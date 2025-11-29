@@ -1,0 +1,17 @@
+[Unit]
+Description=RaspScan FastAPI server
+After=network.target cups.service
+Wants=cups.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/raspscan
+Environment="VIRTUAL_ENV=/opt/raspscan/.venv"
+Environment="PATH=/opt/raspscan/.venv/bin:/usr/bin:/bin"
+ExecStart=/opt/raspscan/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
