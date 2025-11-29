@@ -23,3 +23,14 @@ RaspScan is a Raspberry Pi-based scan and print server that centralizes scanning
 4. Access API at `http://localhost:8000/api/v1` and health check at `/health`.
 
 For HTTPS, place RaspScan behind Caddy or nginx with TLS termination and enable IP allowlists via configuration.
+
+## Web UI (modern Svelte preview)
+The `app/web` directory now includes a modern Svelte + Vite single-page interface with glassmorphism styling. To run locally:
+
+```bash
+cd app/web
+npm install
+npm run dev
+```
+
+Build assets with `npm run build`; serve the resulting `dist/` directory via Caddy/nginx or mount it as static files in the FastAPI app. Wire the stubbed controls to the existing API endpoints (e.g., `/api/scan/start`, `/api/printers`, `/api/print`).
