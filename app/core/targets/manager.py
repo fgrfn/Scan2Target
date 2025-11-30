@@ -103,8 +103,13 @@ class TargetManager:
                 print(f"Testing server: //{server}")
                 
                 try:
+                    # Build smbclient command
+                    # Format: smbclient -L //server -U username%password
+                    # Do NOT use -N (no password) flag if password is provided
+                    cmd = ['smbclient', '-L', f'//{server}', '-U', f"{username}%{password}"]
+                    
                     result = subprocess.run(
-                        ['smbclient', '-L', f'//{server}', '-U', f"{username}%{password}", '-N'],
+                        cmd,
                         capture_output=True,
                         timeout=10,
                         text=True

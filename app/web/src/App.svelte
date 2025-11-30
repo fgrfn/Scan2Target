@@ -168,7 +168,7 @@
     }
   }
 
-  async function saveTarget() {
+  async function saveTarget(skipValidation = false) {
     if (!targetName || !targetConnection) {
       alert('Please fill in all required fields');
       return;
@@ -193,9 +193,14 @@
     };
 
     console.log('Saving target:', payload);
+    console.log('Skip validation:', skipValidation);
 
     try {
-      const response = await fetch(`${API_BASE}/targets`, {
+      const url = skipValidation 
+        ? `${API_BASE}/targets?validate=false`
+        : `${API_BASE}/targets`;
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -479,7 +484,13 @@
             <input id="target-password" type="password" placeholder="Network password" bind:value={targetPassword} />
           {/if}
           
-          <button class="primary block" on:click={saveTarget}>Save target</button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="primary" style="flex: 1;" on:click={() => saveTarget(false)}>Test & Save</button>
+            <button style="flex: 1;" on:click={() => saveTarget(true)}>Save without test</button>
+          </div>
+          <p style="font-size: 0.85rem; color: #888; margin-top: 0.5rem;">
+            💡 "Test & Save" validates the connection before saving. Use "Save without test" if the server is temporarily offline.
+          </p>
         </div>
       </div>
     </div>
