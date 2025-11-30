@@ -223,7 +223,8 @@
 
       if (response.ok) {
         await loadData();
-        discoveredDevices = discoveredDevices.filter(d => d.uri !== device.uri);
+        // Refresh discovery to update "configured" status
+        await discoverPrinters();
         alert(`Printer "${device.name}" added successfully`);
       } else {
         alert('Failed to add printer');
@@ -231,6 +232,33 @@
     } catch (error) {
       console.error('Add printer error:', error);
       alert('Failed to add printer');
+    }
+  }
+
+  async function removePrinter(printerId) {
+    if (!confirm(`Remove printer "${printerId}"? This will delete the printer from CUPS.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/printers/${encodeURIComponent(printerId)}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        await loadData();
+        // Refresh discovery to update "configured" status
+        if (discoveredDevices.length > 0) {
+          await discoverPrinters();
+        }
+        alert(`Printer "${printerId}" removed successfully`);
+      } else {
+        const error = await response.json();
+        alert(`Failed to remove printer: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Remove printer error:', error);
+      alert('Failed to remove printer');
     }
   }
 
@@ -340,16 +368,19 @@
   <SectionCard id="print" title="Print" subtitle="Upload PDFs or images and forward them to CUPS printers.">
     <div class="grid two-cols">
       <div>
-        <h3>Printers</h3>
+        <h3>Configured Printers</h3>
         {#if printers.length === 0}
-          <p class="muted">No printers configured. Add printers in Settings.</p>
+          <p class="muted">No printers configured. Use Settings → Discover Printers to add.</p>
         {:else}
           <ul class="list">
             {#each printers as printer}
               <li>
                 <div class="list-title">{printer.name}</div>
-                <div class="muted">{printer.type || 'Unknown'} - {printer.id}</div>
-                <span class={`badge ${printer.status === 'idle' ? 'success' : 'warning'}`}>{printer.status}</span>
+                <div class="muted">{printer.type || 'Unknown'} · {printer.id}</div>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
+                  <span class={`badge ${printer.status === 'idle' ? 'success' : 'warning'}`}>{printer.status}</span>
+                  <button class="ghost small" on:click={() => removePrinter(printer.id)}>Remove</button>
+                </div>
               </li>
             {/each}
           </ul>
@@ -452,8 +483,8 @@
   <SectionCard id="settings" title="Settings" subtitle="Configure printers and system settings.">
     <div class="grid two-cols">
       <div>
-        <h3>Printer Discovery</h3>
-        <p class="muted">Auto-detect USB and wireless printers. USB port is detected automatically by CUPS.</p>
+        <h3>Printer Management</h3>
+        <p class="muted">Discover and add USB/wireless printers to CUPS. Printers must be manually added - they are never added automatically.</p>
         <button class="primary" on:click={discoverPrinters} disabled={isDiscovering}>
           {isDiscovering ? 'Searching...' : 'Discover Printers'}
         </button>
@@ -467,39 +498,50 @@
                 <div class="muted">
                   {device.type}
                   {#if device.configured}
-                    <span class="badge success" style="margin-left: 0.5rem;">Already Configured</span>
+                    <span class="badge success" style="margin-left: 0.5rem;">✓ Configured</span>
+                  {:else}
+                    <span class="badge warning" style="margin-left: 0.5rem;">Not Added</span>
                   {/if}
                 </div>
                 <div class="muted small" style="font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;">
                   {device.uri}
                 </div>
                 {#if !device.configured}
-                  <button class="ghost small" on:click={() => addDiscoveredPrinter(device)}>Add to CUPS</button>
+                  <button class="primary small" on:click={() => addDiscoveredPrinter(device)}>Add Printer</button>
+                {:else}
+                  <button class="ghost small" disabled>Already Added</button>
                 {/if}
               </li>
             {/each}
           </ul>
         {:else if !isDiscovering}
-          <p class="muted small mt">No devices found. Make sure printers are powered on and connected.</p>
+          <p class="muted small mt">No devices found. Make sure printers are powered on and connected (USB or network).</p>
         {/if}
       </div>
       <div class="panel">
-        <div class="panel-header">Manual Setup</div>
+        <div class="panel-header">Manual Setup (Advanced)</div>
         <div class="panel-body">
-          <p class="muted small">For advanced users: add printer manually with custom URI.</p>
+          <p class="muted small">💡 <strong>Tip:</strong> Use "Discover Printers" instead - it's easier and automatic!</p>
+          <p class="muted small">For advanced users: manually specify printer URI if discovery doesn't work.</p>
           <label for="printer-uri">Printer URI</label>
           <input id="printer-uri" type="text" placeholder="usb://HP/Envy or ipp://printer.local" bind:value={newPrinterUri} />
           <label for="printer-name">Printer Name</label>
-          <input id="printer-name" type="text" placeholder="My Printer" bind:value={newPrinterName} />
+          <input id="printer-name" type="text" placeholder="My_Printer" bind:value={newPrinterName} />
           <button class="ghost block" on:click={addPrinter}>Add Manually</button>
           <hr style="margin: 1rem 0; border: none; border-top: 1px solid rgba(255,255,255,0.1);">
-          <h4>Supported Connections:</h4>
-          <ul class="muted small" style="margin-left: 1rem;">
-            <li><strong>USB:</strong> Auto-detected, any USB port</li>
-            <li><strong>Wireless:</strong> AirPrint/IPP (dnssd://)</li>
-            <li><strong>Network:</strong> IPP (ipp://)</li>
+          <h4>Printer Management:</h4>
+          <ul class="muted small" style="margin-left: 1rem; margin-bottom: 1rem;">
+            <li>✓ Printers are <strong>never</strong> added automatically</li>
+            <li>✓ Use Discovery or Manual Setup to add</li>
+            <li>✓ Remove printers in Print section</li>
           </ul>
-          <p class="muted small"><strong>Note:</strong> Scanners are managed separately via SANE (/scan section). Multi-function devices appear in both if they support both printing and scanning.</p>
+          <h4>Supported Types:</h4>
+          <ul class="muted small" style="margin-left: 1rem;">
+            <li><strong>USB:</strong> Auto-detected (any port)</li>
+            <li><strong>Wireless:</strong> AirPrint/IPP (dnssd://)</li>
+            <li><strong>Network:</strong> Direct IPP (ipp://)</li>
+          </ul>
+          <p class="muted small"><strong>Note:</strong> Multi-function devices appear in both Printers and Scanners if they support both.</p>
         </div>
       </div>
     </div>

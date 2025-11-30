@@ -410,11 +410,40 @@ class PrinterManager:
             
             if result.returncode != 0:
                 raise Exception(f"lpadmin failed: {result.stderr}")
-                
-            # Set as default if it's the first printer
-            printers = self.list_printers()
-            if len(printers) == 1:
-                subprocess.run(['lpadmin', '-d', safe_name], timeout=5)
+            
+            print(f"✓ Printer '{safe_name}' added to CUPS")
                 
         except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
             raise Exception(f"Failed to add printer: {e}")
+
+    def remove_printer(self, printer_id: str) -> None:
+        """
+        Remove a printer from CUPS.
+        
+        Args:
+            printer_id: CUPS printer name/ID to remove
+            
+        Raises:
+            Exception: If printer removal fails
+        """
+        try:
+            # Remove printer from CUPS
+            # -x: delete printer
+            result = subprocess.run(
+                ['lpadmin', '-x', printer_id],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                raise Exception(f"lpadmin -x failed: {result.stderr}")
+                
+            print(f"✓ Printer '{printer_id}' removed from CUPS")
+                
+        except FileNotFoundError:
+            raise Exception("lpadmin command not found. CUPS is not installed.")
+        except subprocess.TimeoutExpired:
+            raise Exception(f"Timeout while removing printer '{printer_id}'")
+        except Exception as e:
+            raise Exception(f"Failed to remove printer: {e}")

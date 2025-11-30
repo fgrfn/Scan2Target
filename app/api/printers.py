@@ -82,3 +82,19 @@ async def add_printer(printer: AddPrinterRequest):
         description=printer.description
     )
     return {"status": "added", "name": printer.name}
+
+
+@router.delete("/{printer_id}")
+async def remove_printer(printer_id: str):
+    """
+    Remove a printer from CUPS.
+    
+    This permanently deletes the printer configuration.
+    Any pending print jobs for this printer will be cancelled.
+    """
+    try:
+        PrinterManager().remove_printer(printer_id)
+        return {"status": "removed", "printer_id": printer_id}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e))
