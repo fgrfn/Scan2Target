@@ -2305,7 +2305,7 @@
             <span style="font-size: 0.875rem;">{job.job_type}</span>
             <span style="font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis;" title={job.device_id}>{job.device_id ? formatScannerName(job.device_id) : 'N/A'}</span>
             <span style="font-size: 0.875rem;">{targets.find(t => t.id === job.target_id)?.name || job.target_id || 'N/A'}</span>
-            <span style="font-size: 0.875rem;">{new Date(job.created_at).toLocaleString()}</span>
+            <span style="font-size: 0.875rem;">{new Date(job.created_at + 'Z').toLocaleString()}</span>
             <div>
               <span class={`badge ${job.status === 'completed' && !job.message ? 'success' : job.status === 'failed' ? 'danger' : job.message ? 'warning' : 'warning'}`}>
                 {job.status === 'completed' && job.message ? t.uploadFailed : job.status === 'completed' ? t.completed : job.status === 'failed' ? t.failed : job.status}
