@@ -183,17 +183,22 @@
       config.password = targetPassword;
     }
 
+    const payload = {
+      id: `target_${Date.now()}`,
+      type: targetType,
+      name: targetName,
+      config: config,
+      enabled: true,
+      description: null
+    };
+
+    console.log('Saving target:', payload);
+
     try {
       const response = await fetch(`${API_BASE}/targets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: `target_${Date.now()}`,
-          type: targetType,
-          name: targetName,
-          config: config,
-          enabled: true
-        })
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
@@ -202,13 +207,15 @@
         targetConnection = '';
         targetUsername = '';
         targetPassword = '';
-        alert('Target saved');
+        alert('✅ Target saved successfully');
       } else {
-        alert('Failed to save target');
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        console.error('Failed to save target:', response.status, errorData);
+        alert(`❌ Failed to save target: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Save target error:', error);
-      alert('Failed to save target');
+      alert(`❌ Failed to save target: ${error.message}`);
     }
   }
 
