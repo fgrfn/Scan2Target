@@ -15,7 +15,7 @@ from app.core.worker import get_worker
 
 
 class ScannerManager:
-    """High-level entrypoint for scan operations.\"""
+    """High-level entrypoint for scan operations."""
 
     def list_devices(self) -> List[dict]:
         """

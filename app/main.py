@@ -1,7 +1,10 @@
 """RaspScan FastAPI application entrypoint."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from app.api import scan, printers, targets, auth, history
 from app.core.init_db import init_database
@@ -43,6 +46,34 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["health"])
     async def health():
         return {"status": "ok"}
+
+    # Serve Web UI
+    web_dist = Path(__file__).parent / "web" / "dist"
+    web_dev = Path(__file__).parent / "web" / "index.html"
+    
+    if web_dist.exists():
+        # Production: serve built assets
+        app.mount("/assets", StaticFiles(directory=str(web_dist / "assets")), name="assets")
+        
+        @app.get("/")
+        async def serve_root():
+            return FileResponse(str(web_dist / "index.html"))
+    elif web_dev.exists():
+        # Development: serve from web directory
+        app.mount("/src", StaticFiles(directory=str(web_dev.parent / "src")), name="src")
+        
+        @app.get("/")
+        async def serve_root():
+            return FileResponse(str(web_dev))
+    else:
+        @app.get("/")
+        async def serve_root():
+            return {
+                "message": "RaspScan API",
+                "docs": "/docs",
+                "health": "/health",
+                "note": "Web UI not found. Run 'cd app/web && npm run build' or 'npm run dev'"
+            }
 
     return app
 
