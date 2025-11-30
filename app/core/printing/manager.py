@@ -410,13 +410,72 @@ class PrinterManager:
             # Sanitize printer name (no spaces, special chars)
             safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', name)
             
-            # Try to add printer with auto driver selection (-m everywhere)
-            # -p: printer name, -v: device URI, -E: enable printer, -m: driver model
+            # Determine driver model based on URI type
+            driver_model = 'everywhere'
+            fallback_drivers = []
+            
+            # For dnssd:// (AirPrint/Bonjour), use driverless first
+            if uri.startswith('dnssd://'):
+                driver_model = 'driverless:' + uri
+                fallback_drivers = ['everywhere']
+            
+            # For USB printers, try multiple driver options
+            elif uri.startswith('usb://'):
+                # First try to find a driverless IPP-over-USB driver
+                # This is often the most compatible option
+                try:
+                    ppd_result = subprocess.run(
+                        ['lpinfo', '-m'],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                    
+                    # Extract device identifier from USB URI (e.g., HP/ENVY from usb://HP/ENVY%206400?serial=...)
+                    usb_match = re.match(r'usb://([^/]+)/([^?]+)', uri)
+                    if usb_match:
+                        make = usb_match.group(1).replace('%20', ' ')
+                        model = usb_match.group(2).replace('%20', ' ').replace('%', ' ')
+                        
+                        # Look for driverless IPP-over-USB driver first (best compatibility)
+                        for line in ppd_result.stdout.split('\n'):
+                            if 'driverless:ipp://' in line and make.upper() in line.upper():
+                                # Found driverless IPP driver - use this!
+                                driver_model = line.split()[0]
+                                print(f"Found driverless IPP-over-USB driver: {driver_model}")
+                                fallback_drivers = ['everywhere']
+                                break
+                        else:
+                            # Look for HPLIP-specific drivers for HP printers
+                            if 'HP' in make.upper():
+                                for line in ppd_result.stdout.split('\n'):
+                                    if 'hplip:' in line.lower() and model.split()[0].lower() in line.lower():
+                                        driver_model = line.split()[0]
+                                        print(f"Found HPLIP driver: {driver_model}")
+                                        fallback_drivers = ['everywhere', 'lsb/usr/cupsfilters/Generic-PDF_Printer-PDF.ppd']
+                                        break
+                                else:
+                                    # No specific driver, use generic
+                                    fallback_drivers = ['everywhere', 'lsb/usr/cupsfilters/Generic-PDF_Printer-PDF.ppd']
+                            else:
+                                # Non-HP USB printer
+                                fallback_drivers = ['lsb/usr/cupsfilters/Generic-PDF_Printer-PDF.ppd', 'drv:///sample.drv/generic.ppd']
+                    else:
+                        # Can't parse URI
+                        fallback_drivers = ['everywhere', 'lsb/usr/cupsfilters/Generic-PDF_Printer-PDF.ppd']
+                except Exception as e:
+                    print(f"Error finding USB drivers: {e}")
+                    fallback_drivers = ['everywhere', 'lsb/usr/cupsfilters/Generic-PDF_Printer-PDF.ppd']
+            else:
+                # Other URI types (ipp, ipps, etc.)
+                fallback_drivers = ['lsb/usr/cupsfilters/Generic-PDF_Printer-PDF.ppd']
+            
+            # Try to add printer with primary driver
             cmd = [
                 'lpadmin',
                 '-p', safe_name,
                 '-v', uri,
-                '-m', 'everywhere',  # IPP Everywhere (works for most modern printers)
+                '-m', driver_model,
                 '-E'  # Enable the printer
             ]
             
@@ -430,14 +489,27 @@ class PrinterManager:
                 timeout=30
             )
             
+            # If failed, try fallback drivers
             if result.returncode != 0:
                 error_msg = result.stderr.strip()
+                
                 # Check if printer already exists
                 if 'already exists' in error_msg.lower() or safe_name in [p['id'] for p in self.list_printers()]:
                     raise Exception(f"Printer '{safe_name}' is already configured in CUPS. Remove it first or choose a different name.")
-                raise Exception(f"lpadmin failed: {error_msg}")
+                
+                # Try fallback drivers
+                for fallback in fallback_drivers:
+                    print(f"Primary driver '{driver_model}' failed, trying '{fallback}'...")
+                    cmd[cmd.index('-m') + 1] = fallback
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    if result.returncode == 0:
+                        driver_model = fallback
+                        break
+                else:
+                    # All drivers failed
+                    raise Exception(f"lpadmin failed with all drivers. Last error: {error_msg}")
             
-            print(f"✓ Printer '{safe_name}' added to CUPS")
+            print(f"✓ Printer '{safe_name}' added to CUPS with driver '{driver_model}'")
                 
         except FileNotFoundError:
             raise Exception("CUPS is not installed. Install with: sudo apt install cups cups-browsed")
