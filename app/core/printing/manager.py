@@ -215,6 +215,8 @@ class PrinterManager:
                         ['lpstat', '-v', name],
                         capture_output=True,
                         text=True,
+                        encoding='utf-8',
+                        errors='replace',
                         timeout=2
                     )
                     uri = 'unknown'
@@ -224,6 +226,7 @@ class PrinterManager:
                         uri_match = re.search(r'device for \S+: (.+)', uri_result.stdout)
                         if uri_match:
                             uri = uri_match.group(1).strip()
+                            print(f"DEBUG: Printer '{name}' URI: {uri}")
                             
                             # Determine connection type from URI
                             if uri.startswith('usb://'):
@@ -253,6 +256,8 @@ class PrinterManager:
                 ['lpstat', '-d'],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=2
             )
             if default_result.returncode == 0:
