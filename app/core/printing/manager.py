@@ -191,12 +191,14 @@ class PrinterManager:
             )
             
             if result.returncode != 0:
-                print(f"lpstat -p failed: {result.stderr}")
+                print(f"WARNING: lpstat -p failed (code {result.returncode}): {result.stderr}")
                 return []
             
             if not result.stdout.strip():
-                print("No printers configured in CUPS")
+                print("INFO: No printers configured in CUPS (lpstat -p returned empty)")
                 return []
+            
+            print(f"DEBUG: lpstat -p output:\n{result.stdout}")
             
             for line in result.stdout.strip().split('\n'):
                 if not line.strip():
@@ -260,11 +262,20 @@ class PrinterManager:
                     for printer in printers:
                         if printer['id'] == default_name:
                             printer['is_default'] = True
+            
+            print(f"INFO: Found {len(printers)} configured printer(s)")
                             
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            print(f"Error listing printers: {e}")
+        except FileNotFoundError:
+            print("ERROR: lpstat command not found - CUPS is not installed!")
+            print("Install CUPS: sudo apt install cups cups-browsed")
+            return []
+        except subprocess.TimeoutExpired as e:
+            print(f"ERROR: Timeout listing printers: {e}")
+            return []
         except Exception as e:
-            print(f"Unexpected error in list_printers: {e}")
+            print(f"ERROR: Unexpected error in list_printers: {e}")
+            import traceback
+            traceback.print_exc()
             
         return printers
 
@@ -409,7 +420,11 @@ class PrinterManager:
             )
             
             if result.returncode != 0:
-                raise Exception(f"lpadmin failed: {result.stderr}")
+                error_msg = result.stderr.strip()
+                # Check if printer already exists
+                if 'already exists' in error_msg.lower() or safe_name in [p['id'] for p in self.list_printers()]:
+                    raise Exception(f"Printer '{safe_name}' is already configured in CUPS. Remove it first or choose a different name.")
+                raise Exception(f"lpadmin failed: {error_msg}")
             
             print(f"✓ Printer '{safe_name}' added to CUPS")
                 
