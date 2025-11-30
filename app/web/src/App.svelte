@@ -11,6 +11,7 @@
   let history = [];
   let statCards = [];
   let activeJobs = [];
+  let lastCompletedJob = null;
   
   let selectedScanner = '';
   let selectedProfile = '';
@@ -191,6 +192,7 @@
       const res = await fetch(`${API_BASE}/history`);
       if (res.ok) {
         const allJobs = await res.json();
+        const previousActiveCount = activeJobs.length;
         activeJobs = allJobs.filter(j => j.status === 'queued' || j.status === 'running');
         
         // Try to load thumbnails for running jobs
@@ -208,9 +210,27 @@
           }
         }
         
-        // Refresh history if there are no more active jobs
-        if (activeJobs.length === 0 && history.some(h => h.status === 'queued' || h.status === 'running')) {
+        // If a job just completed, save it to show until next scan
+        if (previousActiveCount > 0 && activeJobs.length === 0) {
+          const justCompleted = allJobs.find(j => j.status === 'completed');
+          if (justCompleted) {
+            // Load thumbnail for completed job
+            try {
+              const thumbRes = await fetch(`/thumbnails/scan_${justCompleted.id}_thumb.jpg`, { method: 'HEAD' });
+              if (thumbRes.ok) {
+                justCompleted.thumbnailUrl = `/thumbnails/scan_${justCompleted.id}_thumb.jpg?t=${Date.now()}`;
+              }
+            } catch (e) {
+              // No thumbnail
+            }
+            lastCompletedJob = justCompleted;
+          }
           loadHistory();
+        }
+        
+        // Clear last completed job when new scan starts
+        if (activeJobs.length > 0 && lastCompletedJob) {
+          lastCompletedJob = null;
         }
       }
     } catch (error) {
@@ -767,8 +787,8 @@
   </SectionCard>
 
   <!-- Active Scans Section -->
-  {#if activeJobs.length > 0}
-  <SectionCard title="Active Scans" subtitle="Scans in progress">
+  {#if activeJobs.length > 0 || lastCompletedJob}
+  <SectionCard title={activeJobs.length > 0 ? "Active Scans" : "Last Scan"} subtitle={activeJobs.length > 0 ? "Scans in progress" : "Most recent scan"}>
     <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;">
       {#each activeJobs as job}
         <div class="panel" style="padding: 1rem;">
@@ -806,6 +826,39 @@
           </div>
         </div>
       {/each}
+      
+      {#if lastCompletedJob && activeJobs.length === 0}
+        <div class="panel" style="padding: 1rem;">
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
+            <span class="badge success" style="font-size: 0.875rem;">
+              ✅ Completed
+            </span>
+            <span class="muted" style="font-size: 0.875rem;">Job #{lastCompletedJob.id.slice(0, 8)}</span>
+          </div>
+          
+          {#if lastCompletedJob.thumbnailUrl}
+            <div style="margin-bottom: 0.75rem;">
+              <img 
+                src={lastCompletedJob.thumbnailUrl} 
+                alt="Scan preview" 
+                style="width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--border);"
+              />
+            </div>
+          {/if}
+          
+          <div style="font-size: 0.875rem;">
+            <div style="margin-bottom: 0.25rem;">
+              <span class="muted">Device:</span> {lastCompletedJob.device_id || 'N/A'}
+            </div>
+            <div style="margin-bottom: 0.25rem;">
+              <span class="muted">Target:</span> {lastCompletedJob.target_id || 'N/A'}
+            </div>
+            <div>
+              <span class="muted">Completed:</span> {new Date(lastCompletedJob.created_at).toLocaleTimeString()}
+            </div>
+          </div>
+        </div>
+      {/if}
     </div>
   </SectionCard>
   {/if}

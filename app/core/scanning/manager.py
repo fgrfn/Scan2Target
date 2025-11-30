@@ -332,6 +332,26 @@ class ScannerManager:
                 
                 scanned_files.append(tiff_file)
                 
+                # Generate thumbnail immediately after first page scan (for live preview)
+                if page_num == 1:
+                    try:
+                        thumbnail_file = output_dir / f"{prefix}_{job_id}_thumb.jpg"
+                        subprocess.run(
+                            [
+                                'convert',
+                                str(tiff_file),
+                                '-thumbnail', '400x400>',
+                                '-quality', '80',
+                                str(thumbnail_file)
+                            ],
+                            capture_output=True,
+                            timeout=10
+                        )
+                        if thumbnail_file.exists():
+                            print(f"Live preview thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
+                    except Exception as e:
+                        print(f"Warning: Failed to generate live preview thumbnail: {e}")
+                
                 # If not batch mode, stop after first page
                 if not batch_scan:
                     break
