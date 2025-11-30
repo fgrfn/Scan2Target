@@ -47,6 +47,8 @@ class PrinterManager:
                 ['lpinfo', '-v'],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=15
             )
             
@@ -131,9 +133,13 @@ class PrinterManager:
                     'status': 'Configured' if is_configured else 'Available'
                 })
                 
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            print(f"Error discovering devices: {e}")
+        except FileNotFoundError:
+            print("ERROR: lpinfo command not found. CUPS is not installed!")
+            print("Install CUPS: sudo apt install cups cups-browsed")
             # Return configured printers if discovery fails
+            return self._get_configured_as_discovered()
+        except subprocess.TimeoutExpired as e:
+            print(f"Error discovering devices (timeout): {e}")
             return self._get_configured_as_discovered()
         except Exception as e:
             print(f"Unexpected error in discover_devices: {e}")
@@ -179,6 +185,8 @@ class PrinterManager:
                 ['lpstat', '-p'],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=5
             )
             
