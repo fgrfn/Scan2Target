@@ -1,7 +1,7 @@
 """Security utilities for encrypting sensitive data."""
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 import os
 import base64
@@ -31,7 +31,7 @@ class SecureStorage:
         env_secret = os.getenv('SCAN2TARGET_SECRET_KEY')
         if env_secret:
             # Derive key from secret using PBKDF2
-            kdf = PBKDF2(
+            kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
                 salt=b'scan2target_salt_v1',  # Static salt for consistency
