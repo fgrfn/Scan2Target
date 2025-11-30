@@ -108,7 +108,7 @@ async def get_scan_job(job_id: str):
 
 
 @router.post("/preview")
-async def preview_scan(device_id: str):
+async def preview_scan(request: dict):
     """
     Quick preview scan at low resolution.
     Returns base64 encoded image for immediate display.
@@ -120,6 +120,10 @@ async def preview_scan(device_id: str):
     import tempfile
     from pathlib import Path
     import base64
+    
+    device_id = request.get('device_id')
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id is required")
     
     try:
         # Convert device_id to device URI

@@ -1478,8 +1478,8 @@
           
           <label for="source-select">{t.scanSource}</label>
           <select id="source-select" bind:value={scanSource} style="width: 100%; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px;">
-            <option value="Flatbed">📄 Flatbed (single page)</option>
-            <option value="ADF">📚 Document Feeder (ADF) - Multi-page</option>
+            <option value="Flatbed">{t.flatbed}</option>
+            <option value="ADF">{t.adf}</option>
           </select>
           <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">{t.adfDesc}</p>
           
