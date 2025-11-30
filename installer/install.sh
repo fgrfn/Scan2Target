@@ -22,23 +22,17 @@ install_packages() {
         python3 \
         python3-venv \
         python3-pip \
-        cups \
-        cups-browsed \
         avahi-daemon \
         sane-utils \
         sane-airscan \
         smbclient \
-        cifs-utils \
-        sqlite3 \
         ssh \
         imagemagick \
         nodejs \
         npm
     
     # Enable and start services
-    systemctl enable cups
     systemctl enable avahi-daemon
-    systemctl start cups
     systemctl start avahi-daemon
 }
 
@@ -76,8 +70,7 @@ create_service() {
     cat > "${SERVICE_FILE}" <<SERVICE
 [Unit]
 Description=RaspScan FastAPI server
-After=network.target cups.service
-Wants=cups.service
+After=network.target
 
 [Service]
 Type=simple
@@ -85,7 +78,7 @@ User=${RUN_USER}
 WorkingDirectory=${APP_DIR}
 Environment="VIRTUAL_ENV=${VENV_DIR}"
 Environment="PATH=${VENV_DIR}/bin:/usr/bin:/bin"
-ExecStart=${VENV_DIR}/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+ExecStart=${VENV_DIR}/bin/uvicorn app.main:app --host 0.0.0.0 --port 80
 Restart=on-failure
 RestartSec=5
 
@@ -138,9 +131,9 @@ print_info() {
     echo "║                  RaspScan Installation Complete                  ║"
     echo "╚═══════════════════════════════════════════════════════════════════╝"
     echo ""
-    echo "✓ RaspScan is running on: http://$(hostname -I | awk '{print $1}'):8000"
-    echo "✓ API Documentation: http://$(hostname -I | awk '{print $1}'):8000/docs"
-    echo "✓ Health Check: http://$(hostname -I | awk '{print $1}'):8000/health"
+    echo "✓ RaspScan is running on: http://$(hostname -I | awk '{print $1}')"
+    echo "✓ API Documentation: http://$(hostname -I | awk '{print $1}'/docs"
+    echo "✓ Health Check: http://$(hostname -I | awk '{print $1}'/health"
     echo ""
     echo "Default Admin Credentials:"
     echo "  Username: admin"
@@ -167,7 +160,7 @@ print_info() {
     echo "  Cleanup logs: tail -f /var/log/raspscan-cleanup.log"
     echo ""
     echo "Web UI:"
-    echo "  Production build already served at: http://$(hostname -I | awk '{print $1}'):8000/"
+    echo "  Production build already served at: http://$(hostname -I | awk '{print $1}')/"
     echo "  For development with hot-reload:"
     echo "    cd ${APP_DIR}/app/web"
     echo "    npm run dev"

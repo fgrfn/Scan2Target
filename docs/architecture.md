@@ -125,7 +125,7 @@ POST /api/v1/print
 ## Security Model
 - **Auth:** Session or JWT tokens; password hashing via `argon2` or `bcrypt`; HTTPS recommended behind Caddy/nginx; optional IP allowlist enforced per request.
 - **Secrets:** Encrypted credential fields; filesystem isolation (`/etc/raspscan/` for secrets, `/data/raspscan` for runtime data).
-- **Network Exposure:** Run FastAPI on localhost:8000 with reverse proxy terminating TLS; disable anonymous access; CSRF protection for web UI.
+- **Network Exposure:** Run FastAPI on port 80 (or behind reverse proxy for TLS); disable anonymous access if needed; CSRF protection for web UI.
 
 ## Deployment
 - **Native:** Systemd units to start FastAPI (uvicorn) and optional workers; Avahi for mDNS/AirPrint; CUPS installed with IPP Everywhere.

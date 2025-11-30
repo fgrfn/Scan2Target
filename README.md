@@ -27,11 +27,11 @@ The installer automatically:
 - ✅ Configures automatic cleanup cron job (daily at 3 AM)
 - ✅ Creates database and default admin user
 
-2. Access RaspScan at: `http://YOUR_RASPBERRY_PI_IP:8000`
+2. Access RaspScan at: `http://YOUR_RASPBERRY_PI_IP`
 
 ### Manual Setup
 If you prefer manual installation:
-1. Install dependencies: `sudo apt install cups cups-browsed avahi-daemon sane-utils sane-airscan python3-venv smbclient imagemagick nodejs npm`
+1. Install dependencies: `sudo apt install avahi-daemon sane-utils sane-airscan python3-venv smbclient ssh imagemagick nodejs npm`
 2. Create virtualenv: `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
 3. Build Web UI: `cd app/web && npm install && npm run build && cd ../..`
 4. Copy service file: `sudo cp installer/raspscan.service /etc/systemd/system/`
@@ -42,7 +42,7 @@ If you prefer manual installation:
 ## Quick Start
 
 After installation:
-1. Access Web UI at `http://YOUR_RASPBERRY_PI_IP:8000`
+1. Access Web UI at `http://YOUR_RASPBERRY_PI_IP`
 2. Login with default credentials (username: `admin`, password: `admin`)
 3. **⚠️ CHANGE THE DEFAULT PASSWORD IMMEDIATELY!**
 4. Click "Discover Scanners" to find your scanner
@@ -61,6 +61,13 @@ cd app/web
 npm run dev
 ```
 
+## System Requirements
+
+- **Hardware:** Raspberry Pi 3B+ or newer (4GB RAM recommended)
+- **OS:** Raspberry Pi OS (Debian-based)
+- **Network:** Wired or WiFi connection
+- **Scanner:** USB or network scanner with SANE/eSCL support
+
 ## Authentication
 
 ### Default User
@@ -71,7 +78,7 @@ On first startup, RaspScan creates a default admin user:
 
 ### Login
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/login \
+curl -X POST http://localhost/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "password": "admin"}'
 ```
@@ -94,7 +101,7 @@ Response:
 Include the token in the `Authorization` header:
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:8000/api/v1/scan/start
+  http://localhost/api/v1/scan/start
 ```
 
 ### Authentication Configuration
@@ -157,7 +164,7 @@ RaspScan automatically detects scanners via SANE:
 
 Discovery endpoint:
 ```bash
-curl http://localhost:8000/api/v1/devices/discover
+curl http://localhost/api/v1/devices/discover
 ```
 
 ### How It Works
@@ -198,7 +205,7 @@ Configure destinations for scanned documents:
 
 ### SMB/CIFS Share
 ```bash
-curl -X POST http://localhost:8000/api/v1/targets \
+curl -X POST http://localhost/api/v1/targets \
   -H "Content-Type: application/json" \
   -d '{
     "name": "NAS Documents",
@@ -213,7 +220,7 @@ curl -X POST http://localhost:8000/api/v1/targets \
 
 ### Email
 ```bash
-curl -X POST http://localhost:8000/api/v1/targets \
+curl -X POST http://localhost/api/v1/targets \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Email to Archive",
@@ -231,7 +238,7 @@ curl -X POST http://localhost:8000/api/v1/targets \
 ### Connection Testing
 All targets are automatically tested before saving:
 ```bash
-curl -X POST http://localhost:8000/api/v1/targets/{target_id}/test
+curl -X POST http://localhost/api/v1/targets/{target_id}/test
 ```
 
 ## Advanced Features
@@ -239,7 +246,7 @@ curl -X POST http://localhost:8000/api/v1/targets/{target_id}/test
 ### Webhook Notifications
 Get notified when scans complete:
 ```bash
-curl -X POST http://localhost:8000/api/v1/scan/start \
+curl -X POST http://localhost/api/v1/scan/start \
   -H "Content-Type: application/json" \
   -d '{
     "device_id": "scanner_id",
@@ -309,10 +316,10 @@ cd /home/florian/RaspScan
 python3 -m app.core.cleanup
 
 # Check disk usage
-curl http://localhost:8000/api/v1/maintenance/disk-usage
+curl http://localhost/api/v1/maintenance/disk-usage
 
 # Trigger cleanup via API
-curl -X POST http://localhost:8000/api/v1/maintenance/cleanup
+curl -X POST http://localhost/api/v1/maintenance/cleanup
 ```
 
 ### View Cleanup Logs
@@ -358,7 +365,7 @@ RaspScan's open API makes integration easy:
 # configuration.yaml
 rest_command:
   raspscan_quick_scan:
-    url: "http://RASPI_IP:8000/api/v1/scan/start"
+    url: "http://RASPI_IP/api/v1/scan/start"
     method: POST
     content_type: "application/json"
     payload: >
@@ -378,7 +385,7 @@ button:
 sensor:
   - platform: rest
     name: RaspScan Active Jobs
-    resource: "http://RASPI_IP:8000/api/v1/history"
+    resource: "http://RASPI_IP/api/v1/history"
     value_template: >
       {{ value_json | selectattr('status', 'in', ['queued', 'running']) | list | length }}
     scan_interval: 5
@@ -409,4 +416,4 @@ sensor:
 - `GET /api/v1/maintenance/disk-usage` - Get disk usage stats
 - `POST /api/v1/maintenance/cleanup` - Trigger manual cleanup
 
-Full API documentation: `http://YOUR_IP:8000/docs`
+Full API documentation: `http://YOUR_IP/docs`
