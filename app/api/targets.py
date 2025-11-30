@@ -10,7 +10,7 @@ from app.core.targets.models import TargetConfig
 router = APIRouter()
 
 
-class TargetConfig(BaseModel):
+class Target(BaseModel):
     id: str
     type: str
     name: str
