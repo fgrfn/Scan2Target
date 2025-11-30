@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from app.api import scan, printers, targets, auth, history
+from app.api import scan, printers, targets, auth, history, devices
 from app.core.init_db import init_database
 
 
@@ -40,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(scan.router, prefix="/api/v1/scan", tags=["scan"])
     app.include_router(printers.router, prefix="/api/v1/printers", tags=["printers"])
+    app.include_router(devices.router, prefix="/api/v1/devices", tags=["devices"])
     app.include_router(targets.router, prefix="/api/v1/targets", tags=["targets"])
     app.include_router(history.router, prefix="/api/v1/history", tags=["history"])
 

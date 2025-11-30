@@ -101,11 +101,31 @@ class Database:
                 )
             """)
             
+            # Devices table (printers AND scanners)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS devices (
+                    id TEXT PRIMARY KEY,
+                    device_type TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    uri TEXT NOT NULL,
+                    make TEXT,
+                    model TEXT,
+                    connection_type TEXT,
+                    description TEXT,
+                    is_active INTEGER DEFAULT 1,
+                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
             # Create indexes
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_devices_type ON devices(device_type)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_devices_active ON devices(is_active)")
             
             conn.commit()
 
