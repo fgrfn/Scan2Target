@@ -202,53 +202,120 @@ class ScannerManager:
         
         WARNING: This runs synchronously. In production, use a background worker.
         """
-        # Get profile settings
-        profiles = {p['id']: p for p in self.list_profiles()}
-        profile = profiles.get(profile_id, profiles['color_300_pdf'])
+        job_manager = JobManager()
         
-        # Create temp output file
-        output_dir = Path(tempfile.gettempdir()) / 'raspscan' / 'scans'
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        prefix = filename_prefix or 'scan'
-        output_format = profile['format']
-        output_file = output_dir / f"{prefix}_{job_id}.{output_format}"
-        
-        # Build scanimage command
-        cmd = [
-            'scanimage',
-            '--device-name', device_id,
-            '--resolution', str(profile['dpi']),
-            '--mode', profile['color_mode'],
-            '--format', 'tiff' if output_format == 'pdf' else output_format,
-            '--output-file', str(output_file)
-        ]
-        
-        # Execute scan
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        
-        if result.returncode == 0:
-            # Convert TIFF to PDF if needed
-            if output_format == 'pdf':
-                pdf_file = output_dir / f"{prefix}_{job_id}.pdf"
-                # Use ImageMagick or similar for conversion
-                # For now just rename (production would convert properly)
-                output_file.rename(pdf_file)
-                output_file = pdf_file
-            
-            # Update job with file path
-            job_manager = JobManager()
+        try:
+            # Update job status
             job = job_manager.get_job(job_id)
             if job:
-                job.file_path = str(output_file)
+                job.status = JobStatus.running
                 job_manager.update_job(job)
             
-            # Deliver to target
-            TargetManager().deliver(target_id, str(output_file), {'job_id': job_id})
+            # Get profile settings
+            profiles = {p['id']: p for p in self.list_profiles()}
+            profile = profiles.get(profile_id, profiles['color_300_pdf'])
             
-            # Status update happens in background worker wrapper
-        else:
-            raise Exception(f"scanimage failed: {result.stderr}")
+            print(f"Starting scan with profile: {profile}")
+            
+            # Create temp output file
+            output_dir = Path(tempfile.gettempdir()) / 'raspscan' / 'scans'
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            prefix = filename_prefix or 'scan'
+            output_format = profile['format']
+            
+            # Scan to TIFF first (most compatible)
+            tiff_file = output_dir / f"{prefix}_{job_id}.tiff"
+            
+            # Build scanimage command
+            cmd = [
+                'scanimage',
+                '--device-name', device_id,
+                '--resolution', str(profile['dpi']),
+                '--mode', profile['color_mode'],
+                '--format', 'tiff'
+            ]
+            
+            print(f"Executing scan command: {' '.join(cmd)}")
+            print(f"Output file: {tiff_file}")
+            
+            # Execute scan
+            with open(tiff_file, 'wb') as f:
+                result = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=False, timeout=120)
+            
+            if result.returncode != 0:
+                error_msg = result.stderr.decode('utf-8', errors='replace') if result.stderr else 'Unknown error'
+                print(f"Scan failed: {error_msg}")
+                raise Exception(f"scanimage failed: {error_msg}")
+            
+            print(f"Scan completed successfully: {tiff_file} ({tiff_file.stat().st_size} bytes)")
+            
+            # Convert TIFF to requested format if needed
+            final_file = tiff_file
+            if output_format == 'pdf':
+                pdf_file = output_dir / f"{prefix}_{job_id}.pdf"
+                print(f"Converting TIFF to PDF: {pdf_file}")
+                
+                # Use ImageMagick convert
+                convert_result = subprocess.run(
+                    ['convert', str(tiff_file), str(pdf_file)],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                
+                if convert_result.returncode == 0 and pdf_file.exists():
+                    print(f"PDF conversion successful: {pdf_file} ({pdf_file.stat().st_size} bytes)")
+                    tiff_file.unlink()  # Remove TIFF after successful conversion
+                    final_file = pdf_file
+                else:
+                    print(f"Warning: PDF conversion failed, using TIFF: {convert_result.stderr}")
+                    # Keep TIFF file as fallback
+            elif output_format == 'jpeg':
+                jpeg_file = output_dir / f"{prefix}_{job_id}.jpg"
+                print(f"Converting TIFF to JPEG: {jpeg_file}")
+                
+                convert_result = subprocess.run(
+                    ['convert', str(tiff_file), '-quality', '90', str(jpeg_file)],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                
+                if convert_result.returncode == 0 and jpeg_file.exists():
+                    print(f"JPEG conversion successful: {jpeg_file} ({jpeg_file.stat().st_size} bytes)")
+                    tiff_file.unlink()  # Remove TIFF
+                    final_file = jpeg_file
+                else:
+                    print(f"Warning: JPEG conversion failed, using TIFF: {convert_result.stderr}")
+            
+            # Update job with file path
+            job = job_manager.get_job(job_id)
+            if job:
+                job.file_path = str(final_file)
+                job.status = JobStatus.completed
+                job_manager.update_job(job)
+            
+            print(f"Delivering scan to target: {target_id}")
+            
+            # Deliver to target
+            TargetManager().deliver(target_id, str(final_file), {'job_id': job_id})
+            
+            print(f"Scan job {job_id} completed successfully")
+            
+        except Exception as e:
+            print(f"Scan error for job {job_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Update job status to failed
+            job = job_manager.get_job(job_id)
+            if job:
+                job.status = JobStatus.failed
+                job.message = str(e)
+                job_manager.update_job(job)
+            
+            raise
 
     def list_jobs(self) -> List[JobRecord]:
         return JobManager().list_jobs(job_type="scan")
