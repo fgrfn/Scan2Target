@@ -198,7 +198,7 @@
       targets: 'Ziele',
       history: 'Verlauf',
       heroTagline: 'Linux · FastAPI · Svelte',
-      heroTitle: 'Zentrale für Scannen.',
+      heroTitle: 'Scan-Dashboard.',
       heroDescription: 'Starten Sie Scans auf Geräten ohne physische Tasten und leiten Sie Dateien an SMB, E-Mail, Paperless-ngx oder Webhooks weiter.',
       startScan: 'Scan starten',
       liveStatus: 'Live-Status',
