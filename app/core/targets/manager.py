@@ -87,18 +87,50 @@ class TargetManager:
                 if not connection:
                     return {"status": "error", "message": "Connection string is required"}
                 
-                result = subprocess.run(
-                    ['smbclient', '-L', connection, '-U', f"{username}%{password}", '-N'],
-                    capture_output=True,
-                    timeout=10,
-                    text=True
-                )
+                print(f"Testing SMB connection to: {connection}")
+                print(f"Username: {username}")
                 
-                if result.returncode == 0:
-                    return {"status": "ok"}
-                else:
-                    error_msg = result.stderr.strip() if result.stderr else "Connection failed"
-                    return {"status": "error", "message": error_msg}
+                # Parse connection string - can be //server/share or \\server\share
+                # Convert Windows format to Unix format
+                connection_unix = connection.replace('\\', '/')
+                if not connection_unix.startswith('//'):
+                    connection_unix = '//' + connection_unix
+                
+                # Extract server for -L command (just list shares, don't access)
+                # Format: //server/share -> just use //server for listing
+                server = connection_unix.split('/')[2] if len(connection_unix.split('/')) > 2 else connection_unix
+                
+                print(f"Testing server: //{server}")
+                
+                try:
+                    result = subprocess.run(
+                        ['smbclient', '-L', f'//{server}', '-U', f"{username}%{password}", '-N'],
+                        capture_output=True,
+                        timeout=10,
+                        text=True
+                    )
+                    
+                    print(f"smbclient exit code: {result.returncode}")
+                    print(f"stdout: {result.stdout[:200]}")
+                    print(f"stderr: {result.stderr[:200]}")
+                    
+                    if result.returncode == 0:
+                        return {"status": "ok"}
+                    else:
+                        error_msg = result.stderr.strip() if result.stderr else "Connection failed"
+                        # Common errors and user-friendly messages
+                        if "NT_STATUS_LOGON_FAILURE" in error_msg:
+                            error_msg = "Login failed - check username and password"
+                        elif "NT_STATUS_HOST_UNREACHABLE" in error_msg or "NT_STATUS_IO_TIMEOUT" in error_msg:
+                            error_msg = f"Server {server} not reachable - check IP address and network"
+                        elif "NT_STATUS_BAD_NETWORK_NAME" in error_msg:
+                            error_msg = f"Share not found on {server}"
+                        
+                        return {"status": "error", "message": error_msg}
+                except FileNotFoundError:
+                    return {"status": "error", "message": "smbclient not installed. Install with: sudo apt install smbclient"}
+                except subprocess.TimeoutExpired:
+                    return {"status": "error", "message": f"Connection timeout - server {server} not responding"}
                 
             elif target.type == 'SFTP':
                 # Test SFTP with ssh

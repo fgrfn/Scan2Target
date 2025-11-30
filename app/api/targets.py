@@ -52,6 +52,10 @@ async def create_target(target: Target, validate: bool = True):
     Set validate=false to skip connection test (not recommended).
     """
     try:
+        print(f"Creating target: {target.name} (type: {target.type})")
+        print(f"Config: {target.config}")
+        print(f"Validate: {validate}")
+        
         # Convert Pydantic model to TargetConfig
         target_config = TargetConfig(
             id=target.id,
@@ -64,6 +68,8 @@ async def create_target(target: Target, validate: bool = True):
         
         result = TargetManager().create_target(target_config, validate=validate)
         
+        print(f"✓ Target '{target.name}' created successfully")
+        
         return Target(
             id=result.id,
             type=result.type,
@@ -73,6 +79,9 @@ async def create_target(target: Target, validate: bool = True):
             description=result.description
         )
     except Exception as e:
+        print(f"ERROR creating target: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
 
 
