@@ -18,6 +18,22 @@
   let scanFilename = '';
   let scanSource = 'Flatbed';
   
+  // Auto-select profile when scan source changes
+  $: if (scanSource) {
+    const profilesForSource = quickProfiles.filter(p => p.source === scanSource);
+    if (profilesForSource.length > 0) {
+      // For ADF, prefer multi-page profile
+      if (scanSource === 'ADF') {
+        const multiPageProfile = profilesForSource.find(p => p.id.includes('multipage') || p.name.toLowerCase().includes('multi'));
+        selectedProfile = multiPageProfile ? multiPageProfile.id : profilesForSource[0].id;
+      } else {
+        // For Flatbed, prefer Document @200 DPI (small)
+        const defaultProfile = profilesForSource.find(p => p.id.includes('200') || p.name.toLowerCase().includes('200'));
+        selectedProfile = defaultProfile ? defaultProfile.id : profilesForSource[0].id;
+      }
+    }
+  }
+  
   let targetType = 'SMB';
   let targetName = '';
   let targetConnection = '';
