@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from app.api import scan, targets, auth, history, devices, maintenance, websocket
+from app.api import scan, targets, auth, history, devices, maintenance, websocket, stats
 from app.core.init_db import init_database
 
 
@@ -44,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(history.router, prefix="/api/v1/history", tags=["history"])
     app.include_router(maintenance.router, prefix="/api/v1/maintenance", tags=["maintenance"])
     app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
+    app.include_router(stats.router, prefix="/api/v1/stats", tags=["stats"])
     
     # Serve thumbnails from temp directory
     thumbnail_dir = Path("/tmp/raspscan/scans")

@@ -105,3 +105,70 @@ async def list_scan_jobs():
 async def get_scan_job(job_id: str):
     """Return a single scan job status."""
     return ScannerManager().get_job(job_id)
+
+
+@router.post("/preview")
+async def preview_scan(device_id: str):
+    """
+    Quick preview scan at low resolution.
+    Returns base64 encoded image for immediate display.
+    """
+    from fastapi import HTTPException
+    from fastapi.responses import JSONResponse
+    from app.core.devices.repository import DeviceRepository
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    import base64
+    
+    try:
+        # Convert device_id to device URI
+        device_repo = DeviceRepository()
+        device = device_repo.get_device(device_id)
+        
+        if not device:
+            raise HTTPException(status_code=404, detail=f"Scanner '{device_id}' not found")
+        
+        device_uri = device.uri
+        
+        # Create temp file for preview
+        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+            preview_file = Path(tmp.name)
+        
+        try:
+            # Low-res preview scan (100 DPI, grayscale, JPEG)
+            result = subprocess.run(
+                [
+                    'scanimage',
+                    '--device-name', device_uri,
+                    '--resolution', '100',
+                    '--mode', 'Gray',
+                    '--format', 'jpeg'
+                ],
+                stdout=open(preview_file, 'wb'),
+                stderr=subprocess.PIPE,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                raise Exception(f"scanimage failed: {result.stderr.decode()}")
+            
+            # Read and encode as base64
+            with open(preview_file, 'rb') as f:
+                image_data = base64.b64encode(f.read()).decode('utf-8')
+            
+            return JSONResponse({
+                "status": "success",
+                "image": f"data:image/jpeg;base64,{image_data}",
+                "format": "jpeg"
+            })
+            
+        finally:
+            # Cleanup
+            if preview_file.exists():
+                preview_file.unlink()
+    
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=408, detail="Preview scan timeout")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Preview failed: {str(e)}")

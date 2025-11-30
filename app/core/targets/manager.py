@@ -311,6 +311,14 @@ class TargetManager:
                     self._deliver_paperless(target, file, metadata)
                 elif target.type == 'Webhook':
                     self._deliver_webhook(target, file, metadata)
+                elif target.type == 'Google Drive':
+                    self._deliver_google_drive(target, file)
+                elif target.type == 'Dropbox':
+                    self._deliver_dropbox(target, file)
+                elif target.type == 'OneDrive':
+                    self._deliver_onedrive(target, file)
+                elif target.type == 'Nextcloud':
+                    self._deliver_nextcloud(target, file)
                 else:
                     raise Exception(f"Unsupported target type: {target.type}")
                 
@@ -434,3 +442,23 @@ class TargetManager:
             data = metadata
             response = requests.post(url, files=files, data=data, timeout=30)
             response.raise_for_status()
+    
+    def _deliver_google_drive(self, target: TargetConfig, file: Path) -> None:
+        """Upload to Google Drive."""
+        from app.core.targets.cloud import GoogleDriveHandler
+        GoogleDriveHandler.upload(file, target.config)
+    
+    def _deliver_dropbox(self, target: TargetConfig, file: Path) -> None:
+        """Upload to Dropbox."""
+        from app.core.targets.cloud import DropboxHandler
+        DropboxHandler.upload(file, target.config)
+    
+    def _deliver_onedrive(self, target: TargetConfig, file: Path) -> None:
+        """Upload to OneDrive."""
+        from app.core.targets.cloud import OneDriveHandler
+        OneDriveHandler.upload(file, target.config)
+    
+    def _deliver_nextcloud(self, target: TargetConfig, file: Path) -> None:
+        """Upload to Nextcloud/ownCloud."""
+        from app.core.targets.cloud import NextcloudHandler
+        NextcloudHandler.upload(file, target.config)
