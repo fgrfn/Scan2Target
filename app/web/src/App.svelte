@@ -29,6 +29,7 @@
   let newPrinterUri = '';
   let newPrinterName = '';
   let discoveredDevices = [];
+  let discoveredScanners = [];
   let isDiscovering = false;
   let lastDiscoveryTime = null;
 
@@ -244,6 +245,30 @@
     }
   }
 
+  async function removeDevice(deviceId, deviceType) {
+    const typeName = deviceType === 'printer' ? 'printer' : 'scanner';
+    if (!confirm(`Remove ${typeName} "${deviceId}"?`)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE}/devices/${deviceId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        await loadData();
+        alert(`✅ ${typeName.charAt(0).toUpperCase() + typeName.slice(1)} removed successfully`);
+      } else {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        alert(`❌ Failed to remove ${typeName}: ${errorData.detail || response.statusText}`);
+      }
+    } catch (error) {
+      console.error(`Remove ${typeName} error:`, error);
+      alert(`❌ Failed to remove ${typeName}: ${error.message}`);
+    }
+  }
+
   async function discoverPrinters() {
     isDiscovering = true;
     try {
@@ -302,32 +327,62 @@
     }
   }
 
-  async function removePrinter(printerId) {
-    if (!confirm(`Remove printer "${printerId}"? This will delete the printer from CUPS.`)) {
-      return;
-    }
-
+  async function discoverScanners() {
+    isDiscovering = true;
     try {
-      const response = await fetch(`${API_BASE}/printers/${encodeURIComponent(printerId)}`, {
-        method: 'DELETE'
+      const response = await fetch(`${API_BASE}/devices/discover`);
+      if (response.ok) {
+        const allDevices = await response.json();
+        
+        // Filter to only show scanners (not printers)
+        discoveredScanners = allDevices.filter(device => device.device_type === 'scanner');
+        lastDiscoveryTime = new Date();
+        
+        console.log('Discovery complete:', discoveredScanners.length, 'scanners found');
+      } else {
+        const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        alert(`Failed to discover scanners: ${error.detail || response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Discovery error:', error);
+      alert(`Failed to discover scanners: ${error.message}`);
+    } finally {
+      isDiscovering = false;
+    }
+  }
+
+  async function addDiscoveredScanner(device) {
+    try {
+      const response = await fetch(`${API_BASE}/devices/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uri: device.uri,
+          name: device.name,
+          device_type: 'scanner',
+          make: device.make,
+          model: device.model,
+          connection_type: device.connection_type,
+          description: `${device.connection_type} - ${device.model || device.name}`
+        })
       });
 
       if (response.ok) {
         await loadData();
-        // Refresh discovery to update "configured" status
-        if (discoveredDevices.length > 0) {
-          await discoverPrinters();
-        }
-        alert(`Printer "${printerId}" removed successfully`);
+        // Refresh discovery to update "already_added" status
+        await discoverScanners();
+        alert(`✅ Scanner "${device.name}" added successfully`);
       } else {
         const error = await response.json();
-        alert(`Failed to remove printer: ${error.detail || 'Unknown error'}`);
+        alert(`❌ Failed to add scanner: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Remove printer error:', error);
-      alert('Failed to remove printer');
+      console.error('Add scanner error:', error);
+      alert(`❌ Failed to add scanner: ${error.message || 'Network error'}`);
     }
   }
+
+
 
   async function addPrinter() {
     if (!newPrinterUri || !newPrinterName) {
@@ -384,15 +439,19 @@
   <SectionCard id="scan" title="Scan" subtitle="Start server-side scans and route results to targets.">
     <div class="grid two-cols">
       <div>
-        <h3>Scanners</h3>
+        <h3>Configured Scanners</h3>
         {#if scanners.length === 0}
-          <p class="muted">No scanners detected. Make sure SANE/eSCL is configured.</p>
+          <p class="muted">No scanners configured. Use Settings → Scanner Management to add.</p>
         {:else}
           <ul class="list">
             {#each scanners as scanner}
-              <li>
-                <div class="list-title">{scanner.name}</div>
-                <div class="muted">{scanner.type || 'Unknown type'}</div>
+              <li style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="flex: 1;">
+                  <div class="list-title">{scanner.name}</div>
+                  <div class="muted">{scanner.connection_type || scanner.type || 'Unknown'}</div>
+                  <span class="badge {scanner.status === 'online' ? 'success' : 'warning'}">{scanner.status || 'unknown'}</span>
+                </div>
+                <button class="ghost small" on:click={() => removeDevice(scanner.id, 'scanner')}>Remove</button>
               </li>
             {/each}
           </ul>
@@ -447,7 +506,7 @@
                 <div class="muted">{printer.type || 'Unknown'} · {printer.id}</div>
                 <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
                   <span class={`badge ${printer.status === 'idle' ? 'success' : 'warning'}`}>{printer.status}</span>
-                  <button class="ghost small" on:click={() => removePrinter(printer.id)}>Remove</button>
+                  <button class="ghost small" on:click={() => removeDevice(printer.id, 'printer')}>Remove</button>
                 </div>
               </li>
             {/each}
@@ -600,31 +659,46 @@
           <p class="muted small mt">No devices found. Make sure printers are powered on and connected (USB or network).</p>
         {/if}
       </div>
-      <div class="panel">
-        <div class="panel-header">Manual Setup (Advanced)</div>
-        <div class="panel-body">
-          <p class="muted small">💡 <strong>Tip:</strong> Use "Discover Printers" instead - it's easier and automatic!</p>
-          <p class="muted small">For advanced users: manually specify printer URI if discovery doesn't work.</p>
-          <label for="printer-uri">Printer URI</label>
-          <input id="printer-uri" type="text" placeholder="usb://HP/Envy or ipp://printer.local" bind:value={newPrinterUri} />
-          <label for="printer-name">Printer Name</label>
-          <input id="printer-name" type="text" placeholder="My_Printer" bind:value={newPrinterName} />
-          <button class="ghost block" on:click={addPrinter}>Add Manually</button>
-          <hr style="margin: 1rem 0; border: none; border-top: 1px solid rgba(255,255,255,0.1);">
-          <h4>Printer Management:</h4>
-          <ul class="muted small" style="margin-left: 1rem; margin-bottom: 1rem;">
-            <li>✓ Printers are <strong>never</strong> added automatically</li>
-            <li>✓ Use Discovery or Manual Setup to add</li>
-            <li>✓ Remove printers in Print section</li>
+      <div>
+        <h3>Scanner Management</h3>
+        <p class="muted">Discover and add USB/wireless scanners via SANE/eSCL. Scanners must be manually added - they are never added automatically.</p>
+        <button class="primary" on:click={discoverScanners} disabled={isDiscovering}>
+          {isDiscovering ? 'Searching...' : 'Discover Scanners'}
+        </button>
+        {#if lastDiscoveryTime}
+          <p class="muted small" style="margin-top: 0.5rem;">
+            Last scan: {lastDiscoveryTime.toLocaleTimeString()} · Click "Discover" to refresh
+          </p>
+        {/if}
+        
+        {#if discoveredScanners.length > 0}
+          <h4 class="mt">Discovered Scanners ({discoveredScanners.length})</h4>
+          <ul class="list">
+            {#each discoveredScanners as device}
+              <li>
+                <div class="list-title">{device.name}</div>
+                <div class="muted">
+                  {device.connection_type || device.type}
+                  {#if device.already_added}
+                    <span class="badge success" style="margin-left: 0.5rem;">✓ Already Added</span>
+                  {:else}
+                    <span class="badge warning" style="margin-left: 0.5rem;">Not Added Yet</span>
+                  {/if}
+                </div>
+                <div class="muted small" style="font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;">
+                  {device.uri}
+                </div>
+                {#if !device.already_added}
+                  <button class="primary small" on:click={() => addDiscoveredScanner(device)}>Add Scanner</button>
+                {:else}
+                  <button class="ghost small" disabled>Already Added</button>
+                {/if}
+              </li>
+            {/each}
           </ul>
-          <h4>Supported Types:</h4>
-          <ul class="muted small" style="margin-left: 1rem;">
-            <li><strong>USB:</strong> Auto-detected (any port)</li>
-            <li><strong>Wireless:</strong> AirPrint/IPP (dnssd://)</li>
-            <li><strong>Network:</strong> Direct IPP (ipp://)</li>
-          </ul>
-          <p class="muted small"><strong>Note:</strong> Multi-function devices appear in both Printers and Scanners if they support both.</p>
-        </div>
+        {:else if !isDiscovering}
+          <p class="muted small mt">No scanners found. Make sure scanners are powered on and connected (USB or network).</p>
+        {/if}
       </div>
     </div>
   </SectionCard>
