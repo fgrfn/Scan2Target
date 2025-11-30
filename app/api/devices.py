@@ -137,27 +137,9 @@ async def list_devices(device_type: str | None = None):
     
     response = []
     for device in devices:
-        # Check online status (simplified - just checks if device exists)
+        # Skip expensive online status checks for fast loading
+        # Status can be checked separately if needed
         status = "unknown"
-        if device.device_type == "printer":
-            try:
-                # Check if printer is in CUPS
-                printer_manager = PrinterManager()
-                printers = printer_manager.list_printers()
-                printer_ids = [p['id'] for p in printers]
-                # Use URI-based lookup or name-based lookup
-                status = "online" if any(device.id in pid or device.uri in p.get('uri', '') for p, pid in zip(printers, printer_ids)) else "offline"
-            except:
-                status = "unknown"
-        elif device.device_type == "scanner":
-            try:
-                # Check if scanner is visible to SANE
-                scanner_manager = ScannerManager()
-                scanners = scanner_manager.list_devices()
-                scanner_uris = [s['id'] for s in scanners]
-                status = "online" if device.uri in scanner_uris else "offline"
-            except:
-                status = "unknown"
         
         response.append(DeviceResponse(
             id=device.id,

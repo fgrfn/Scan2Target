@@ -39,7 +39,7 @@ class ScannerManager:
                 text=True,
                 encoding='utf-8',
                 errors='replace',  # Replace invalid UTF-8 bytes with �
-                timeout=15
+                timeout=8
             )
             
             if result.returncode == 0:
