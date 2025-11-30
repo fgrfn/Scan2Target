@@ -49,7 +49,7 @@ class TargetRepository:
                     config=json.loads(row['config']),
                     enabled=bool(row['enabled']),
                     description=row['description'],
-                    is_favorite=bool(row.get('is_favorite', 0))
+                    is_favorite=bool(row['is_favorite']) if 'is_favorite' in row.keys() else False
                 )
         return None
     
@@ -88,7 +88,7 @@ class TargetRepository:
                     config=json.loads(row['config']),
                     enabled=bool(row['enabled']),
                     description=row['description'],
-                    is_favorite=bool(row.get('is_favorite', 0))
+                    is_favorite=bool(row['is_favorite']) if 'is_favorite' in row.keys() else False
                 )
                 for row in rows
             ]
