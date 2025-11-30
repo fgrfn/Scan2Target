@@ -855,7 +855,7 @@
           </div>
           
           {#if job.thumbnailUrl}
-            <div style="margin-bottom: 0.75rem; cursor: pointer;" on:click={() => expandedThumbnail = expandedThumbnail === job.id ? null : job.id}>
+            <div style="margin-bottom: 0.75rem; cursor: pointer; display: flex; justify-content: flex-start;" on:click={() => expandedThumbnail = expandedThumbnail === job.id ? null : job.id}>
               <img 
                 src={job.thumbnailUrl} 
                 alt="Scan preview" 
@@ -904,7 +904,7 @@
           </div>
           
           {#if lastCompletedJob.thumbnailUrl}
-            <div style="margin-bottom: 0.75rem; cursor: pointer;" on:click={() => expandedThumbnail = expandedThumbnail === lastCompletedJob.id ? null : lastCompletedJob.id}>
+            <div style="margin-bottom: 0.75rem; cursor: pointer; display: flex; justify-content: flex-start;" on:click={() => expandedThumbnail = expandedThumbnail === lastCompletedJob.id ? null : lastCompletedJob.id}>
               <img 
                 src={lastCompletedJob.thumbnailUrl} 
                 alt="Scan preview" 
