@@ -2241,12 +2241,12 @@
       {/if}
       
       {#if statsHourly.length > 0}
+        {@const maxCount = Math.max(...statsHourly.map(h => h.count), 1)}
         <div>
           <h3>{t.hourlyDistribution}</h3>
           <div class="card" style="padding: 1.5rem;">
             <div style="display: flex; align-items: flex-end; gap: 0.25rem; height: 150px;">
               {#each statsHourly as hour}
-                {@const maxCount = Math.max(...statsHourly.map(h => h.count), 1)}
                 <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center;">
                   <div 
                     style="width: 100%; background: var(--primary); border-radius: 4px 4px 0 0; transition: all 0.3s;"
