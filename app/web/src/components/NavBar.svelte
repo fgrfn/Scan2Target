@@ -8,7 +8,7 @@
     <div class="logo">📠</div>
     <div>
       <div class="brand-name">{brand}</div>
-      <div class="brand-sub">Scan &amp; Print Hub</div>
+      <div class="brand-sub">Scan Hub</div>
     </div>
   </div>
   <nav class="links">
