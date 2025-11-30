@@ -1,6 +1,6 @@
 # RaspScan - Scan Hub
 
-RaspScan is a Raspberry Pi-based scan server that centralizes scanning for network and USB devices. Trigger scans remotely via API or web interface and automatically route scanned documents to network targets (SMB shares, email, webhooks).
+RaspScan is a network scan server that centralizes scanning for network and USB devices. Trigger scans remotely via API or web interface and automatically route scanned documents to network targets (SMB shares, email, webhooks). Works on Linux servers, Raspberry Pi, and virtual machines.
 
 ## Contents
 - `docs/architecture.md` — system architecture, API overview, security model.
@@ -27,7 +27,7 @@ The installer automatically:
 - ✅ Configures automatic cleanup cron job (daily at 3 AM)
 - ✅ Creates database and default admin user
 
-2. Access RaspScan at: `http://YOUR_RASPBERRY_PI_IP` (no port needed - runs on port 80)
+2. Access RaspScan at: `http://YOUR_SERVER_IP` (no port needed - runs on port 80)
 
 ### Manual Setup
 If you prefer manual installation:
@@ -42,7 +42,7 @@ If you prefer manual installation:
 ## Quick Start
 
 After installation:
-1. Access Web UI at `http://YOUR_RASPBERRY_PI_IP`
+1. Access Web UI at `http://YOUR_SERVER_IP`
 2. Login with default credentials (username: `admin`, password: `admin`)
 3. **⚠️ CHANGE THE DEFAULT PASSWORD IMMEDIATELY!**
 4. Click "Discover Scanners" to find your scanner
@@ -63,8 +63,8 @@ npm run dev
 
 ## System Requirements
 
-- **Hardware:** Raspberry Pi 3B+ or newer (4GB RAM recommended)
-- **OS:** Raspberry Pi OS (Debian-based)
+- **Hardware:** Linux server, VM, or Raspberry Pi (2GB+ RAM recommended)
+- **OS:** Debian-based Linux (Debian, Ubuntu, Raspberry Pi OS)
 - **Network:** Wired or WiFi connection
 - **Scanner:** USB or network scanner with SANE/eSCL support
 
@@ -470,7 +470,7 @@ RaspScan's open API makes integration easy:
 # configuration.yaml
 rest_command:
   raspscan_quick_scan:
-    url: "http://RASPI_IP/api/v1/scan/start"
+    url: "http://SERVER_IP/api/v1/scan/start"
     method: POST
     content_type: "application/json"
     payload: >
@@ -490,7 +490,7 @@ button:
 sensor:
   - platform: rest
     name: RaspScan Active Jobs
-    resource: "http://RASPI_IP/api/v1/history"
+    resource: "http://SERVER_IP/api/v1/history"
     value_template: >
       {{ value_json | selectattr('status', 'in', ['queued', 'running']) | list | length }}
     scan_interval: 5
@@ -521,4 +521,4 @@ sensor:
 - `GET /api/v1/maintenance/disk-usage` - Get disk usage stats
 - `POST /api/v1/maintenance/cleanup` - Trigger manual cleanup
 
-Full API documentation: `http://YOUR_IP/docs`
+Full API documentation: `http://YOUR_SERVER_IP/docs`

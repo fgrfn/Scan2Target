@@ -17,7 +17,7 @@
       activeScansMenu: 'Active Scans',
       targets: 'Targets',
       history: 'History',
-      heroTagline: 'Raspberry Pi · FastAPI · Svelte',
+      heroTagline: 'Linux · FastAPI · Svelte',
       heroTitle: 'Central hub for scanning.',
       heroDescription: 'Trigger scans on devices without physical buttons, and route files to SMB, email, Paperless-ngx, or webhooks.',
       startScan: 'Start a scan',
@@ -48,6 +48,7 @@
       addScanner: 'Add Scanner',
       noScannersFound: 'No scanners found. Make sure scanners are powered on and connected (USB or network).',
       quickProfiles: 'Quick profiles',
+      scanSubtitle: 'Start server-side scans and route results to targets.',
       launchScan: 'Launch a scan',
       chooseScanner: 'Choose scanner',
       selectScanner: '-- Select scanner --',
@@ -117,7 +118,7 @@
       activeScansMenu: 'Aktive Scans',
       targets: 'Ziele',
       history: 'Verlauf',
-      heroTagline: 'Raspberry Pi · FastAPI · Svelte',
+      heroTagline: 'Linux · FastAPI · Svelte',
       heroTitle: 'Zentrale für Scannen.',
       heroDescription: 'Starten Sie Scans auf Geräten ohne physische Tasten und leiten Sie Dateien an SMB, E-Mail, Paperless-ngx oder Webhooks weiter.',
       startScan: 'Scan starten',
@@ -148,6 +149,7 @@
       addScanner: 'Scanner hinzufügen',
       noScannersFound: 'Keine Scanner gefunden. Stellen Sie sicher, dass Scanner eingeschaltet und verbunden sind (USB oder Netzwerk).',
       quickProfiles: 'Schnellprofile',
+      scanSubtitle: 'Starten Sie serverseitige Scans und leiten Sie Ergebnisse an Ziele weiter.',
       launchScan: 'Scan starten',
       chooseScanner: 'Scanner wählen',
       selectScanner: '-- Scanner auswählen --',
@@ -927,10 +929,10 @@
     </div>
   </section>
 
-  <SectionCard id="scan" title={t.scan} subtitle="Start server-side scans and route results to targets.">
+  <SectionCard id="scan" title={t.scan} subtitle={t.scanSubtitle}>
     <div class="grid two-cols">
       <div>
-        <h3>Configured Scanners</h3>
+        <h3>{t.configuredScanners}</h3>
         {#if isLoadingDevices}
           <p class="muted">⏳ Loading scanners...</p>
         {:else if scanners.length === 0}
@@ -964,19 +966,19 @@
           </ul>
         {/if}
         
-        <h3 class="mt">Scanner Management</h3>
-        <p class="muted">Discover and add USB/wireless scanners via SANE/eSCL. Scanners must be manually added - they are never added automatically.</p>
+        <h3 class="mt">{t.scannerManagement}</h3>
+        <p class="muted">{t.scannerManagementDesc}</p>
         <button class="primary" on:click={discoverScanners} disabled={isDiscovering}>
-          {isDiscovering ? 'Searching...' : 'Discover Scanners'}
+          {isDiscovering ? t.searching : t.discoverScanners}
         </button>
         {#if lastDiscoveryTime}
           <p class="muted small" style="margin-top: 0.5rem;">
-            Last scan: {lastDiscoveryTime.toLocaleTimeString()} · Click "Discover" to refresh
+            {t.lastScan}: {lastDiscoveryTime.toLocaleTimeString()} · {t.clickRefresh}
           </p>
         {/if}
         
         {#if discoveredScanners.length > 0}
-          <h4 class="mt">Discovered Scanners ({discoveredScanners.length})</h4>
+          <h4 class="mt">{t.discoveredScanners} ({discoveredScanners.length})</h4>
           <ul class="list">
             {#each discoveredScanners as device}
               <li>
@@ -1007,7 +1009,7 @@
           <p class="muted small mt">{t.noScannersFound}</p>
         {/if}
         
-        <h3 class="mt">Quick profiles</h3>
+        <h3 class="mt">{t.quickProfiles}</h3>
         <div class="chip-row">
           {#each quickProfiles as profile}
             <div class="chip" title={profile.description || profile.name}>
@@ -1017,9 +1019,9 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-header">Launch a scan</div>
+        <div class="panel-header">{t.launchScan}</div>
         <div class="panel-body">
-          <label for="scanner-select">Choose scanner</label>
+          <label for="scanner-select">{t.chooseScanner}</label>
           <select id="scanner-select" bind:value={selectedScanner}>
             <option value="">-- Select scanner --</option>
             {#each scanners as scanner}
@@ -1030,14 +1032,14 @@
             {/each}
           </select>
           
-          <label for="source-select">🆕 Scan Source</label>
+          <label for="source-select">{t.scanSource}</label>
           <select id="source-select" bind:value={scanSource} style="width: 100%; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px;">
             <option value="Flatbed">📄 Flatbed (single page)</option>
             <option value="ADF">📚 Document Feeder (ADF) - Multi-page</option>
           </select>
-          <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">ADF automatically scans all pages in the feeder</p>
+          <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">{t.adfDesc}</p>
           
-          <label for="profile-select">Profile</label>
+          <label for="profile-select">{t.profile}</label>
           <select id="profile-select" bind:value={selectedProfile}>
             {#each quickProfiles.filter(p => p.source === scanSource) as profile}
               <option value={profile.id}>
@@ -1045,7 +1047,7 @@
               </option>
             {/each}
           </select>
-          <label for="target-select">Target</label>
+          <label for="target-select">{t.target}</label>
           <select id="target-select" bind:value={selectedTarget}>
             <option value="">-- Select target --</option>
             {#each targets as target}
@@ -1054,17 +1056,17 @@
               </option>
             {/each}
           </select>
-          <label for="filename-input">Filename (optional)</label>
+          <label for="filename-input">{t.filename}</label>
           <input 
             id="filename-input" 
             type="text" 
             bind:value={scanFilename} 
-            placeholder="e.g. invoice_2025" 
+            placeholder={t.filenamePlaceholder} 
             style="width: 100%; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px;"
           />
-          <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">Leave empty for auto-generated name (scan_UUID)</p>
+          <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">{t.filenameDesc}</p>
           
-          <button class="primary block" on:click={startScan}>Start scan</button>
+          <button class="primary block" on:click={startScan}>{t.startScanButton}</button>
         </div>
       </div>
     </div>
@@ -1194,7 +1196,7 @@
   <SectionCard id="targets" title={t.targets} subtitle={t.targetsSubtitle}>
     <div class="grid two-cols">
       <div>
-        <h3>Delivery targets</h3>
+        <h3>{t.deliveryTargets}</h3>
         {#if isLoadingTargets}
           <p class="muted">⏳ Loading targets...</p>
         {:else if targets.length === 0}
@@ -1233,9 +1235,9 @@
         {/if}
       </div>
       <div class="panel">
-        <div class="panel-header">Add target</div>
+        <div class="panel-header">{t.addTarget}</div>
         <div class="panel-body">
-          <label for="target-type">Type</label>
+          <label for="target-type">{t.type}</label>
           <select id="target-type" bind:value={targetType}>
             <option>SMB</option>
             <option>SFTP</option>
@@ -1243,24 +1245,24 @@
             <option>Paperless-ngx</option>
             <option>Webhook</option>
           </select>
-          <label for="target-name">Name</label>
-          <input id="target-name" type="text" placeholder="e.g. NAS scans" bind:value={targetName} />
-          <label for="target-connection">Connection</label>
-          <input id="target-connection" type="text" placeholder="//nas/share or URL" bind:value={targetConnection} />
+          <label for="target-name">{t.name}</label>
+          <input id="target-name" type="text" placeholder={t.namePlaceholder} bind:value={targetName} />
+          <label for="target-connection">{t.connection}</label>
+          <input id="target-connection" type="text" placeholder={t.connectionPlaceholder} bind:value={targetConnection} />
           
           {#if targetType === 'SMB'}
-            <label for="target-username">Username</label>
-            <input id="target-username" type="text" placeholder="Network username" bind:value={targetUsername} />
-            <label for="target-password">Password</label>
-            <input id="target-password" type="password" placeholder="Network password" bind:value={targetPassword} />
+            <label for="target-username">{t.username}</label>
+            <input id="target-username" type="text" placeholder={t.usernamePlaceholder} bind:value={targetUsername} />
+            <label for="target-password">{t.password}</label>
+            <input id="target-password" type="password" placeholder={t.passwordPlaceholder} bind:value={targetPassword} />
           {/if}
           
           <div style="display: flex; gap: 0.5rem;">
-            <button class="primary" style="flex: 1;" on:click={() => saveTarget(false)}>Test & Save</button>
-            <button class="ghost" style="flex: 1;" on:click={() => saveTarget(true)}>Save without test</button>
+            <button class="primary" style="flex: 1;" on:click={() => saveTarget(false)}>{t.testAndSave}</button>
+            <button class="ghost" style="flex: 1;" on:click={() => saveTarget(true)}>{t.saveWithoutTest}</button>
           </div>
           <p style="font-size: 0.85rem; color: #888; margin-top: 0.5rem;">
-            💡 "Test & Save" validates the connection before saving. Use "Save without test" if the server is temporarily offline.
+            {t.testSaveHint}
           </p>
         </div>
       </div>
