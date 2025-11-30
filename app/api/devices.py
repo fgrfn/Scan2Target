@@ -187,6 +187,7 @@ async def list_devices(device_type: str | None = None):
             connection_type=device.connection_type,
             description=device.description,
             is_active=device.is_active,
+            is_favorite=device.is_favorite,
             status=status
         ))
     

@@ -642,9 +642,8 @@
         <h3 class="mt">Quick profiles</h3>
         <div class="chip-row">
           {#each quickProfiles as profile}
-            <div class="chip" title={profile.description || ''}>
-              {profile.name}
-              {#if profile.source === 'ADF'}<span style="color: var(--primary); margin-left: 4px;">📄</span>{/if}
+            <div class="chip" title={profile.description || profile.name}>
+              {profile.source === 'ADF' ? '📚' : '📄'} {profile.name}
             </div>
           {/each}
         </div>

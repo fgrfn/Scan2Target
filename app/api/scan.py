@@ -19,10 +19,16 @@ class ScanRequest(BaseModel):
 
 class ScanProfile(BaseModel):
     id: str
+    name: str
     dpi: int
     color_mode: str
     paper_size: str
     format: str
+    quality: int
+    source: str
+    batch_scan: bool
+    auto_detect: bool
+    description: str
 
 
 class ScanJobResponse(BaseModel):
