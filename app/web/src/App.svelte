@@ -1899,12 +1899,12 @@
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
               <span style="font-size: 0.875rem; font-weight: 500; width: 50px;">{t.scanStatus}</span>
               <span class={`badge ${job.status === 'running' ? 'warning' : 'info'}`} style="font-size: 0.875rem;">
-                {job.status === 'queued' ? '⏳ ' + (lang === 'de' ? 'Wartend' : 'Queued') : '🔄 ' + (lang === 'de' ? 'Läuft' : 'Running')}
+                {job.status === 'queued' ? t.queued : t.running}
               </span>
             </div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <span style="font-size: 0.875rem; font-weight: 500; width: 50px; opacity: 0.5;">{t.uploadStatus}</span>
-              <span class="badge" style="font-size: 0.875rem; opacity: 0.5;">⏸️ {lang === 'de' ? 'Wartend' : 'Waiting'}</span>
+              <span class="badge" style="font-size: 0.875rem; opacity: 0.5;">{t.waiting}</span>
             </div>
           </div>
           
@@ -1944,14 +1944,14 @@
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
               <span style="font-size: 0.875rem; font-weight: 500; width: 50px;">{t.scanStatus}</span>
               <span class={`badge ${lastCompletedJob.status === 'failed' ? 'danger' : 'success'}`} style="font-size: 0.875rem;">
-                {lastCompletedJob.status === 'failed' ? '❌ ' + (lang === 'de' ? 'Fehlgeschlagen' : 'Failed') : t.done}
+                {lastCompletedJob.status === 'failed' ? t.failed : t.done}
               </span>
             </div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <span style="font-size: 0.875rem; font-weight: 500; width: 50px; {lastCompletedJob.status === 'failed' ? 'opacity: 0.5;' : ''}">{t.uploadStatus}</span>
               <span class={`badge ${lastCompletedJob.status === 'failed' ? '' : lastCompletedJob.message ? 'danger' : 'success'}`} 
                     style="font-size: 0.875rem; {lastCompletedJob.status === 'failed' ? 'opacity: 0.5;' : ''}">
-                {lastCompletedJob.status === 'failed' ? '⏸️ ' + (lang === 'de' ? 'Übersprungen' : 'Skipped') : lastCompletedJob.message ? '❌ ' + (lang === 'de' ? 'Fehlgeschlagen' : 'Failed') : t.done}
+                {lastCompletedJob.status === 'failed' ? t.skipped : lastCompletedJob.message ? t.failed : t.done}
               </span>
               {#if lastCompletedJob.status === 'completed' && lastCompletedJob.message}
                 <button 
