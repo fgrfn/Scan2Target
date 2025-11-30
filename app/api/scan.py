@@ -45,6 +45,7 @@ async def list_profiles():
 async def start_scan(payload: ScanRequest):
     """Trigger a scan and enqueue delivery to the selected target."""
     from fastapi import HTTPException
+    from app.core.devices.repository import DeviceRepository
     
     # Validate inputs
     if not payload.device_id or payload.device_id.strip() == "":
@@ -57,13 +58,30 @@ async def start_scan(payload: ScanRequest):
         raise HTTPException(status_code=400, detail="Please select a target destination")
     
     try:
+        # Convert device_id to device URI
+        # The frontend sends the database ID, but scanimage needs the actual URI
+        device_repo = DeviceRepository()
+        device = device_repo.get_device(payload.device_id)
+        
+        if not device:
+            raise HTTPException(status_code=404, detail=f"Scanner '{payload.device_id}' not found in database")
+        
+        if device.device_type != 'scanner':
+            raise HTTPException(status_code=400, detail=f"Device '{payload.device_id}' is not a scanner")
+        
+        # Use the device URI for scanning
+        device_uri = device.uri
+        print(f"Starting scan with device ID: {payload.device_id} -> URI: {device_uri}")
+        
         job_id = ScannerManager().start_scan(
-            device_id=payload.device_id,
+            device_id=device_uri,  # Pass URI instead of database ID
             profile_id=payload.profile_id,
             target_id=payload.target_id,
             filename_prefix=payload.filename_prefix,
         )
         return ScanJobResponse(job_id=job_id, status=JobStatus.queued)
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Scan error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to start scan: {str(e)}")
