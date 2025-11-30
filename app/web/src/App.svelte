@@ -16,7 +16,7 @@
   let selectedProfile = '';
   let selectedTarget = '';
   let scanFilename = '';
-  let webhookUrl = '';
+  let scanSource = 'Flatbed';
   let selectedPrinter = '';
   let printCopies = 1;
   let printFile = null;
@@ -89,7 +89,14 @@
     try {
       const response = await fetch(`${API_BASE}/scan/profiles`);
       if (response.ok) {
-        quickProfiles = await response.json();
+        const profiles = await response.json();
+        // Transform API profiles to match frontend structure
+        quickProfiles = profiles.map(p => ({
+          id: p.id,
+          name: p.name || p.id,
+          description: p.description || '',
+          source: p.source || 'Flatbed'
+        }));
         console.log('Loaded profiles from API:', quickProfiles.length);
       }
     } catch (error) {
@@ -171,22 +178,15 @@
     }
 
     try {
-      const payload = {
-        device_id: selectedScanner,
-        profile_id: selectedProfile || quickProfiles[0].id,
-        target_id: selectedTarget,
-        filename_prefix: scanFilename || 'scan'
-      };
-      
-      // Add webhook_url if provided
-      if (webhookUrl && webhookUrl.trim()) {
-        payload.webhook_url = webhookUrl.trim();
-      }
-      
       const response = await fetch(`${API_BASE}/scan/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          device_id: selectedScanner,
+          profile_id: selectedProfile || quickProfiles[0].id,
+          target_id: selectedTarget,
+          filename_prefix: scanFilename || 'scan'
+        })
       });
 
       if (response.ok) {
@@ -595,12 +595,19 @@
               </option>
             {/each}
           </select>
+          
+          <label for="source-select">🆕 Scan-Quelle</label>
+          <select id="source-select" bind:value={scanSource} style="width: 100%; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px;">
+            <option value="Flatbed">📄 Flachbett (Flatbed)</option>
+            <option value="ADF">📚 Dokumenteneinzug (ADF) - Multi-page</option>
+          </select>
+          <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">ADF scannt automatisch alle Seiten im Einzug</p>
+          
           <label for="profile-select">Profile</label>
           <select id="profile-select" bind:value={selectedProfile}>
-            {#each quickProfiles as profile}
+            {#each quickProfiles.filter(p => p.source === scanSource) as profile}
               <option value={profile.id}>
                 {profile.name}
-                {#if profile.source === 'ADF'}🆕 Multi-page{/if}
               </option>
             {/each}
           </select>
@@ -620,16 +627,6 @@
             style="width: 100%; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px;"
           />
           <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">Leave empty for auto-generated name (scan_UUID)</p>
-          
-          <label for="webhook-input">🆕 Webhook URL (optional)</label>
-          <input 
-            id="webhook-input" 
-            type="url" 
-            bind:value={webhookUrl} 
-            placeholder="https://hooks.slack.com/services/..." 
-            style="width: 100%; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px;"
-          />
-          <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">Get notified when scan completes (Slack, Discord, etc.)</p>
           
           <button class="primary block" on:click={startScan}>Start scan</button>
         </div>
