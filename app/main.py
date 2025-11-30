@@ -42,6 +42,11 @@ def create_app() -> FastAPI:
     app.include_router(devices.router, prefix="/api/v1/devices", tags=["devices"])
     app.include_router(targets.router, prefix="/api/v1/targets", tags=["targets"])
     app.include_router(history.router, prefix="/api/v1/history", tags=["history"])
+    
+    # Serve thumbnails from temp directory
+    thumbnail_dir = Path("/tmp/raspscan/scans")
+    thumbnail_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/thumbnails", StaticFiles(directory=str(thumbnail_dir)), name="thumbnails")
 
     @app.get("/health", tags=["health"])
     async def health():

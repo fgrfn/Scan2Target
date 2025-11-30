@@ -10,6 +10,7 @@
   let targets = [];
   let history = [];
   let statCards = [];
+  let activeJobs = [];
   
   let selectedScanner = '';
   let selectedProfile = '';
@@ -32,6 +33,7 @@
   let isLoadingDevices = true;
   let isLoadingTargets = true;
   let isLoadingHistory = true;
+  let pollInterval = null;
 
   const navLinks = [
     { label: 'Dashboard', href: '#dashboard' },
@@ -68,6 +70,17 @@
         clearInterval(checkComplete);
       }
     }, 100);
+    
+    // Start polling for active jobs
+    pollActiveJobs();
+    pollInterval = setInterval(pollActiveJobs, 3000);
+    
+    // Cleanup on unmount
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
   });
 
   async function loadData() {
@@ -157,6 +170,38 @@
     }
   }
 
+  async function pollActiveJobs() {
+    try {
+      const res = await fetch(`${API_BASE}/history`);
+      if (res.ok) {
+        const allJobs = await res.json();
+        activeJobs = allJobs.filter(j => j.status === 'queued' || j.status === 'running');
+        
+        // Try to load thumbnails for running jobs
+        for (const job of activeJobs) {
+          if (job.status === 'running') {
+            try {
+              // Thumbnail pattern: scan_{job_id}_thumb.jpg
+              const thumbRes = await fetch(`/thumbnails/scan_${job.id}_thumb.jpg`, { method: 'HEAD' });
+              if (thumbRes.ok) {
+                job.thumbnailUrl = `/thumbnails/scan_${job.id}_thumb.jpg?t=${Date.now()}`;
+              }
+            } catch (e) {
+              // Thumbnail not ready yet
+            }
+          }
+        }
+        
+        // Refresh history if there are no more active jobs
+        if (activeJobs.length === 0 && history.some(h => h.status === 'queued' || h.status === 'running')) {
+          loadHistory();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to poll active jobs:', error);
+    }
+  }
+
   function updateStats() {
     const todayScans = history.filter(h => h.job_type === 'scan' && isToday(h.created_at)).length;
     const activeJobs = history.filter(h => h.status === 'queued' || h.status === 'running').length;
@@ -175,8 +220,18 @@
   }
 
   async function startScan() {
-    if (!selectedScanner || !selectedTarget) {
-      alert('Please select scanner and target');
+    if (!selectedScanner) {
+      alert('Please select a scanner');
+      return;
+    }
+    
+    if (!selectedProfile) {
+      alert('Please select a scan profile');
+      return;
+    }
+    
+    if (!selectedTarget) {
+      alert('Please select a target');
       return;
     }
 
@@ -694,6 +749,50 @@
       </div>
     </div>
   </SectionCard>
+
+  <!-- Active Scans Section -->
+  {#if activeJobs.length > 0}
+  <SectionCard title="Active Scans" subtitle="Scans in progress">
+    <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;">
+      {#each activeJobs as job}
+        <div class="panel" style="padding: 1rem;">
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
+            <span class={`badge ${job.status === 'running' ? 'warning' : 'info'}`} style="font-size: 0.875rem;">
+              {job.status === 'queued' ? '⏳ Queued' : '🔄 Scanning'}
+            </span>
+            <span class="muted" style="font-size: 0.875rem;">Job #{job.id.slice(0, 8)}</span>
+          </div>
+          
+          {#if job.thumbnailUrl}
+            <div style="margin-bottom: 0.75rem;">
+              <img 
+                src={job.thumbnailUrl} 
+                alt="Scan preview" 
+                style="width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--border);"
+              />
+            </div>
+          {:else if job.status === 'running'}
+            <div style="margin-bottom: 0.75rem; padding: 3rem 1rem; background: var(--surface-dim); border-radius: 6px; text-align: center;">
+              <p class="muted">🖨️ Scanning...</p>
+            </div>
+          {/if}
+          
+          <div style="font-size: 0.875rem;">
+            <div style="margin-bottom: 0.25rem;">
+              <span class="muted">Device:</span> {job.device_id || 'N/A'}
+            </div>
+            <div style="margin-bottom: 0.25rem;">
+              <span class="muted">Target:</span> {job.target_id || 'N/A'}
+            </div>
+            <div>
+              <span class="muted">Started:</span> {new Date(job.created_at).toLocaleTimeString()}
+            </div>
+          </div>
+        </div>
+      {/each}
+    </div>
+  </SectionCard>
+  {/if}
 
   <SectionCard id="targets" title="Targets" subtitle="Destinations for scanned documents.">
     <div class="grid two-cols">
