@@ -39,8 +39,7 @@
     { label: 'Dashboard', href: '#dashboard' },
     { label: 'Scan', href: '#scan' },
     { label: 'Targets', href: '#targets' },
-    { label: 'History', href: '#history' },
-    { label: 'Settings', href: '#settings' }
+    { label: 'History', href: '#history' }
   ];
 
   const quickProfiles = [
@@ -634,49 +633,4 @@
     {/if}
   </SectionCard>
 
-  <SectionCard id="settings" title="Settings" subtitle="Configure printers and system settings.">
-    <div class="grid two-cols">
-      <div>
-        <h3>Printer Management</h3>
-        <p class="muted">Discover and add USB/wireless printers to CUPS. Printers must be manually added - they are never added automatically.</p>
-        <button class="primary" on:click={discoverPrinters} disabled={isDiscovering}>
-          {isDiscovering ? 'Searching...' : 'Discover Printers'}
-        </button>
-        {#if lastDiscoveryTime}
-          <p class="muted small" style="margin-top: 0.5rem;">
-            Last scan: {lastDiscoveryTime.toLocaleTimeString()} · Click "Discover" to refresh
-          </p>
-        {/if}
-        
-        {#if discoveredDevices.length > 0}
-          <h4 class="mt">Discovered Devices ({discoveredDevices.length})</h4>
-          <ul class="list">
-            {#each discoveredDevices as device}
-              <li>
-                <div class="list-title">{device.name}</div>
-                <div class="muted">
-                  {device.connection_type || device.type}
-                  {#if device.already_added}
-                    <span class="badge success" style="margin-left: 0.5rem;">✓ Already Added</span>
-                  {:else}
-                    <span class="badge warning" style="margin-left: 0.5rem;">Not Added Yet</span>
-                  {/if}
-                </div>
-                <div class="muted small" style="font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;">
-                  {device.uri}
-                </div>
-                {#if !device.already_added}
-                  <button class="primary small" on:click={() => addDiscoveredPrinter(device)}>Add Printer</button>
-                {:else}
-                  <button class="ghost small" disabled>Already Added</button>
-                {/if}
-              </li>
-            {/each}
-          </ul>
-        {:else if !isDiscovering}
-          <p class="muted small mt">No devices found. Make sure printers are powered on and connected (USB or network).</p>
-        {/if}
-      </div>
-    </div>
-  </SectionCard>
 </main>
