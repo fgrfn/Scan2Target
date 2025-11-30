@@ -91,12 +91,19 @@
       if (response.ok) {
         const profiles = await response.json();
         // Transform API profiles to match frontend structure
-        quickProfiles = profiles.map(p => ({
-          id: p.id,
-          name: p.name || p.id,
-          description: p.description || '',
-          source: p.source || 'Flatbed'
-        }));
+        quickProfiles = profiles.map(p => {
+          // Build a more descriptive name
+          let displayName = p.name || p.id;
+          if (p.mode && p.resolution && p.format) {
+            displayName = `${p.mode} @ ${p.resolution} DPI → ${p.format.toUpperCase()}`;
+          }
+          return {
+            id: p.id,
+            name: displayName,
+            description: p.description || '',
+            source: p.source || 'Flatbed'
+          };
+        });
         console.log('Loaded profiles from API:', quickProfiles.length);
       }
     } catch (error) {
@@ -596,12 +603,12 @@
             {/each}
           </select>
           
-          <label for="source-select">🆕 Scan-Quelle</label>
+          <label for="source-select">🆕 Scan Source</label>
           <select id="source-select" bind:value={scanSource} style="width: 100%; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px;">
-            <option value="Flatbed">📄 Flachbett (Flatbed)</option>
-            <option value="ADF">📚 Dokumenteneinzug (ADF) - Multi-page</option>
+            <option value="Flatbed">📄 Flatbed (single page)</option>
+            <option value="ADF">📚 Document Feeder (ADF) - Multi-page</option>
           </select>
-          <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">ADF scannt automatisch alle Seiten im Einzug</p>
+          <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">ADF automatically scans all pages in the feeder</p>
           
           <label for="profile-select">Profile</label>
           <select id="profile-select" bind:value={selectedProfile}>
