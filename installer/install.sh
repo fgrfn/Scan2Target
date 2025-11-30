@@ -103,6 +103,35 @@ enable_service() {
     systemctl status "${SERVICE_NAME}" --no-pager --full || true
 }
 
+setup_cleanup_cron() {
+    echo "[+] Setting up automatic cleanup cron job..."
+    local CLEANUP_SCRIPT="${APP_DIR}/scripts/cleanup.sh"
+    
+    # Make cleanup script executable
+    if [[ -f "${CLEANUP_SCRIPT}" ]]; then
+        chmod +x "${CLEANUP_SCRIPT}"
+        
+        # Add cron job for automatic cleanup (daily at 3 AM)
+        local CRON_LINE="0 3 * * * ${CLEANUP_SCRIPT}"
+        
+        # Check if cron job already exists
+        if sudo -u "${RUN_USER}" crontab -l 2>/dev/null | grep -q "${CLEANUP_SCRIPT}"; then
+            echo "[✓] Cleanup cron job already exists"
+        else
+            # Add to user's crontab
+            (sudo -u "${RUN_USER}" crontab -l 2>/dev/null || true; echo "${CRON_LINE}") | sudo -u "${RUN_USER}" crontab -
+            echo "[✓] Cleanup cron job added (runs daily at 3 AM)"
+        fi
+        
+        # Create log directory
+        mkdir -p /var/log
+        touch /var/log/raspscan-cleanup.log
+        chown "${RUN_USER}:${RUN_USER}" /var/log/raspscan-cleanup.log
+    else
+        echo "[!] Cleanup script not found at ${CLEANUP_SCRIPT}; skipping cron setup" >&2
+    fi
+}
+
 print_info() {
     echo ""
     echo "╔═══════════════════════════════════════════════════════════════════╗"
@@ -131,6 +160,12 @@ print_info() {
     echo "  Status:  sudo systemctl status ${SERVICE_NAME}"
     echo "  Logs:    sudo journalctl -u ${SERVICE_NAME} -f"
     echo ""
+    echo "Automatic Cleanup:"
+    echo "  Scheduled: Daily at 3:00 AM"
+    echo "  View cron: crontab -l"
+    echo "  Manual run: cd ${APP_DIR} && python3 -m app.core.cleanup"
+    echo "  Cleanup logs: tail -f /var/log/raspscan-cleanup.log"
+    echo ""
     echo "Web UI:"
     echo "  Production build already served at: http://$(hostname -I | awk '{print $1}'):8000/"
     echo "  For development with hot-reload:"
@@ -145,6 +180,7 @@ main() {
     setup_venv
     setup_webui
     create_service
+    setup_cleanup_cron
     enable_service
     print_info
 }

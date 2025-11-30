@@ -53,6 +53,13 @@ async def retry_upload(job_id: str):
             job.message = None
             job_manager.update_job(job)
             
+            # Clean up local file after successful retry
+            try:
+                file_path.unlink()
+                print(f"✓ Deleted scan file after successful retry: {file_path}")
+            except Exception as cleanup_error:
+                print(f"Warning: Failed to delete file after retry: {cleanup_error}")
+            
             return {
                 "status": "success",
                 "message": f"Upload successful to {job.target_id}",

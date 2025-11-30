@@ -500,7 +500,19 @@ class ScannerManager:
                     job.message = None
                     job_manager.update_job(job)
                 
-                print(f"Scan job {job_id} completed successfully")
+                print(f"✓ Scan job {job_id} completed successfully")
+                
+                # Clean up local files after successful upload
+                try:
+                    if final_file.exists():
+                        final_file.unlink()
+                        print(f"✓ Deleted scan file: {final_file}")
+                    
+                    # Keep thumbnail for preview in UI (small file ~10-50KB)
+                    # Thumbnails can be cleaned up separately with a cron job if needed
+                    
+                except Exception as cleanup_error:
+                    print(f"Warning: Failed to delete scan file: {cleanup_error}")
                 
             except Exception as delivery_error:
                 print(f"⚠️ Delivery failed for job {job_id}: {delivery_error}")
@@ -512,8 +524,9 @@ class ScannerManager:
                     job.message = f"Upload failed: {str(delivery_error)}"
                     job_manager.update_job(job)
                 
-                print(f"Scan completed but delivery failed. File saved locally: {final_file}")
+                print(f"⚠️ Scan completed but delivery failed. File kept locally for retry: {final_file}")
                 # Don't raise - scan was successful, just delivery failed
+                # File is kept for manual retry
             
             # Send webhook notification if configured
             if webhook_url:
