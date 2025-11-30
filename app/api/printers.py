@@ -26,7 +26,12 @@ class AddPrinterRequest(BaseModel):
 
 @router.get("/", response_model=List[dict])
 async def list_printers():
-    """List available printers."""
+    """
+    List configured printers in CUPS.
+    
+    Returns ONLY printers that were explicitly added via POST /add endpoint.
+    Printers are never automatically added - full manual control.
+    """
     return PrinterManager().list_printers()
 
 
@@ -59,9 +64,17 @@ async def discover_printers():
     """
     Discover available USB and network printers.
     
+    **IMPORTANT: This endpoint ONLY discovers printers, it does NOT add them automatically!**
+    
     Returns both:
     - USB printers connected to any USB port (auto-detected by CUPS)
     - Wireless printers on the network (via AirPrint/IPP/DNS-SD)
+    
+    Each printer shows a "configured" flag:
+    - `configured: true` - Already added to CUPS, ready to use
+    - `configured: false` - Found but NOT added yet (requires manual "Add Printer" action)
+    
+    **To add a printer:** Use the POST /add endpoint or click "Add Printer" in the Web UI.
     
     Note: Scanner-only devices won't appear here (use /scan/devices for scanners)
     """
@@ -71,10 +84,27 @@ async def discover_printers():
 @router.post("/add")
 async def add_printer(printer: AddPrinterRequest):
     """
-    Add a USB or network printer to CUPS.
+    **Manually** add a USB or network printer to CUPS.
     
-    USB printers are auto-detected - you don't need to specify the USB port.
-    Just use the URI from /discover endpoint.
+    **MANUAL CONTROL ONLY:**
+    - Printers are NEVER added automatically
+    - This endpoint must be explicitly called (via Web UI button or API)
+    - Full control over which printers are configured
+    
+    **Process:**
+    1. Discover printers with GET /discover
+    2. User reviews the list
+    3. User explicitly clicks "Add Printer" in Web UI
+    4. This endpoint is called to add printer to CUPS
+    
+    **USB Printers:**
+    - Auto-detected by CUPS when plugged in
+    - No need to specify USB port
+    - Use URI from /discover endpoint (e.g., `usb://HP/ENVY%206400`)
+    
+    **Network Printers:**
+    - Use IPP Everywhere driver for compatibility
+    - Use URI from /discover (e.g., `ipp://printer.local/ipp/print`)
     """
     try:
         PrinterManager().add_printer(
