@@ -44,13 +44,29 @@ async def list_profiles():
 @router.post("/start", response_model=ScanJobResponse)
 async def start_scan(payload: ScanRequest):
     """Trigger a scan and enqueue delivery to the selected target."""
-    job_id = ScannerManager().start_scan(
-        device_id=payload.device_id,
-        profile_id=payload.profile_id,
-        target_id=payload.target_id,
-        filename_prefix=payload.filename_prefix,
-    )
-    return ScanJobResponse(job_id=job_id, status=JobStatus.queued)
+    from fastapi import HTTPException
+    
+    # Validate inputs
+    if not payload.device_id or payload.device_id.strip() == "":
+        raise HTTPException(status_code=400, detail="Please select a scanner")
+    
+    if not payload.profile_id or payload.profile_id.strip() == "":
+        raise HTTPException(status_code=400, detail="Please select a scan profile")
+    
+    if not payload.target_id or payload.target_id.strip() == "":
+        raise HTTPException(status_code=400, detail="Please select a target destination")
+    
+    try:
+        job_id = ScannerManager().start_scan(
+            device_id=payload.device_id,
+            profile_id=payload.profile_id,
+            target_id=payload.target_id,
+            filename_prefix=payload.filename_prefix,
+        )
+        return ScanJobResponse(job_id=job_id, status=JobStatus.queued)
+    except Exception as e:
+        print(f"Scan error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start scan: {str(e)}")
 
 
 @router.get("/jobs", response_model=List[JobRecord])

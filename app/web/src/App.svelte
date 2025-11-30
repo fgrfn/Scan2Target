@@ -119,20 +119,22 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           device_id: selectedScanner,
-          profile: selectedProfile || quickProfiles[0].name,
-          target_id: selectedTarget
+          profile_id: selectedProfile || quickProfiles[0].id,
+          target_id: selectedTarget,
+          filename_prefix: 'scan'
         })
       });
 
       if (response.ok) {
         await loadData();
-        alert('Scan started successfully');
+        alert('✅ Scan started successfully');
       } else {
-        alert('Failed to start scan');
+        const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        alert(`❌ Failed to start scan: ${error.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Scan error:', error);
-      alert('Failed to start scan');
+      alert(`❌ Failed to start scan: ${error.message}`);
     }
   }
 
