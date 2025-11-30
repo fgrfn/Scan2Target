@@ -90,20 +90,13 @@
       const response = await fetch(`${API_BASE}/scan/profiles`);
       if (response.ok) {
         const profiles = await response.json();
-        // Transform API profiles to match frontend structure
-        quickProfiles = profiles.map(p => {
-          // Build a more descriptive name
-          let displayName = p.name || p.id;
-          if (p.mode && p.resolution && p.format) {
-            displayName = `${p.mode} @ ${p.resolution} DPI → ${p.format.toUpperCase()}`;
-          }
-          return {
-            id: p.id,
-            name: displayName,
-            description: p.description || '',
-            source: p.source || 'Flatbed'
-          };
-        });
+        // Use the name from API directly - it's already well formatted
+        quickProfiles = profiles.map(p => ({
+          id: p.id,
+          name: p.name || p.id,
+          description: p.description || '',
+          source: p.source || 'Flatbed'
+        }));
         console.log('Loaded profiles from API:', quickProfiles.length);
       }
     } catch (error) {
@@ -265,7 +258,8 @@
       name: targetName,
       config: config,
       enabled: true,
-      description: null
+      description: null,
+      is_favorite: false
     };
 
     console.log('Saving target:', payload);
