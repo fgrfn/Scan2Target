@@ -7,7 +7,7 @@
   const API_BASE = '/api/v1';
 
   // Language/i18n support
-  let currentLang = localStorage.getItem('raspscan_lang') || 'en';
+  let currentLang = localStorage.getItem('scan2target_lang') || 'en';
   
   const translations = {
     en: {
@@ -376,7 +376,7 @@
   
   function changeLanguage(lang) {
     currentLang = lang;
-    localStorage.setItem('raspscan_lang', lang);
+    localStorage.setItem('scan2target_lang', lang);
   }
 
   let scanners = [];

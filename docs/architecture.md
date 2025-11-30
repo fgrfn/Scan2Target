@@ -123,7 +123,7 @@ POST /api/v1/print
 ```
 
 ## Configuration Model
-- **Storage Choice:** SQLite for structured configuration, users, jobs, and targets; YAML for bootstrap defaults and easy manual edits. SQLite chosen for atomic updates, concurrent access, and simple backups on Pi. Secrets stored encrypted (e.g., Fernet key in `/etc/raspscan/secret.key`).
+- **Storage Choice:** SQLite for structured configuration, users, jobs, and targets; YAML for bootstrap defaults and easy manual edits. SQLite chosen for atomic updates, concurrent access, and simple backups on Pi. Secrets stored encrypted (e.g., Fernet key in `/etc/scan2target/secret.key` or `~/.scan2target/encryption.key`).
 - **Entities:**
   - `User`: username, password hash, roles, allowed IP subnets.
   - `Scanner`: id, type (eSCL/SANE), capabilities, last_seen.
@@ -134,12 +134,12 @@ POST /api/v1/print
 
 ## Security Model
 - **Auth:** Session or JWT tokens; password hashing via `argon2` or `bcrypt`; HTTPS recommended behind Caddy/nginx; optional IP allowlist enforced per request.
-- **Secrets:** Encrypted credential fields; filesystem isolation (`/etc/raspscan/` for secrets, `/data/raspscan` for runtime data).
+- **Secrets:** Encrypted credential fields; filesystem isolation (`/etc/scan2target/` for secrets, `/data/scan2target` for runtime data).
 - **Network Exposure:** Run FastAPI on port 80 (or behind reverse proxy for TLS); disable anonymous access if needed; CSRF protection for web UI.
 
 ## Deployment
 - **Native:** Systemd units to start FastAPI (uvicorn) and optional workers; Avahi for mDNS/AirPrint; CUPS installed with IPP Everywhere.
-- **Container:** Docker Compose defining API, frontend, CUPS, Avahi reflector, and a data volume for `/data/raspscan`.
+- **Container:** Docker Compose defining API, frontend, CUPS, Avahi reflector, and a data volume for `/data/scan2target`.
 
 ## Non-Functional Considerations
 - **Performance:** Use asynchronous I/O for network transfers; scanning/printing operations offloaded to worker threads to avoid blocking event loop.

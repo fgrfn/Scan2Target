@@ -1,5 +1,5 @@
 // Service Worker for Progressive Web App (PWA)
-const CACHE_NAME = 'raspscan-v1';
+const CACHE_NAME = 'scan2target-v1';
 const STATIC_CACHE = [
   '/',
   '/index.html',
@@ -70,7 +70,7 @@ self.addEventListener('fetch', (event) => {
 // Push notification event (for future webhook notifications)
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
-  const title = data.title || 'RaspScan';
+  const title = data.title || 'Scan2Target';
   const options = {
     body: data.body || 'Scan completed',
     icon: '/icon-192.png',

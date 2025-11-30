@@ -1,6 +1,6 @@
 {
-  "name": "RaspScan - Scan Hub",
-  "short_name": "RaspScan",
+  "name": "Scan2Target - Scan Hub",
+  "short_name": "Scan2Target",
   "description": "Network scanning hub for remote document scanning",
   "start_url": "/",
   "display": "standalone",

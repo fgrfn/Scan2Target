@@ -1,4 +1,4 @@
-# RaspScan Web UI (Svelte + Vite)
+# Scan2Target Web UI (Svelte + Vite)
 
 A lightweight, modern single-page UI built with Svelte and Vite. The design uses a dark, glassy shell that highlights scan/print status, targets, and job history. All interactive controls are stubbed and should be wired to the FastAPI backend endpoints.
 
@@ -32,9 +32,9 @@ npm run build # emits production assets to dist/
 - Swap stubbed selects with data-bound dropdowns and add progress indicators for active jobs.
 - Extract reusable widgets (tables, chips, cards) into `src/components` as the UI grows.
 
-# RaspScan Web UI (Svelte)
+# Scan2Target Web UI (Svelte)
 
-This directory will host the SvelteKit frontend for RaspScan.
+This directory hosts the Svelte + Vite frontend for Scan2Target.
 
 ## Pages to Implement
 - **Dashboard:** overall status of scanners/printers and recent scan jobs.
