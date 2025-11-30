@@ -54,9 +54,28 @@ async def print_test_page(printer_id: str):
     return PrintJobResponse(job_id=job_id)
 
 
+@router.get("/discover", response_model=List[dict])
+async def discover_printers():
+    """
+    Discover available USB and network printers.
+    
+    Returns both:
+    - USB printers connected to any USB port (auto-detected by CUPS)
+    - Wireless printers on the network (via AirPrint/IPP/DNS-SD)
+    
+    Note: Scanner-only devices won't appear here (use /scan/devices for scanners)
+    """
+    return PrinterManager().discover_devices()
+
+
 @router.post("/add")
 async def add_printer(printer: AddPrinterRequest):
-    """Add a USB or network printer to CUPS."""
+    """
+    Add a USB or network printer to CUPS.
+    
+    USB printers are auto-detected - you don't need to specify the USB port.
+    Just use the URI from /discover endpoint.
+    """
     PrinterManager().add_printer(
         uri=printer.uri,
         name=printer.name,

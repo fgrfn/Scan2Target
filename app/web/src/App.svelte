@@ -28,6 +28,8 @@
   let showPrinterSettings = false;
   let newPrinterUri = '';
   let newPrinterName = '';
+  let discoveredDevices = [];
+  let isDiscovering = false;
 
   const navLinks = [
     { label: 'Dashboard', href: '#dashboard' },
@@ -187,6 +189,48 @@
     } catch (error) {
       console.error('Save target error:', error);
       alert('Failed to save target');
+    }
+  }
+
+  async function discoverPrinters() {
+    isDiscovering = true;
+    try {
+      const response = await fetch(`${API_BASE}/printers/discover`);
+      if (response.ok) {
+        discoveredDevices = await response.json();
+      } else {
+        alert('Failed to discover printers');
+      }
+    } catch (error) {
+      console.error('Discovery error:', error);
+      alert('Failed to discover printers');
+    } finally {
+      isDiscovering = false;
+    }
+  }
+
+  async function addDiscoveredPrinter(device) {
+    try {
+      const response = await fetch(`${API_BASE}/printers/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uri: device.uri,
+          name: device.name,
+          description: `${device.type} - ${device.model}`
+        })
+      });
+
+      if (response.ok) {
+        await loadData();
+        discoveredDevices = discoveredDevices.filter(d => d.uri !== device.uri);
+        alert(`Printer "${device.name}" added successfully`);
+      } else {
+        alert('Failed to add printer');
+      }
+    } catch (error) {
+      console.error('Add printer error:', error);
+      alert('Failed to add printer');
     }
   }
 
@@ -408,25 +452,48 @@
   <SectionCard id="settings" title="Settings" subtitle="Configure printers and system settings.">
     <div class="grid two-cols">
       <div>
-        <h3>USB Printers</h3>
-        <p class="muted">Add printers connected via USB to CUPS.</p>
-        <button class="ghost" on:click={() => showPrinterSettings = !showPrinterSettings}>
-          {showPrinterSettings ? 'Hide' : 'Show'} Printer Settings
+        <h3>Printer Discovery</h3>
+        <p class="muted">Auto-detect USB and wireless printers. USB port is detected automatically by CUPS.</p>
+        <button class="primary" on:click={discoverPrinters} disabled={isDiscovering}>
+          {isDiscovering ? 'Searching...' : 'Discover Printers'}
         </button>
+        
+        {#if discoveredDevices.length > 0}
+          <h4 class="mt">Discovered Devices</h4>
+          <ul class="list">
+            {#each discoveredDevices as device}
+              <li>
+                <div class="list-title">{device.name}</div>
+                <div class="muted">
+                  Type: {device.type} · {device.uri}
+                </div>
+                <button class="ghost small" on:click={() => addDiscoveredPrinter(device)}>Add</button>
+              </li>
+            {/each}
+          </ul>
+        {:else if !isDiscovering && discoveredDevices.length === 0}
+          <p class="muted small mt">No devices discovered. Click "Discover Printers" to scan.</p>
+        {/if}
       </div>
-      {#if showPrinterSettings}
-        <div class="panel">
-          <div class="panel-header">Add USB Printer</div>
-          <div class="panel-body">
-            <label for="printer-uri">Printer URI</label>
-            <input id="printer-uri" type="text" placeholder="usb://HP/Envy" bind:value={newPrinterUri} />
-            <label for="printer-name">Printer Name</label>
-            <input id="printer-name" type="text" placeholder="My USB Printer" bind:value={newPrinterName} />
-            <button class="primary block" on:click={addPrinter}>Add Printer</button>
-            <p class="muted small">For USB printers, use URI format: usb://Manufacturer/Model</p>
-          </div>
+      <div class="panel">
+        <div class="panel-header">Manual Setup</div>
+        <div class="panel-body">
+          <p class="muted small">For advanced users: add printer manually with custom URI.</p>
+          <label for="printer-uri">Printer URI</label>
+          <input id="printer-uri" type="text" placeholder="usb://HP/Envy or ipp://printer.local" bind:value={newPrinterUri} />
+          <label for="printer-name">Printer Name</label>
+          <input id="printer-name" type="text" placeholder="My Printer" bind:value={newPrinterName} />
+          <button class="ghost block" on:click={addPrinter}>Add Manually</button>
+          <hr style="margin: 1rem 0; border: none; border-top: 1px solid rgba(255,255,255,0.1);">
+          <h4>Supported Connections:</h4>
+          <ul class="muted small" style="margin-left: 1rem;">
+            <li><strong>USB:</strong> Auto-detected, any USB port</li>
+            <li><strong>Wireless:</strong> AirPrint/IPP (dnssd://)</li>
+            <li><strong>Network:</strong> IPP (ipp://)</li>
+          </ul>
+          <p class="muted small"><strong>Note:</strong> Scanners are managed separately via SANE (/scan section). Multi-function devices appear in both if they support both printing and scanning.</p>
         </div>
-      {/if}
+      </div>
     </div>
   </SectionCard>
 </main>

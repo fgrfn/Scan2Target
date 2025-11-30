@@ -1,13 +1,30 @@
 """RaspScan FastAPI application entrypoint."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
 from app.api import scan, printers, targets, auth, history
+from app.core.init_db import init_database
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events."""
+    # Startup
+    print("Starting RaspScan...")
+    init_database()
+    yield
+    # Shutdown
+    print("Shutting down RaspScan...")
 
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    app = FastAPI(title="RaspScan", version="0.1.0")
+    app = FastAPI(
+        title="RaspScan",
+        version="0.1.0",
+        lifespan=lifespan
+    )
 
     app.add_middleware(
         CORSMiddleware,

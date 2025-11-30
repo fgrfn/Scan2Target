@@ -1,15 +1,15 @@
-"""In-memory job manager placeholder; replace with SQLite repository."""
+"""Job manager with SQLite persistence."""
 from __future__ import annotations
 from typing import List, Optional
 from datetime import datetime
 
 from app.core.jobs.models import JobRecord, JobStatus
+from app.core.jobs.repository import JobRepository
 
 
 class JobManager:
     def __init__(self):
-        # In real implementation this would query SQLite
-        self._jobs: dict[str, JobRecord] = {}
+        self.repo = JobRepository()
 
     def create_job(
         self,
@@ -30,19 +30,17 @@ class JobManager:
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
-        self._jobs[job_id] = job
-        return job
+        return self.repo.create(job)
+    
+    def update_job(self, job: JobRecord) -> JobRecord:
+        """Update job status and metadata."""
+        return self.repo.update(job)
 
     def list_jobs(self, job_type: Optional[str] = None, printer_id: Optional[str] = None) -> List[JobRecord]:
-        jobs = list(self._jobs.values())
-        if job_type:
-            jobs = [j for j in jobs if j.job_type == job_type]
-        if printer_id:
-            jobs = [j for j in jobs if j.printer_id == printer_id]
-        return jobs
+        return self.repo.list(job_type=job_type, printer_id=printer_id)
 
-    def get_job(self, job_id: str) -> JobRecord:
-        return self._jobs[job_id]
+    def get_job(self, job_id: str) -> Optional[JobRecord]:
+        return self.repo.get(job_id)
 
     def list_history(self) -> List[JobRecord]:
-        return list(self._jobs.values())
+        return self.repo.list()
