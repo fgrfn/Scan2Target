@@ -93,14 +93,24 @@ async def get_statistics_overview():
         """)
         most_used_target = cursor.fetchone()
         
-        # Daily average (last 30 days)
+        # Daily average (based on days with actual activity or days since first scan)
         cursor.execute("""
-            SELECT COUNT(*) / 30.0 as avg_per_day
+            SELECT 
+                COUNT(*) as total,
+                COUNT(DISTINCT date(created_at)) as active_days,
+                julianday('now') - julianday(MIN(date(created_at))) + 1 as days_since_first
             FROM jobs 
-            WHERE job_type = 'scan' 
-            AND date(created_at) >= date('now', '-30 days')
+            WHERE job_type = 'scan'
         """)
-        avg_per_day = cursor.fetchone()['avg_per_day']
+        avg_data = cursor.fetchone()
+        
+        # Use days since first scan if available, otherwise default to active days
+        if avg_data['total'] > 0 and avg_data['days_since_first'] > 0:
+            avg_per_day = avg_data['total'] / avg_data['days_since_first']
+        elif avg_data['active_days'] > 0:
+            avg_per_day = avg_data['total'] / avg_data['active_days']
+        else:
+            avg_per_day = 0
         
         return {
             "total_scans": total_scans,
