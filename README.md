@@ -137,9 +137,17 @@ curl http://localhost:8000/api/v1/devices/discover
 ### Scan Profiles
 Optimized profiles for different use cases:
 - **Document @200 DPI (Gray):** Smallest size, best for text (~100-300 KB/page)
+- **Multi-Page Document (ADF):** 🆕 Automatic document feeder support - scan multiple pages into one PDF
 - **Color @300 DPI:** Standard quality for mixed content (~300-600 KB/page)
 - **Grayscale @150 DPI:** Fast scans, very small files (~80-200 KB/page)
 - **Photo @600 DPI:** High quality for photos (~1-3 MB/page)
+
+### Multi-Page Scanning (ADF)
+Automatic Document Feeder support:
+- Scans until ADF is empty
+- Combines all pages into single PDF
+- Automatic page detection
+- Safety limit: 100 pages per job
 
 ### Compression
 All PDFs are automatically compressed using JPEG compression:
@@ -188,3 +196,62 @@ All targets are automatically tested before saving:
 ```bash
 curl -X POST http://localhost:8000/api/v1/targets/{target_id}/test
 ```
+
+## Advanced Features
+
+### Webhook Notifications
+Get notified when scans complete:
+```bash
+curl -X POST http://localhost:8000/api/v1/scan/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "scanner_id",
+    "profile_id": "document_200_pdf",
+    "target_id": "target_id",
+    "webhook_url": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+  }'
+```
+
+Webhook payload:
+```json
+{
+  "job_id": "uuid",
+  "status": "completed",
+  "timestamp": "2025-11-30T12:00:00+00:00",
+  "metadata": {
+    "pages": 5,
+    "file_size": 245678,
+    "format": "pdf",
+    "profile": "document_200_pdf",
+    "thumbnail": "/tmp/scan_thumb.jpg"
+  }
+}
+```
+
+### Live Scan Previews
+Automatic thumbnail generation:
+- 400x400px preview created for each scan
+- Available in webhook notification metadata
+- Stored temporarily with scan output
+
+### Progressive Web App (PWA)
+Install RaspScan as native app:
+1. Open web interface in browser
+2. Click "Install" prompt or browser menu → "Install App"
+3. Launch from home screen/desktop
+4. Works offline with cached interface
+5. Push notifications for scan completion (future)
+
+**Features:**
+- Standalone app window (no browser UI)
+- Home screen icon
+- Offline support
+- Fast loading with Service Worker cache
+- Mobile-optimized interface
+
+### Automatic Document Detection
+Profiles support automatic optimization:
+- Auto paper size detection
+- Color/grayscale auto-selection
+- DPI recommendation based on content
+- Blank page detection (ADF mode)

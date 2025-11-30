@@ -14,6 +14,7 @@ class ScanRequest(BaseModel):
     profile_id: str
     target_id: str
     filename_prefix: str | None = None
+    webhook_url: str | None = None
 
 
 class ScanProfile(BaseModel):
@@ -78,6 +79,7 @@ async def start_scan(payload: ScanRequest):
             profile_id=payload.profile_id,
             target_id=payload.target_id,
             filename_prefix=payload.filename_prefix,
+            webhook_url=payload.webhook_url,
         )
         return ScanJobResponse(job_id=job_id, status=JobStatus.queued)
     except HTTPException:

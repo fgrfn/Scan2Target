@@ -145,7 +145,23 @@ class ScannerManager:
                 'paper_size': 'A4',
                 'format': 'pdf',
                 'quality': 80,
+                'source': 'Flatbed',
+                'batch_scan': False,
+                'auto_detect': True,
                 'description': 'Best for text documents - smallest size'
+            },
+            {
+                'id': 'document_adf_200_pdf',
+                'name': 'Multi-Page Document (ADF)',
+                'dpi': 200,
+                'color_mode': 'Gray',
+                'paper_size': 'A4',
+                'format': 'pdf',
+                'quality': 80,
+                'source': 'ADF',
+                'batch_scan': True,
+                'auto_detect': True,
+                'description': 'Scan multiple pages from document feeder'
             },
             {
                 'id': 'color_300_pdf',
@@ -155,6 +171,9 @@ class ScannerManager:
                 'paper_size': 'A4',
                 'format': 'pdf',
                 'quality': 85,
+                'source': 'Flatbed',
+                'batch_scan': False,
+                'auto_detect': True,
                 'description': 'Good quality for mixed content'
             },
             {
@@ -165,6 +184,9 @@ class ScannerManager:
                 'paper_size': 'A4',
                 'format': 'pdf',
                 'quality': 75,
+                'source': 'Flatbed',
+                'batch_scan': False,
+                'auto_detect': True,
                 'description': 'Quick scans, very small size'
             },
             {
@@ -175,15 +197,19 @@ class ScannerManager:
                 'paper_size': 'A4',
                 'format': 'jpeg',
                 'quality': 95,
+                'source': 'Flatbed',
+                'batch_scan': False,
+                'auto_detect': False,
                 'description': 'Best quality for photos'
             }
         ]
 
-    def start_scan(self, device_id: str, profile_id: str, target_id: str, filename_prefix: str | None) -> str:
+    def start_scan(self, device_id: str, profile_id: str, target_id: str, filename_prefix: str | None, webhook_url: str | None = None) -> str:
         """
         Start a scan job in the background.
         
         Creates job and submits to background worker for async execution.
+        Optionally sends webhook notification on completion.
         """
         job_id = str(uuid.uuid4())
         job_manager = JobManager()
@@ -205,18 +231,17 @@ class ScannerManager:
             await loop.run_in_executor(
                 None, 
                 self._execute_scan, 
-                job_id, device_id, profile_id, target_id, filename_prefix
+                job_id, device_id, profile_id, target_id, filename_prefix, webhook_url
             )
         
         worker.submit_task(job_id, scan_task)
             
         return job_id
     
-    def _execute_scan(self, job_id: str, device_id: str, profile_id: str, target_id: str, filename_prefix: str | None):
+    def _execute_scan(self, job_id: str, device_id: str, profile_id: str, target_id: str, filename_prefix: str | None, webhook_url: str | None = None):
         """
         Execute the actual scan using scanimage.
-        
-        WARNING: This runs synchronously. In production, use a background worker.
+        Supports multi-page scanning (ADF), automatic document detection, and webhook notifications.
         """
         job_manager = JobManager()
         
@@ -239,53 +264,97 @@ class ScannerManager:
             
             prefix = filename_prefix or 'scan'
             output_format = profile['format']
+            batch_scan = profile.get('batch_scan', False)
+            source = profile.get('source', 'Flatbed')
             
-            # Scan to TIFF first (most compatible)
-            tiff_file = output_dir / f"{prefix}_{job_id}.tiff"
+            scanned_files = []
+            page_num = 1
             
-            # Build scanimage command
-            cmd = [
-                'scanimage',
-                '--device-name', device_id,
-                '--resolution', str(profile['dpi']),
-                '--mode', profile['color_mode'],
-                '--format', 'tiff'
-            ]
+            # Multi-page scanning loop (for ADF)
+            while True:
+                # Scan to TIFF first (most compatible)
+                if batch_scan:
+                    tiff_file = output_dir / f"{prefix}_{job_id}_page{page_num:03d}.tiff"
+                else:
+                    tiff_file = output_dir / f"{prefix}_{job_id}.tiff"
+                
+                # Build scanimage command
+                cmd = [
+                    'scanimage',
+                    '--device-name', device_id,
+                    '--resolution', str(profile['dpi']),
+                    '--mode', profile['color_mode'],
+                    '--format', 'tiff'
+                ]
+                
+                # Add source if supported (ADF vs Flatbed)
+                if source and source != 'Flatbed':
+                    cmd.extend(['--source', source])
+                
+                # Add batch mode for ADF
+                if batch_scan:
+                    cmd.extend(['--batch-prompt'])  # Continue until ADF empty
+                
+                print(f"Executing scan command (page {page_num}): {' '.join(cmd)}")
+                print(f"Output file: {tiff_file}")
+                
+                # Execute scan
+                with open(tiff_file, 'wb') as f:
+                    result = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=False, timeout=120)
+                
+                if result.returncode != 0:
+                    # Check if ADF is empty (normal end of batch scan)
+                    error_msg = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
+                    if batch_scan and ('out of documents' in error_msg.lower() or 'no documents' in error_msg.lower()):
+                        print(f"ADF empty, batch scan complete. Scanned {page_num - 1} pages.")
+                        break
+                    print(f"Scan failed: {error_msg}")
+                    raise Exception(f"scanimage failed: {error_msg}")
+                
+                file_size = tiff_file.stat().st_size if tiff_file.exists() else 0
+                print(f"Page {page_num} scanned successfully: {tiff_file} ({file_size} bytes)")
+                
+                scanned_files.append(tiff_file)
+                
+                # If not batch mode, stop after first page
+                if not batch_scan:
+                    break
+                
+                page_num += 1
+                
+                # Safety limit for batch scanning
+                if page_num > 100:
+                    print("Warning: Reached 100-page limit for batch scanning")
+                    break
             
-            print(f"Executing scan command: {' '.join(cmd)}")
-            print(f"Output file: {tiff_file}")
+            if not scanned_files:
+                raise Exception("No pages were scanned successfully")
             
-            # Execute scan
-            with open(tiff_file, 'wb') as f:
-                result = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=False, timeout=120)
+            print(f"Scan completed: {len(scanned_files)} page(s)")
             
-            if result.returncode != 0:
-                error_msg = result.stderr.decode('utf-8', errors='replace') if result.stderr else 'Unknown error'
-                print(f"Scan failed: {error_msg}")
-                raise Exception(f"scanimage failed: {error_msg}")
-            
-            print(f"Scan completed successfully: {tiff_file} ({tiff_file.stat().st_size} bytes)")
-            
-            # Convert TIFF to requested format if needed
-            final_file = tiff_file
+            # Convert TIFF(s) to requested format
+            final_file = None
             if output_format == 'pdf':
                 pdf_file = output_dir / f"{prefix}_{job_id}.pdf"
-                print(f"Converting TIFF to PDF: {pdf_file}")
+                print(f"Converting {len(scanned_files)} TIFF(s) to PDF: {pdf_file}")
                 
                 # Get quality setting from profile (default 85)
                 quality = str(profile.get('quality', 85))
                 
                 # Use ImageMagick convert with compression
-                # -compress JPEG for color/grayscale reduces file size dramatically
-                # -quality controls compression (higher = better quality, larger file)
-                # Typical results: 30+ MB TIFF -> 200-500 KB PDF
-                convert_cmd = [
-                    'convert', 
-                    str(tiff_file),
+                # For multi-page PDFs, all TIFF files are combined into one PDF
+                convert_cmd = ['convert']
+                
+                # Add all TIFF files as input
+                for tiff in scanned_files:
+                    convert_cmd.append(str(tiff))
+                
+                # Add compression settings
+                convert_cmd.extend([
                     '-compress', 'JPEG',
                     '-quality', quality,
-                    '-density', str(profile['dpi']),  # Match scan DPI
-                ]
+                    '-density', str(profile['dpi']),
+                ])
                 
                 # For grayscale, add additional compression
                 if profile['color_mode'] == 'Gray':
@@ -300,23 +369,34 @@ class ScannerManager:
                     convert_cmd,
                     capture_output=True,
                     text=True,
-                    timeout=60
+                    timeout=180  # Longer timeout for multi-page
                 )
                 
                 if convert_result.returncode == 0 and pdf_file.exists():
-                    tiff_size = tiff_file.stat().st_size
+                    total_tiff_size = sum(f.stat().st_size for f in scanned_files)
                     pdf_size = pdf_file.stat().st_size
-                    ratio = (1 - pdf_size / tiff_size) * 100 if tiff_size > 0 else 0
+                    ratio = (1 - pdf_size / total_tiff_size) * 100 if total_tiff_size > 0 else 0
                     print(f"PDF conversion successful: {pdf_file}")
+                    print(f"  Pages: {len(scanned_files)}")
                     print(f"  Size: {pdf_size:,} bytes (saved {ratio:.1f}%)")
-                    tiff_file.unlink()  # Remove TIFF after successful conversion
+                    
+                    # Remove TIFF files after successful conversion
+                    for tiff in scanned_files:
+                        tiff.unlink()
+                    
                     final_file = pdf_file
                 else:
-                    print(f"Warning: PDF conversion failed, using TIFF: {convert_result.stderr}")
-                    # Keep TIFF file as fallback
+                    print(f"Warning: PDF conversion failed: {convert_result.stderr}")
+                    # Keep first TIFF file as fallback
+                    final_file = scanned_files[0] if scanned_files else None
             elif output_format == 'jpeg':
+                # JPEG only supports single page, use first page
+                tiff_file = scanned_files[0]
                 jpeg_file = output_dir / f"{prefix}_{job_id}.jpg"
                 print(f"Converting TIFF to JPEG: {jpeg_file}")
+                
+                if len(scanned_files) > 1:
+                    print(f"Warning: JPEG format only supports single page, using page 1 of {len(scanned_files)}")
                 
                 # Get quality setting from profile (default 90)
                 quality = str(profile.get('quality', 90))
@@ -334,10 +414,15 @@ class ScannerManager:
                     ratio = (1 - jpeg_size / tiff_size) * 100 if tiff_size > 0 else 0
                     print(f"JPEG conversion successful: {jpeg_file}")
                     print(f"  Size: {jpeg_size:,} bytes (saved {ratio:.1f}%)")
-                    tiff_file.unlink()  # Remove TIFF
+                    
+                    # Remove TIFF files
+                    for tiff in scanned_files:
+                        tiff.unlink()
+                    
                     final_file = jpeg_file
                 else:
-                    print(f"Warning: JPEG conversion failed, using TIFF: {convert_result.stderr}")
+                    print(f"Warning: JPEG conversion failed: {convert_result.stderr}")
+                    final_file = tiff_file
             
             # Update job with file path
             job = job_manager.get_job(job_id)
@@ -348,10 +433,45 @@ class ScannerManager:
             
             print(f"Delivering scan to target: {target_id}")
             
+            # Generate thumbnail preview
+            thumbnail_file = None
+            try:
+                thumbnail_file = output_dir / f"{prefix}_{job_id}_thumb.jpg"
+                subprocess.run(
+                    [
+                        'convert',
+                        str(final_file) + '[0]',  # First page only
+                        '-thumbnail', '400x400>',
+                        '-quality', '80',
+                        str(thumbnail_file)
+                    ],
+                    capture_output=True,
+                    timeout=10
+                )
+                if thumbnail_file.exists():
+                    print(f"Thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
+            except Exception as e:
+                print(f"Warning: Failed to generate thumbnail: {e}")
+            
             # Deliver to target
             TargetManager().deliver(target_id, str(final_file), {'job_id': job_id})
             
             print(f"Scan job {job_id} completed successfully")
+            
+            # Send webhook notification if configured
+            if webhook_url:
+                self._send_webhook_notification(
+                    webhook_url,
+                    job_id,
+                    'completed',
+                    {
+                        'pages': len(scanned_files),
+                        'file_size': final_file.stat().st_size if final_file else 0,
+                        'format': output_format,
+                        'profile': profile_id,
+                        'thumbnail': str(thumbnail_file) if thumbnail_file and thumbnail_file.exists() else None
+                    }
+                )
             
         except Exception as e:
             print(f"Scan error for job {job_id}: {e}")
@@ -365,7 +485,43 @@ class ScannerManager:
                 job.message = str(e)
                 job_manager.update_job(job)
             
+            # Send webhook notification for failure
+            if webhook_url:
+                self._send_webhook_notification(
+                    webhook_url,
+                    job_id,
+                    'failed',
+                    {'error': str(e)}
+                )
+            
             raise
+    
+    def _send_webhook_notification(self, webhook_url: str, job_id: str, status: str, metadata: dict):
+        """Send webhook notification with job status."""
+        try:
+            import json
+            import urllib.request
+            
+            payload = {
+                'job_id': job_id,
+                'status': status,
+                'timestamp': subprocess.run(['date', '-Iseconds'], capture_output=True, text=True).stdout.strip(),
+                'metadata': metadata
+            }
+            
+            print(f"Sending webhook notification to {webhook_url}")
+            
+            req = urllib.request.Request(
+                webhook_url,
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                print(f"Webhook notification sent successfully: {response.status}")
+        except Exception as e:
+            print(f"Warning: Failed to send webhook notification: {e}")
 
     def list_jobs(self) -> List[JobRecord]:
         return JobManager().list_jobs(job_type="scan")
