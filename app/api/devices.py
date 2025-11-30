@@ -132,8 +132,13 @@ async def list_devices(device_type: str | None = None):
     
     These are your configured devices that persist across restarts.
     """
+    import time
+    start = time.time()
+    
     device_repo = DeviceRepository()
     devices = device_repo.list_devices(device_type=device_type, active_only=True)
+    
+    print(f"[TIMING] list_devices: DB query took {time.time() - start:.3f}s")
     
     response = []
     for device in devices:

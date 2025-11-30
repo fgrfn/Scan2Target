@@ -1,15 +1,16 @@
-"""Target configuration API routes."""
+"""Target configuration routes."""
 from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+import time
 
 from app.core.targets.manager import TargetManager
-from app.core.targets.models import TargetConfig
+from app.core.targets.models import TargetRecord
 
 router = APIRouter()
 
 
-class Target(BaseModel):
+class TargetConfig(BaseModel):
     id: str
     type: str
     name: str
@@ -21,8 +22,10 @@ class Target(BaseModel):
 @router.get("/", response_model=List[Target])
 async def list_targets():
     """List all configured targets."""
+    start = time.time()
     try:
         targets = TargetManager().list_targets()
+        print(f"[TIMING] list_targets: took {time.time() - start:.3f}s")
         return [
             Target(
                 id=t.id,

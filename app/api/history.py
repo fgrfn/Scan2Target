@@ -11,4 +11,8 @@ router = APIRouter()
 @router.get("/", response_model=List[JobRecord])
 async def list_history():
     """Return unified scan/print history."""
-    return JobManager().list_history()
+    import time
+    start = time.time()
+    result = JobManager().list_history()
+    print(f"[TIMING] list_history: took {time.time() - start:.3f}s")
+    return result

@@ -52,7 +52,16 @@
   ];
 
   onMount(() => {
+    const pageStart = performance.now();
+    console.log('[TIMING] Page load started');
     loadData();
+    // Check when all data is loaded
+    const checkComplete = setInterval(() => {
+      if (!isLoadingDevices && !isLoadingTargets && !isLoadingHistory) {
+        console.log(`[TIMING] Total page load: ${(performance.now() - pageStart).toFixed(0)}ms`);
+        clearInterval(checkComplete);
+      }
+    }, 100);
   });
 
   async function loadData() {
@@ -64,6 +73,7 @@
   }
 
   async function loadDevices() {
+    const start = performance.now();
     try {
       const res = await fetch(`${API_BASE}/devices`);
       if (res.ok) {
@@ -71,6 +81,7 @@
         printers = devices.filter(d => d.device_type === 'printer');
         scanners = devices.filter(d => d.device_type === 'scanner');
         updateStats();
+        console.log(`[TIMING] loadDevices: ${(performance.now() - start).toFixed(0)}ms`);
       }
     } catch (error) {
       console.error('Failed to load devices:', error);
@@ -80,10 +91,12 @@
   }
 
   async function loadTargets() {
+    const start = performance.now();
     try {
       const res = await fetch(`${API_BASE}/targets`);
       if (res.ok) {
         targets = await res.json();
+        console.log(`[TIMING] loadTargets: ${(performance.now() - start).toFixed(0)}ms`);
       }
     } catch (error) {
       console.error('Failed to load targets:', error);
@@ -93,11 +106,13 @@
   }
 
   async function loadHistory() {
+    const start = performance.now();
     try {
       const res = await fetch(`${API_BASE}/history`);
       if (res.ok) {
         history = await res.json();
         updateStats();
+        console.log(`[TIMING] loadHistory: ${(performance.now() - start).toFixed(0)}ms`);
       }
     } catch (error) {
       console.error('Failed to load history:', error);
