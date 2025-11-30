@@ -55,6 +55,17 @@
     const pageStart = performance.now();
     console.log('[TIMING] Page load started');
     loadData();
+    
+    // Handle hash navigation on page load
+    if (window.location.hash) {
+      setTimeout(() => {
+        const element = document.querySelector(window.location.hash);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 200);
+    }
+    
     // Check when all data is loaded
     const checkComplete = setInterval(() => {
       if (!isLoadingDevices && !isLoadingTargets && !isLoadingHistory) {
