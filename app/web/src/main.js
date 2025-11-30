@@ -1,5 +1,5 @@
 import App from './App.svelte';
-import '@fontsource/inter/variable.css';
+import '@fontsource/inter';
 import './app.css';
 
 const app = new App({
