@@ -82,3 +82,7 @@ class JobManager:
     def clear_completed_jobs(self) -> int:
         """Delete all completed and failed jobs from history."""
         return self.repo.clear_completed()
+    
+    def delete_job(self, job_id: str) -> bool:
+        """Delete a single job from history."""
+        return self.repo.delete(job_id)

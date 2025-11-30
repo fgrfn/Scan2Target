@@ -158,6 +158,13 @@
       date: 'Date',
       total: 'Total',
       clearHistory: 'Clear History',
+      clearHistoryConfirm: 'Delete all completed jobs from history? This cannot be undone.',
+      deleteJob: 'Delete Job',
+      deleteJobConfirm: 'Delete this job from history?',
+      jobDeleted: 'Job deleted successfully',
+      deleteTargetStats: 'Delete Statistics',
+      deleteTargetStatsConfirm: 'Delete all statistics for this target? This will remove all delivery history but keep existing scan files.',
+      targetStatsDeleted: 'Target statistics deleted successfully',
       deliveries: 'Deliveries',
       isLoadingHistory: 'Loading history...',
       previewScan: 'Preview Scan',
@@ -329,6 +336,13 @@
       date: 'Datum',
       total: 'Gesamt',
       clearHistory: 'Verlauf löschen',
+      clearHistoryConfirm: 'Alle abgeschlossenen Aufträge aus dem Verlauf löschen? Dies kann nicht rückgängig gemacht werden.',
+      deleteJob: 'Auftrag löschen',
+      deleteJobConfirm: 'Diesen Auftrag aus dem Verlauf löschen?',
+      jobDeleted: 'Auftrag erfolgreich gelöscht',
+      deleteTargetStats: 'Statistiken löschen',
+      deleteTargetStatsConfirm: 'Alle Statistiken für dieses Ziel löschen? Dadurch wird der gesamte Zustellungsverlauf entfernt, aber vorhandene Scan-Dateien bleiben erhalten.',
+      targetStatsDeleted: 'Ziel-Statistiken erfolgreich gelöscht',
       deliveries: 'Zustellungen',
       isLoadingHistory: 'Verlauf wird geladen...',
       previewScan: 'Scan-Vorschau',
@@ -1257,7 +1271,7 @@
       
       if (response.ok) {
         const result = await response.json();
-        alert(`✅ ${result.deleted_count} ${lang === 'de' ? 'Aufträge gelöscht' : 'jobs deleted'}`);
+        alert(`✅ ${result.deleted_count} ${currentLang === 'de' ? 'Aufträge gelöscht' : 'jobs deleted'}`);
         await loadHistory();
         await loadStats(); // Reload stats to reflect changes
       } else {
@@ -1266,6 +1280,54 @@
       }
     } catch (error) {
       console.error('Clear history error:', error);
+      alert(`❌ Error: ${error.message}`);
+    }
+  }
+
+  async function deleteJob(jobId) {
+    if (!confirm(t.deleteJobConfirm)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE}/history/${jobId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        alert(`✅ ${t.jobDeleted}`);
+        await loadHistory();
+        await loadStats();
+      } else {
+        const error = await response.json();
+        alert(`❌ ${error.detail || 'Failed to delete job'}`);
+      }
+    } catch (error) {
+      console.error('Delete job error:', error);
+      alert(`❌ Error: ${error.message}`);
+    }
+  }
+
+  async function deleteTargetStats(targetName) {
+    if (!confirm(t.deleteTargetStatsConfirm)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE}/stats/targets/${encodeURIComponent(targetName)}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        alert(`✅ ${t.targetStatsDeleted} (${result.deleted_count} ${currentLang === 'de' ? 'Einträge gelöscht' : 'entries deleted'})`);
+        await loadStats();
+      } else {
+        const error = await response.json();
+        alert(`❌ ${error.detail || 'Failed to delete target statistics'}`);
+      }
+    } catch (error) {
+      console.error('Delete target stats error:', error);
       alert(`❌ Error: ${error.message}`);
     }
   }
@@ -2147,13 +2209,23 @@
           <h3>{t.targetStats}</h3>
           <ul class="list">
             {#each statsTargets as target}
-              <li>
-                <div class="list-title">{target.target}</div>
-                <div class="muted">
-                  Deliveries: {target.total_deliveries} · 
-                  {t.successful}: {target.successful} ({target.success_rate}%) · 
-                  {t.lastUsed}: {new Date(target.last_used).toLocaleDateString()}
+              <li style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="flex: 1;">
+                  <div class="list-title">{target.target}</div>
+                  <div class="muted">
+                    Deliveries: {target.total_deliveries} · 
+                    {t.successful}: {target.successful} ({target.success_rate}%) · 
+                    {t.lastUsed}: {new Date(target.last_used).toLocaleDateString()}
+                  </div>
                 </div>
+                <button 
+                  class="danger small" 
+                  style="margin-left: 1rem;"
+                  on:click={() => deleteTargetStats(target.target)}
+                  title={t.deleteTargetStats}
+                >
+                  🗑️
+                </button>
               </li>
             {/each}
           </ul>
@@ -2195,16 +2267,17 @@
         <button class="danger small" on:click={clearHistory}>🗑️ {t.clearHistory}</button>
       </div>
       <div class="table" style="display: block;">
-        <div style="display: grid; grid-template-columns: 100px 80px 1fr 1fr 180px 200px; gap: 1rem; padding: 0.75rem 1rem; font-weight: 600; border-bottom: 2px solid var(--border); background: var(--surface-dim);">
+        <div style="display: grid; grid-template-columns: 100px 80px 1fr 1fr 180px 200px 60px; gap: 1rem; padding: 0.75rem 1rem; font-weight: 600; border-bottom: 2px solid var(--border); background: var(--surface-dim);">
           <span>{t.id}</span>
           <span>{t.type}</span>
           <span>{t.device}</span>
           <span>{t.target}</span>
           <span>{t.time}</span>
           <span>{t.status}</span>
+          <span></span>
         </div>
         {#each history as job}
-          <div style="display: grid; grid-template-columns: 100px 80px 1fr 1fr 180px 200px; gap: 1rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); align-items: start;">
+          <div style="display: grid; grid-template-columns: 100px 80px 1fr 1fr 180px 200px 60px; gap: 1rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); align-items: start;">
             <span style="font-family: monospace; font-size: 0.875rem;">{job.id.slice(0, 8)}</span>
             <span style="font-size: 0.875rem;">{job.job_type}</span>
             <span style="font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis;" title={job.device_id}>{job.device_id ? formatScannerName(job.device_id) : 'N/A'}</span>
@@ -2227,6 +2300,14 @@
                 </button>
               {/if}
             </div>
+            <button 
+              class="danger small" 
+              style="width: 40px; height: 40px; padding: 0.25rem;"
+              on:click={() => deleteJob(job.id)}
+              title={t.deleteJob}
+            >
+              🗑️
+            </button>
           </div>
         {/each}
       </div>

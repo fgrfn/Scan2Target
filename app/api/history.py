@@ -35,6 +35,44 @@ async def clear_history():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/{job_id}")
+async def delete_job(job_id: str):
+    """Delete a single job from history."""
+    try:
+        job_manager = JobManager()
+        job = job_manager.get_job(job_id)
+        
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        
+        # Delete associated file if it exists
+        if job.file_path:
+            from pathlib import Path
+            file_path = Path(job.file_path)
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                    print(f"✓ Deleted scan file: {file_path}")
+                except Exception as cleanup_error:
+                    print(f"Warning: Failed to delete file: {cleanup_error}")
+        
+        # Delete job from database
+        success = job_manager.delete_job(job_id)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete job")
+        
+        return {
+            "status": "success",
+            "message": f"Job {job_id} deleted successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/{job_id}/retry-upload")
 async def retry_upload(job_id: str):
     """

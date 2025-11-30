@@ -262,3 +262,67 @@ async def get_hourly_distribution():
             })
         
         return result
+
+
+@router.delete("/targets/{target_name}")
+async def delete_target_statistics(target_name: str):
+    """
+    Delete all job statistics for a specific target.
+    This removes all delivery history for the target but keeps scan files.
+    
+    The target_name can be either:
+    - An actual target name (e.g., "Unraid")
+    - A target_id (e.g., "target_1764518509353")
+    """
+    from fastapi import HTTPException
+    from pathlib import Path
+    db = get_db()
+    
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Find all jobs that match either by target name or target_id
+            cursor.execute("""
+                SELECT j.id, j.file_path
+                FROM jobs j
+                LEFT JOIN targets t ON j.target_id = t.id
+                WHERE j.job_type = 'scan' 
+                AND (t.name = ? OR j.target_id = ?)
+            """, (target_name, target_name))
+            
+            jobs_to_delete = cursor.fetchall()
+            
+            # Delete associated scan files
+            for job in jobs_to_delete:
+                if job['file_path']:
+                    file_path = Path(job['file_path'])
+                    if file_path.exists():
+                        try:
+                            file_path.unlink()
+                            print(f"✓ Deleted scan file: {file_path}")
+                        except Exception as e:
+                            print(f"Warning: Failed to delete file {file_path}: {e}")
+            
+            # Delete jobs from database
+            cursor.execute("""
+                DELETE FROM jobs 
+                WHERE job_type = 'scan' 
+                AND id IN (
+                    SELECT j.id 
+                    FROM jobs j
+                    LEFT JOIN targets t ON j.target_id = t.id
+                    WHERE t.name = ? OR j.target_id = ?
+                )
+            """, (target_name, target_name))
+            
+            deleted_count = cursor.rowcount
+            
+            return {
+                "status": "success",
+                "message": f"Deleted {deleted_count} job entries for target '{target_name}'",
+                "deleted_count": deleted_count
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
