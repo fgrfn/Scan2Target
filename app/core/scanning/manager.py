@@ -23,8 +23,15 @@ class ScannerManager:
         
         Uses 'scanimage -L' to list available devices.
         Supports both USB SANE backends and eSCL (AirScan) for network scanners.
+        
+        Filters duplicate devices by preferring:
+        1. eSCL (AirScan) network scanners (most reliable)
+        2. USB scanners (direct connection)
+        3. Other network protocols
         """
         devices = []
+        device_groups = {}  # Group by normalized name to detect duplicates
+        
         try:
             result = subprocess.run(
                 ['scanimage', '-L'],
@@ -45,21 +52,77 @@ class ScannerManager:
                         description = match.group(2)
                         
                         device_type = 'Unknown'
+                        priority = 99
+                        
                         if device_id.startswith('escl:'):
-                            device_type = 'eSCL (AirScan)'
+                            # eSCL over network - highest priority for network
+                            if '127.0.0.1' in device_id or 'USB' in device_id:
+                                device_type = 'eSCL (USB)'
+                                priority = 2
+                            else:
+                                device_type = 'eSCL (Network)'
+                                priority = 1
                         elif device_id.startswith('airscan:'):
                             device_type = 'AirScan'
+                            priority = 1
+                        elif 'hpaio:/usb' in device_id.lower():
+                            device_type = 'USB (HPAIO)'
+                            priority = 2
                         elif 'usb' in device_id.lower():
                             device_type = 'USB'
+                            priority = 2
+                        elif 'hpaio:/net' in device_id.lower():
+                            device_type = 'Network (HPAIO)'
+                            priority = 3
                         elif 'net' in device_id.lower() or 'network' in device_id.lower():
                             device_type = 'Network'
+                            priority = 3
                         
-                        devices.append({
+                        # Normalize device name (remove model/serial specifics)
+                        # Extract base model name from description
+                        base_name = description.split('flatbed')[0].strip()
+                        base_name = re.sub(r'\[.*?\]', '', base_name).strip()  # Remove [serial]
+                        base_name = re.sub(r'\s+', ' ', base_name)  # Normalize whitespace
+                        
+                        # Group by base name
+                        if base_name not in device_groups:
+                            device_groups[base_name] = []
+                        
+                        device_groups[base_name].append({
                             'id': device_id,
                             'name': description,
                             'type': device_type,
+                            'priority': priority,
                             'supported': True
                         })
+                
+                # For each device group, keep only the best option
+                for base_name, group_devices in device_groups.items():
+                    # Sort by priority (lower = better)
+                    group_devices.sort(key=lambda d: d['priority'])
+                    
+                    # Keep the best device (lowest priority number)
+                    best_device = group_devices[0]
+                    
+                    # If we have both USB and Network, keep both but mark preference
+                    has_usb = any(d['priority'] == 2 for d in group_devices)
+                    has_network = any(d['priority'] == 1 for d in group_devices)
+                    
+                    if has_usb and has_network:
+                        # Keep one USB and one Network option
+                        usb_device = next((d for d in group_devices if d['priority'] == 2), None)
+                        network_device = next((d for d in group_devices if d['priority'] == 1), None)
+                        
+                        if network_device:
+                            network_device['name'] = f"{base_name} (Network - Recommended)"
+                            devices.append(network_device)
+                        if usb_device:
+                            usb_device['name'] = f"{base_name} (USB)"
+                            devices.append(usb_device)
+                    else:
+                        # Only one connection type available
+                        devices.append(best_device)
+                        
         except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
             print(f"Error discovering scanners: {e}")
             # SANE/scanimage not installed or not accessible
