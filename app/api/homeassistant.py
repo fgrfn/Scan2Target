@@ -8,6 +8,7 @@ import asyncio
 from app.core.devices.repository import DeviceRepository
 from app.core.targets.repository import TargetRepository
 from app.core.jobs.repository import JobRepository
+from app.core.jobs.models import JobRecord, JobStatus
 from app.core.jobs.manager import JobManager
 from app.core.auth.dependencies import get_current_user_optional
 
@@ -154,22 +155,24 @@ async def trigger_scan_from_homeassistant(
         # Generate filename
         filename = request.filename or f"scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        # Create job
-        job_id = job_repo.create_job(
-            scanner_id=scanner_id,
-            scanner_name=scanner.name,
+        # Create job record
+        import uuid
+        job = JobRecord(
+            id=str(uuid.uuid4()),
+            job_type="scan",
+            device_id=scanner_id,
             target_id=target_id,
-            target_name=target.name,
-            profile=request.profile,
-            filename=filename,
-            source=request.source,
-            triggered_by="homeassistant"
+            status=JobStatus.queued,
+            message=f"Scan triggered from Home Assistant: {request.profile}"
         )
+        
+        # Save job to database
+        job = job_repo.create(job)
         
         # Start scan in background
         asyncio.create_task(
             job_manager.execute_scan(
-                job_id=job_id,
+                job_id=job.id,
                 scanner_uri=scanner.uri,
                 profile=request.profile,
                 target_id=target_id,
@@ -187,7 +190,7 @@ async def trigger_scan_from_homeassistant(
         
         return HomeAssistantScanResponse(
             success=True,
-            job_id=job_id,
+            job_id=job.id,
             message=f"Scan started successfully",
             scanner_name=scanner.name,
             target_name=target.name,
