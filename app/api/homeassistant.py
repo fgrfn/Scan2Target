@@ -5,7 +5,6 @@ from typing import Optional, List
 from datetime import datetime
 import asyncio
 
-from app.core.database import get_db, Database
 from app.core.devices.repository import DeviceRepository
 from app.core.targets.repository import TargetRepository
 from app.core.jobs.repository import JobRepository
@@ -59,7 +58,6 @@ class HomeAssistantStatusResponse(BaseModel):
 @router.post("/scan", response_model=HomeAssistantScanResponse)
 async def trigger_scan_from_homeassistant(
     request: HomeAssistantScanRequest,
-    db: Database = Depends(get_db),
     current_user = Depends(get_current_user_optional)
 ):
     """
@@ -99,9 +97,9 @@ async def trigger_scan_from_homeassistant(
         payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "adf", "source": "ADF"}'
     ```
     """
-    device_repo = DeviceRepository(db)
-    target_repo = TargetRepository(db)
-    job_repo = JobRepository(db)
+    device_repo = DeviceRepository()
+    target_repo = TargetRepository()
+    job_repo = JobRepository()
     job_manager = JobManager()
     
     try:
@@ -207,7 +205,6 @@ async def trigger_scan_from_homeassistant(
 
 @router.get("/status", response_model=HomeAssistantStatusResponse)
 async def get_homeassistant_status(
-    db: Database = Depends(get_db),
     current_user = Depends(get_current_user_optional)
 ):
     """
@@ -232,9 +229,9 @@ async def get_homeassistant_status(
         scan_interval: 30
     ```
     """
-    device_repo = DeviceRepository(db)
-    target_repo = TargetRepository(db)
-    job_repo = JobRepository(db)
+    device_repo = DeviceRepository()
+    target_repo = TargetRepository()
+    job_repo = JobRepository()
     
     try:
         # Get counts
@@ -272,7 +269,6 @@ async def get_homeassistant_status(
 
 @router.get("/scanners")
 async def list_scanners_for_homeassistant(
-    db: Database = Depends(get_db),
     current_user = Depends(get_current_user_optional)
 ):
     """
@@ -287,7 +283,7 @@ async def list_scanners_for_homeassistant(
           - Fetch from API
     ```
     """
-    device_repo = DeviceRepository(db)
+    device_repo = DeviceRepository()
     
     try:
         scanners = device_repo.list_devices(device_type="scanner")
@@ -310,7 +306,6 @@ async def list_scanners_for_homeassistant(
 
 @router.get("/targets")
 async def list_targets_for_homeassistant(
-    db: Database = Depends(get_db),
     current_user = Depends(get_current_user_optional)
 ):
     """
@@ -325,7 +320,7 @@ async def list_targets_for_homeassistant(
           - Fetch from API
     ```
     """
-    target_repo = TargetRepository(db)
+    target_repo = TargetRepository()
     
     try:
         targets = target_repo.list_targets()
