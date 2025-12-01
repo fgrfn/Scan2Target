@@ -86,3 +86,26 @@ class JobManager:
     def delete_job(self, job_id: str) -> bool:
         """Delete a single job from history."""
         return self.repo.delete(job_id)
+    
+    def cancel_job(self, job_id: str) -> bool:
+        """Cancel a running or queued job."""
+        from app.core.worker import get_worker
+        
+        job = self.get_job(job_id)
+        if not job:
+            return False
+        
+        # Only cancel if job is queued or running
+        if job.status not in [JobStatus.queued, JobStatus.running]:
+            return False
+        
+        # Try to cancel the background task
+        worker = get_worker()
+        worker.cancel_task(job_id)
+        
+        # Update job status
+        job.status = JobStatus.cancelled
+        job.message = "Job cancelled by user"
+        self.update_job(job)
+        
+        return True

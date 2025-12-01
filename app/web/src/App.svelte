@@ -159,6 +159,10 @@
       date: 'Date',
       total: 'Total',
       deliveriesLabel: 'Deliveries',
+      cancelJob: 'Cancel',
+      cancelJobConfirm: 'Cancel this job?',
+      jobCancelled: 'Job cancelled successfully',
+      cancelled: 'Cancelled',
       clearHistory: 'Clear History',
       clearHistoryConfirm: 'Delete all completed jobs from history? This cannot be undone.',
       deleteJob: 'Delete Job',
@@ -349,6 +353,10 @@
       targetStatsDeleted: 'Ziel-Statistiken erfolgreich gelöscht',
       deliveries: 'Zustellungen',
       isLoadingHistory: 'Verlauf wird geladen...',
+      cancelJob: 'Abbrechen',
+      cancelJobConfirm: 'Diesen Job wirklich abbrechen?',
+      jobCancelled: 'Job erfolgreich abgebrochen',
+      cancelled: 'Abgebrochen',
       previewScan: 'Scan-Vorschau',
       previewing: '⏳ Vorschau lädt...',
       previewDesc: 'Schnelle Vorschau in niedriger Auflösung vor dem finalen Scan',
@@ -1306,6 +1314,30 @@
     }
   }
 
+  async function cancelJob(jobId) {
+    if (!confirm(t.cancelJobConfirm)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE}/history/${jobId}/cancel`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        alert(`✅ ${t.jobCancelled}`);
+        await pollActiveJobs();
+        await loadHistory();
+      } else {
+        const error = await response.json();
+        alert(`❌ ${error.detail || 'Failed to cancel job'}`);
+      }
+    } catch (error) {
+      console.error('Cancel job error:', error);
+      alert(`❌ Error: ${error.message}`);
+    }
+  }
+
   async function deleteJob(jobId) {
     if (!confirm(t.deleteJobConfirm)) {
       return;
@@ -1929,10 +1961,18 @@
             <div style="margin-bottom: 0.25rem;">
               <span class="muted">{t.target}:</span> {targets.find(t => t.id === job.target_id)?.name || job.target_id || 'N/A'}
             </div>
-            <div>
+            <div style="margin-bottom: 0.75rem;">
               <span class="muted">{t.started}:</span> {new Date(job.created_at).toLocaleTimeString()}
             </div>
           </div>
+          
+          <button 
+            class="danger small block" 
+            style="width: 100%; margin-top: 0.5rem;"
+            on:click={() => cancelJob(job.id)}
+          >
+            ❌ {t.cancelJob}
+          </button>
         </div>
       {/each}
       
@@ -2320,8 +2360,8 @@
             <span style="font-size: 0.875rem;">{targets.find(t => t.id === job.target_id)?.name || job.target_id || 'N/A'}</span>
             <span style="font-size: 0.875rem;">{new Date(job.created_at + 'Z').toLocaleString()}</span>
             <div>
-              <span class={`badge ${job.status === 'completed' && !job.message ? 'success' : job.status === 'failed' ? 'danger' : job.message ? 'warning' : 'warning'}`}>
-                {job.status === 'completed' && job.message ? t.uploadFailed : job.status === 'completed' ? t.completed : job.status === 'failed' ? t.failed : job.status}
+              <span class={`badge ${job.status === 'completed' && !job.message ? 'success' : job.status === 'failed' ? 'danger' : job.status === 'cancelled' ? 'warning' : job.message ? 'warning' : 'warning'}`}>
+                {job.status === 'completed' && job.message ? t.uploadFailed : job.status === 'completed' ? t.completed : job.status === 'failed' ? t.failed : job.status === 'cancelled' ? t.cancelled : job.status}
               </span>
               {#if job.message}
                 <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--danger); padding: 0.5rem; background: rgba(255, 100, 100, 0.1); border-radius: 4px; border: 1px solid rgba(255, 100, 100, 0.3);">

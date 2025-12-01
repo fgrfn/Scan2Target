@@ -73,6 +73,40 @@ async def delete_job(job_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """
+    Cancel a running or queued job.
+    
+    This stops the background task and marks the job as cancelled.
+    Only works for jobs in 'queued' or 'running' status.
+    """
+    try:
+        job_manager = JobManager()
+        success = job_manager.cancel_job(job_id)
+        
+        if not success:
+            job = job_manager.get_job(job_id)
+            if not job:
+                raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+            else:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Job cannot be cancelled (status: {job.status})"
+                )
+        
+        return {
+            "status": "success",
+            "message": f"Job {job_id} cancelled successfully",
+            "job_id": job_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/{job_id}/retry-upload")
 async def retry_upload(job_id: str):
     """

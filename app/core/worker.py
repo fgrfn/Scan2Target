@@ -81,6 +81,16 @@ class BackgroundWorker:
                 await asyncio.wait_for(self.tasks[job_id], timeout=timeout)
             except asyncio.TimeoutError:
                 pass
+    
+    def cancel_task(self, job_id: str) -> bool:
+        """Cancel a running background task."""
+        if job_id in self.tasks:
+            task = self.tasks[job_id]
+            if not task.done():
+                task.cancel()
+                self.tasks.pop(job_id, None)
+                return True
+        return False
 
 
 # Global worker instance
