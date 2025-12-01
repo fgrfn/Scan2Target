@@ -5,7 +5,7 @@ from typing import Optional, List
 from datetime import datetime
 import asyncio
 
-from app.core.database import get_db
+from app.core.database import get_db, Database
 from app.core.devices.repository import DeviceRepository
 from app.core.targets.repository import TargetRepository
 from app.core.jobs.repository import JobRepository
@@ -59,6 +59,7 @@ class HomeAssistantStatusResponse(BaseModel):
 @router.post("/scan", response_model=HomeAssistantScanResponse)
 async def trigger_scan_from_homeassistant(
     request: HomeAssistantScanRequest,
+    db: Database = Depends(get_db),
     current_user = Depends(get_current_user_optional)
 ):
     """
@@ -98,7 +99,6 @@ async def trigger_scan_from_homeassistant(
         payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "adf", "source": "ADF"}'
     ```
     """
-    db = next(get_db())
     device_repo = DeviceRepository(db)
     target_repo = TargetRepository(db)
     job_repo = JobRepository(db)
@@ -206,7 +206,10 @@ async def trigger_scan_from_homeassistant(
 
 
 @router.get("/status", response_model=HomeAssistantStatusResponse)
-async def get_homeassistant_status(current_user = Depends(get_current_user_optional)):
+async def get_homeassistant_status(
+    db: Database = Depends(get_db),
+    current_user = Depends(get_current_user_optional)
+):
     """
     Get Scan2Target status for Home Assistant sensors.
     
@@ -229,7 +232,6 @@ async def get_homeassistant_status(current_user = Depends(get_current_user_optio
         scan_interval: 30
     ```
     """
-    db = next(get_db())
     device_repo = DeviceRepository(db)
     target_repo = TargetRepository(db)
     job_repo = JobRepository(db)
@@ -269,7 +271,10 @@ async def get_homeassistant_status(current_user = Depends(get_current_user_optio
 
 
 @router.get("/scanners")
-async def list_scanners_for_homeassistant(current_user = Depends(get_current_user_optional)):
+async def list_scanners_for_homeassistant(
+    db: Database = Depends(get_db),
+    current_user = Depends(get_current_user_optional)
+):
     """
     List available scanners for Home Assistant dropdown/select.
     
@@ -282,7 +287,6 @@ async def list_scanners_for_homeassistant(current_user = Depends(get_current_use
           - Fetch from API
     ```
     """
-    db = next(get_db())
     device_repo = DeviceRepository(db)
     
     try:
@@ -305,7 +309,10 @@ async def list_scanners_for_homeassistant(current_user = Depends(get_current_use
 
 
 @router.get("/targets")
-async def list_targets_for_homeassistant(current_user = Depends(get_current_user_optional)):
+async def list_targets_for_homeassistant(
+    db: Database = Depends(get_db),
+    current_user = Depends(get_current_user_optional)
+):
     """
     List available targets for Home Assistant dropdown/select.
     
@@ -318,7 +325,6 @@ async def list_targets_for_homeassistant(current_user = Depends(get_current_user
           - Fetch from API
     ```
     """
-    db = next(get_db())
     target_repo = TargetRepository(db)
     
     try:
