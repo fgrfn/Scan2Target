@@ -1,10 +1,10 @@
 # Home Assistant Integration
 
-Scan2Target bietet eine vollständige Integration mit Home Assistant, um Scans über Automationen, Buttons und Skripte zu triggern.
+Scan2Target provides full integration with Home Assistant to trigger scans via automations, buttons, and scripts.
 
 ## Quick Start
 
-### 1. REST Command für schnellen Scan (mit Favoriten)
+### 1. REST Command for Quick Scan (using favorites)
 
 ```yaml
 # configuration.yaml
@@ -16,64 +16,113 @@ rest_command:
     payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "document"}'
 ```
 
-### 2. Button auf dem Dashboard
+> **Note:** `rest_command` does not create an entity - it's only a service you can call. To get clickable buttons or status entities, see steps 2-4 below.
+
+### 2. Create Button Entity (optional but recommended)
 
 ```yaml
 # configuration.yaml
-button:
-  - platform: template
-    name: "Dokument scannen"
+script:
+  scan_document:
+    alias: "Scan Document"
     icon: mdi:scanner
-    tap_action:
-      action: call-service
-      service: rest_command.scan_document
+    sequence:
+      - service: rest_command.scan_document
+      - service: notify.persistent_notification
+        data:
+          message: "Scan started"
+          title: "Scan2Target"
 ```
 
-### 3. Automation zum Triggern des Scans
+This creates `script.scan_document` that you can add to your dashboard as a button.
+
+### 3. Status Sensor (optional - for monitoring)
+
+```yaml
+# configuration.yaml
+binary_sensor:
+  - platform: rest
+    name: "Scan2Target Online"
+    resource: "http://YOUR_SERVER_IP/api/v1/homeassistant/status"
+    value_template: "{{ value_json.online }}"
+    device_class: connectivity
+    scan_interval: 30
+```
+
+This creates `binary_sensor.scan2target_online` showing online/offline status.
+
+### 4. Automation to Trigger Scan
 
 ```yaml
 # automations.yaml
-- alias: "Scan bei Button-Druck"
+- alias: "Scan on Button Press"
   trigger:
     - platform: state
-      entity_id: input_button.scan_trigger
+      entity_id: script.scan_document
       to: "on"
   action:
     - service: rest_command.scan_document
     - service: notify.mobile_app
       data:
-        message: "Scan gestartet"
+        message: "Scan started"
 ```
 
-## Erweiterte Konfiguration
+**Simple Dashboard Button:**
+```yaml
+# In your Lovelace dashboard
+type: button
+entity: script.scan_document
+name: Scan Document
+icon: mdi:scanner
+tap_action:
+  action: call-service
+  service: script.scan_document
+```
 
-### Mehrere Scan-Profile
+## Understanding Entities vs Services
+
+| Type | Creates Entity? | Use Case |
+|------|----------------|----------|
+| `rest_command` | ❌ No | Service to call the API |
+| `script` | ✅ Yes (`script.*`) | Clickable button in dashboard |
+| `button` helper | ✅ Yes (`button.*`) | Simple trigger button |
+| `sensor` | ✅ Yes (`sensor.*`) | Display status/values |
+| `binary_sensor` | ✅ Yes (`binary_sensor.*`) | Online/offline status |
+
+**Quick Setup for Beginners:**
+1. Add `rest_command` (to call the API)
+2. Add `script` (to get a button entity)
+3. Add script to dashboard (now you can click it)
+
+## Advanced Configuration
+
+### Multiple Scan Profiles
 
 ```yaml
 # configuration.yaml
 rest_command:
-  # Dokument (Standard, Graustufen)
+  # Document (standard, grayscale)
   scan_document:
     url: "http://YOUR_SERVER_IP/api/v1/homeassistant/scan"
     method: POST
     content_type: "application/json"
     payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "document"}'
   
-  # Mehrseitiger Scan (ADF)
+  # Multi-page Scan (ADF)
   scan_multipage:
     url: "http://YOUR_SERVER_IP/api/v1/homeassistant/scan"
     method: POST
     content_type: "application/json"
     payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "adf", "source": "ADF"}'
   
-  # Farbe (höhere Qualität)
+  # Color (higher quality)
   scan_color:
     url: "http://YOUR_SERVER_IP/api/v1/homeassistant/scan"
     method: POST
     content_type: "application/json"
     payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "color"}'
   
-  # Foto (höchste Qualität)
+  # Photo (highest quality)
   scan_photo:
     url: "http://YOUR_SERVER_IP/api/v1/homeassistant/scan"
     method: POST
@@ -81,7 +130,7 @@ rest_command:
     payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "photo"}'
 ```
 
-### Scanner- und Target-Auswahl
+### Scanner and Target Selection
 
 ```yaml
 # configuration.yaml
@@ -89,17 +138,17 @@ input_select:
   scan_scanner:
     name: Scanner
     options:
-      - "Favorit verwenden"
-    initial: "Favorit verwenden"
+      - "Use Favorite"
+    initial: "Use Favorite"
   
   scan_target:
-    name: Ziel
+    name: Target
     options:
-      - "Favorit verwenden"
-    initial: "Favorit verwenden"
+      - "Use Favorite"
+    initial: "Use Favorite"
   
   scan_profile:
-    name: Scan-Profil
+    name: Scan Profile
     options:
       - "document"
       - "adf"
@@ -114,13 +163,13 @@ rest_command:
     content_type: "application/json"
     payload: >
       {
-        "scanner_id": "{{ 'favorite' if states('input_select.scan_scanner') == 'Favorit verwenden' else states('input_select.scan_scanner') }}",
-        "target_id": "{{ 'favorite' if states('input_select.scan_target') == 'Favorit verwenden' else states('input_select.scan_target') }}",
+        "scanner_id": "{{ 'favorite' if states('input_select.scan_scanner') == 'Use Favorite' else states('input_select.scan_scanner') }}",
+        "target_id": "{{ 'favorite' if states('input_select.scan_target') == 'Use Favorite' else states('input_select.scan_target') }}",
         "profile": "{{ states('input_select.scan_profile') }}"
       }
 ```
 
-### Status-Sensor
+### Status Sensor
 
 ```yaml
 # configuration.yaml
@@ -142,17 +191,17 @@ sensor:
   - platform: template
     sensors:
       scan2target_scanner_count:
-        friendly_name: "Anzahl Scanner"
+        friendly_name: "Scanner Count"
         value_template: "{{ state_attr('sensor.scan2target_status', 'scanner_count') }}"
         unit_of_measurement: "Scanner"
       
       scan2target_active_scans:
-        friendly_name: "Aktive Scans"
+        friendly_name: "Active Scans"
         value_template: "{{ state_attr('sensor.scan2target_status', 'active_scans') }}"
         unit_of_measurement: "Scans"
 ```
 
-### Dashboard-Karte
+### Dashboard Card
 
 ```yaml
 # Lovelace UI
@@ -164,60 +213,60 @@ cards:
       - entity: sensor.scan2target_status
         name: Status
       - entity: sensor.scan2target_scanner_count
-        name: Scanner verfügbar
+        name: Available Scanners
       - entity: sensor.scan2target_active_scans
-        name: Aktive Scans
+        name: Active Scans
       - type: attribute
         entity: sensor.scan2target_status
         attribute: favorite_scanner
-        name: Favoriten-Scanner
+        name: Favorite Scanner
       - type: attribute
         entity: sensor.scan2target_status
         attribute: favorite_target
-        name: Favoriten-Ziel
+        name: Favorite Target
   
   - type: entities
-    title: Scan-Optionen
+    title: Scan Options
     entities:
       - input_select.scan_profile
   
   - type: horizontal-stack
     cards:
       - type: button
-        name: Dokument
+        name: Document
         icon: mdi:file-document-outline
         tap_action:
           action: call-service
           service: rest_command.scan_document
       
       - type: button
-        name: Mehrseiten
+        name: Multi-Page
         icon: mdi:file-document-multiple-outline
         tap_action:
           action: call-service
           service: rest_command.scan_multipage
       
       - type: button
-        name: Farbe
+        name: Color
         icon: mdi:palette
         tap_action:
           action: call-service
           service: rest_command.scan_color
       
       - type: button
-        name: Foto
+        name: Photo
         icon: mdi:camera
         tap_action:
           action: call-service
           service: rest_command.scan_photo
 ```
 
-## Automations-Beispiele
+## Automation Examples
 
-### 1. Täglicher automatischer Scan
+### 1. Daily Automatic Scan
 
 ```yaml
-- alias: "Täglicher Dokument-Scan"
+- alias: "Daily Document Scan"
   trigger:
     - platform: time
       at: "09:00:00"
@@ -229,14 +278,14 @@ cards:
     - service: rest_command.scan_document
     - service: notify.mobile_app
       data:
-        title: "Scan gestartet"
-        message: "Täglicher Dokument-Scan wurde ausgelöst"
+        title: "Scan started"
+        message: "Daily document scan has been triggered"
 ```
 
-### 2. Scan bei NFC-Tag
+### 2. Scan on NFC Tag
 
 ```yaml
-- alias: "Scan bei NFC-Tag"
+- alias: "Scan on NFC Tag"
   trigger:
     - platform: tag
       tag_id: YOUR_NFC_TAG_ID
@@ -244,36 +293,36 @@ cards:
     - service: rest_command.scan_document
     - service: notify.mobile_app
       data:
-        message: "Scan durch NFC-Tag gestartet"
+        message: "Scan started by NFC tag"
 ```
 
-### 3. Scan bei Sprachbefehl
+### 3. Scan on Voice Command
 
 ```yaml
-- alias: "Scan bei Sprachbefehl"
+- alias: "Scan on Voice Command"
   trigger:
     - platform: conversation
       command:
-        - "Scanne ein Dokument"
-        - "Starte einen Scan"
+        - "Scan a document"
+        - "Start a scan"
   action:
     - service: rest_command.scan_document
     - service: tts.google_translate_say
       data:
-        entity_id: media_player.wohnzimmer
-        message: "Scan wird gestartet"
+        entity_id: media_player.living_room
+        message: "Starting scan"
 ```
 
-### 4. Scan mit Benachrichtigung bei Fertigstellung
+### 4. Scan with Completion Notification
 
 ```yaml
-# Zunächst einen Helper für die Job-ID erstellen
+# First create a helper for job ID
 input_text:
   last_scan_job_id:
-    name: "Letzte Scan Job-ID"
+    name: "Last Scan Job ID"
     initial: ""
 
-# REST Command mit Response
+# REST Command with Response
 rest_command:
   scan_with_notification:
     url: "http://YOUR_SERVER_IP/api/v1/homeassistant/scan"
@@ -282,7 +331,7 @@ rest_command:
     payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "document"}'
 
 # Automation
-- alias: "Scan mit Benachrichtigung"
+- alias: "Scan with Notification"
   trigger:
     - platform: state
       entity_id: input_button.scan_with_notification
@@ -292,20 +341,20 @@ rest_command:
         seconds: 5
     - service: notify.mobile_app
       data:
-        message: "Scan läuft, bitte warten..."
+        message: "Scan running, please wait..."
     - delay:
-        seconds: 30  # Geschätzte Scan-Dauer
+        seconds: 30  # Estimated scan duration
     - service: notify.mobile_app
       data:
-        message: "Scan abgeschlossen!"
+        message: "Scan completed!"
         data:
           url: "http://YOUR_SERVER_IP"
 ```
 
-### 5. Bedingter Scan basierend auf Anwesenheit
+### 5. Conditional Scan Based on Presence
 
 ```yaml
-- alias: "Scan wenn jemand zu Hause ist"
+- alias: "Scan when someone is home"
   trigger:
     - platform: state
       entity_id: input_button.scan_trigger
@@ -318,20 +367,20 @@ rest_command:
   else:
     - service: notify.mobile_app
       data:
-        message: "Scan nicht möglich - niemand zu Hause"
+        message: "Scan not possible - nobody home"
 ```
 
-## API-Endpunkte
+## API Endpoints
 
 ### POST /api/v1/homeassistant/scan
-Startet einen Scan.
+Starts a scan.
 
-**Parameter:**
-- `scanner_id` (optional): Scanner-ID oder "favorite" (Standard)
-- `target_id` (optional): Target-ID oder "favorite" (Standard)
-- `profile` (optional): Scan-Profil (document, adf, color, photo)
-- `filename` (optional): Benutzerdefinierter Dateiname
-- `source` (optional): Scan-Quelle (Flatbed, ADF)
+**Parameters:**
+- `scanner_id` (optional): Scanner ID or "favorite" (default)
+- `target_id` (optional): Target ID or "favorite" (default)
+- `profile` (optional): Scan profile (document, adf, color, photo)
+- `filename` (optional): Custom filename
+- `source` (optional): Scan source (Flatbed, ADF)
 
 **Response:**
 ```json
@@ -346,7 +395,7 @@ Startet einen Scan.
 ```
 
 ### GET /api/v1/homeassistant/status
-Liefert System-Status.
+Returns system status.
 
 **Response:**
 ```json
@@ -362,28 +411,28 @@ Liefert System-Status.
 ```
 
 ### GET /api/v1/homeassistant/scanners
-Liste aller verfügbaren Scanner.
+List of all available scanners.
 
 ### GET /api/v1/homeassistant/targets
-Liste aller verfügbaren Ziele.
+List of all available targets.
 
 ### GET /api/v1/homeassistant/profiles
-Liste aller verfügbaren Scan-Profile.
+List of all available scan profiles.
 
-## Vorbereitung in Scan2Target
+## Preparation in Scan2Target
 
-1. **Favoriten-Scanner festlegen:**
-   - Web UI öffnen → Scan-Bereich
-   - Scanner auswählen → ⭐ Stern klicken
+1. **Set Favorite Scanner:**
+   - Open Web UI → Scan section
+   - Select scanner → Click ⭐ star
 
-2. **Favoriten-Ziel festlegen:**
-   - Web UI öffnen → Targets-Bereich
-   - Ziel auswählen → ⭐ Stern klicken
+2. **Set Favorite Target:**
+   - Open Web UI → Targets section
+   - Select target → Click ⭐ star
 
-3. **Optional: Authentifizierung deaktivieren (nur lokales Netzwerk!):**
+3. **Optional: Disable Authentication (local network only!):**
    ```bash
    sudo nano /etc/systemd/system/scan2target.service
-   # Hinzufügen:
+   # Add:
    Environment="SCAN2TARGET_REQUIRE_AUTH=false"
    
    sudo systemctl daemon-reload
@@ -392,35 +441,35 @@ Liste aller verfügbaren Scan-Profile.
 
 ## Troubleshooting
 
-### Fehler: "No favorite scanner configured"
-- In der Scan2Target Web UI einen Scanner als Favorit markieren
-- Oder spezifische `scanner_id` im REST Command verwenden
+### Error: "No favorite scanner configured"
+- Mark a scanner as favorite in Scan2Target Web UI
+- Or use specific `scanner_id` in REST command
 
-### Fehler: "No favorite target configured"
-- In der Scan2Target Web UI ein Ziel als Favorit markieren
-- Oder spezifische `target_id` im REST Command verwenden
+### Error: "No favorite target configured"
+- Mark a target as favorite in Scan2Target Web UI
+- Or use specific `target_id` in REST command
 
-### REST Command antwortet nicht
-- Server-IP überprüfen: `http://YOUR_SERVER_IP/health`
-- Firewall-Regeln überprüfen
-- Scan2Target-Logs prüfen: `sudo journalctl -u scan2target -f`
+### REST Command not responding
+- Check server IP: `http://YOUR_SERVER_IP/health`
+- Check firewall rules
+- Check Scan2Target logs: `sudo journalctl -u scan2target -f`
 
-### Scan startet nicht
-- Scanner in Scan2Target Web UI entdecken
-- Ziel-Konnektivität testen (Test & Save Button)
-- Active Jobs in Web UI überprüfen
+### Scan not starting
+- Discover scanner in Scan2Target Web UI
+- Test target connectivity (Test & Save button)
+- Check Active Jobs in Web UI
 
-## Sicherheitshinweise
+## Security Notes
 
-⚠️ **Wichtig für Produktionsumgebungen:**
+⚠️ **Important for Production Environments:**
 
-1. **Netzwerk-Isolation:** Scan2Target nur im lokalen Netzwerk betreiben
-2. **Reverse Proxy:** Bei Internet-Zugriff HTTPS-Reverse-Proxy verwenden
-3. **Authentifizierung:** JWT-Auth aktivieren für externe Zugriffe
-4. **API-Token:** Für externe Aufrufe API-Token verwenden statt Favoriten
+1. **Network Isolation:** Operate Scan2Target only on local network
+2. **Reverse Proxy:** Use HTTPS reverse proxy for internet access
+3. **Authentication:** Enable JWT auth for external access
+4. **API Token:** Use API tokens instead of favorites for external calls
 
-## Weitere Ressourcen
+## Additional Resources
 
-- [Scan2Target API Dokumentation](http://YOUR_SERVER_IP/docs)
+- [Scan2Target API Documentation](http://YOUR_SERVER_IP/docs)
 - [Home Assistant REST Integration](https://www.home-assistant.io/integrations/rest/)
 - [Home Assistant RESTful Command](https://www.home-assistant.io/integrations/rest_command/)

@@ -107,43 +107,51 @@ async def trigger_scan_from_homeassistant(
     try:
         # Resolve scanner
         scanner_id = request.scanner_id
+        scanner = None
+        
         if scanner_id == "favorite" or scanner_id is None:
-            # Get favorite scanner
-            favorite = device_repo.get_favorite_scanner()
-            if not favorite:
+            # Get favorite scanner from database
+            scanners = device_repo.list_devices(device_type="scanner")
+            favorite_scanners = [s for s in scanners if s.is_favorite]
+            if not favorite_scanners:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No favorite scanner configured. Please mark a scanner as favorite in the Web UI (⭐ star icon)."
+                )
+            scanner = favorite_scanners[0]
+            scanner_id = scanner.id
+        else:
+            # Get scanner by ID
+            scanner = device_repo.get_by_id(scanner_id)
+            if not scanner:
                 raise HTTPException(
                     status_code=404,
-                    detail="No favorite scanner configured. Please set a favorite scanner in the Web UI."
+                    detail=f"Scanner not found: {scanner_id}"
                 )
-            scanner_id = favorite.id
-        
-        # Get scanner details
-        scanner = device_repo.get_by_id(scanner_id)
-        if not scanner:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Scanner not found: {scanner_id}"
-            )
         
         # Resolve target
         target_id = request.target_id
+        target = None
+        
         if target_id == "favorite" or target_id is None:
-            # Get favorite target
-            favorite_target = target_repo.get_favorite_target()
-            if not favorite_target:
+            # Get favorite target from database
+            targets = target_repo.list_targets()
+            favorite_targets = [t for t in targets if t.is_favorite]
+            if not favorite_targets:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No favorite target configured. Please mark a target as favorite in the Web UI (⭐ star icon)."
+                )
+            target = favorite_targets[0]
+            target_id = target.id
+        else:
+            # Get target by ID
+            target = target_repo.get_by_id(target_id)
+            if not target:
                 raise HTTPException(
                     status_code=404,
-                    detail="No favorite target configured. Please set a favorite target in the Web UI."
+                    detail=f"Target not found: {target_id}"
                 )
-            target_id = favorite_target.id
-        
-        # Get target details
-        target = target_repo.get_by_id(target_id)
-        if not target:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Target not found: {target_id}"
-            )
         
         # Generate filename
         filename = request.filename or f"scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -228,7 +236,7 @@ async def get_homeassistant_status(current_user = Depends(get_current_user_optio
     
     try:
         # Get counts
-        scanners = device_repo.list_devices()
+        scanners = device_repo.list_devices(device_type="scanner")
         targets = target_repo.list_targets()
         active_jobs = job_repo.get_active_jobs()
         
@@ -237,8 +245,11 @@ async def get_homeassistant_status(current_user = Depends(get_current_user_optio
         last_scan = recent_jobs[0].created_at if recent_jobs else None
         
         # Get favorites
-        favorite_scanner = device_repo.get_favorite_scanner()
-        favorite_target = target_repo.get_favorite_target()
+        favorite_scanners = [s for s in scanners if s.is_favorite]
+        favorite_scanner = favorite_scanners[0] if favorite_scanners else None
+        
+        favorite_targets = [t for t in targets if t.is_favorite]
+        favorite_target = favorite_targets[0] if favorite_targets else None
         
         return HomeAssistantStatusResponse(
             online=True,
@@ -275,7 +286,7 @@ async def list_scanners_for_homeassistant(current_user = Depends(get_current_use
     device_repo = DeviceRepository(db)
     
     try:
-        scanners = device_repo.list_devices()
+        scanners = device_repo.list_devices(device_type="scanner")
         return {
             "scanners": [
                 {
