@@ -2108,14 +2108,15 @@
           
           {#if targetType === 'SMB'}
             <label for="target-connection">{t.connection}</label>
-            <input id="target-connection" type="text" placeholder="//nas/share" bind:value={targetConnection} />
+            <input id="target-connection" type="text" placeholder="//10.10.10.11/sharename" bind:value={targetConnection} />
+            <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">⚠️ Must start with // (two slashes). Example: //192.168.1.100/documents</p>
             <label for="target-username">{t.username}</label>
             <input id="target-username" type="text" placeholder={t.usernamePlaceholder} bind:value={targetUsername} />
             <label for="target-password">{t.password}</label>
             <input id="target-password" type="password" placeholder={t.passwordPlaceholder} bind:value={targetPassword} />
             <label for="target-upload-path">{t.remotePath}</label>
-            <input id="target-upload-path" type="text" placeholder="/consume" bind:value={targetRemotePath} />
-            <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">Optional: Subdirectory within the share (e.g., /consume, /subfolder)</p>
+            <input id="target-upload-path" type="text" placeholder="consume" bind:value={targetRemotePath} />
+            <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">💡 Optional: Subdirectory within the share (e.g., consume, inbox, scans)</p>
           {:else if targetType === 'SFTP'}
             <label for="target-sftp-host">{t.sftpHost}</label>
             <input id="target-sftp-host" type="text" placeholder={t.sftpHostPlaceholder} bind:value={targetSftpHost} />
