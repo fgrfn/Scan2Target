@@ -1059,6 +1059,20 @@
         alert('Please fill in connection and username for SMB');
         return;
       }
+      
+      // Validate SMB connection format
+      if (!targetConnection.startsWith('//') && !targetConnection.startsWith('\\\\')) {
+        const shouldContinue = confirm(
+          '⚠️ Warning: SMB connection should start with // or \\\\\n\n' +
+          `Current: ${targetConnection}\n` +
+          `Suggested: //${targetConnection}\n\n` +
+          'Continue anyway? (Not recommended)'
+        );
+        if (!shouldContinue) {
+          return;
+        }
+      }
+      
       config.connection = targetConnection;
       config.username = targetUsername;
       config.password = targetPassword;
@@ -2108,10 +2122,12 @@
           
           {#if targetType === 'SMB'}
             <label for="target-connection">{t.connection}</label>
-            <input id="target-connection" type="text" placeholder="192.168.1.100/scans/inbox  or  //nas.local/documents" bind:value={targetConnection} />
+            <input id="target-connection" type="text" placeholder="//192.168.1.100/documents/inbox" bind:value={targetConnection} />
             <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">
-              💡 <strong>Include the full path!</strong> Formats: <code>server/share/folder</code> or <code>//server/share/path</code><br/>
-              Examples: <code>192.168.1.100/documents/inbox</code> or <code>//nas.local/scans/consume</code>
+              ⚠️ <strong>Format:</strong> <code>//server/share</code> or <code>//server/share/subfolder</code><br/>
+              ✅ Examples: <code>//192.168.1.100/scans/consume</code> or <code>//nas.local/documents</code><br/>
+              ❌ Wrong: <code>192.168.1.100/share</code> (missing //)<br/>
+              💡 Tip: Start with <code>//</code> (two slashes!)
             </p>
             <label for="target-username">{t.username}</label>
             <input id="target-username" type="text" placeholder={t.usernamePlaceholder} bind:value={targetUsername} />
