@@ -172,33 +172,36 @@ async def preview_scan(request: dict):
                 ],
                 stdout=open(preview_file, 'wb'),
                 stderr=subprocess.PIPE,
-                timeout=30
-            )
-            
-            if result.returncode != 0:
-                raise Exception(f"scanimage failed: {result.stderr.decode()}")
-            
-            # Read and encode as base64
-            with open(preview_file, 'rb') as f:
-                image_data = base64.b64encode(f.read()).decode('utf-8')
-            
-            return JSONResponse({
-                "status": "success",
-                "image": f"data:image/jpeg;base64,{image_data}",
-                "format": "jpeg"
-            })
-            
-        finally:
-            # Cleanup
-            if preview_file.exists():
-                preview_file.unlink()
-    
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=408, detail="Preview scan timeout")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Preview failed: {str(e)}")
-
-
+                # Profil-Einstellungen holen
+                scanner_mgr = ScannerManager()
+                profiles = scanner_mgr.list_profiles()
+                profile_id = request.get('profile_id')
+                profile = next((p for p in profiles if p['id'] == profile_id), None)
+                color_mode = profile['color_mode'] if profile else 'Gray'
+                dpi = min(profile['dpi'] if profile else 150, 200)
+                try:
+                    # Preview-Scan mit Profil-Einstellungen
+                    result = subprocess.run(
+                        [
+                            'scanimage',
+                            '--device-name', device_uri,
+                            '--resolution', str(dpi),
+                            '--mode', color_mode,
+                            '--format', 'jpeg'
+                        ],
+                        stdout=open(preview_file, 'wb'),
+                        stderr=subprocess.PIPE,
+                        timeout=30
+                    )
+                    if result.returncode != 0:
+                        raise Exception(f"scanimage failed: {result.stderr.decode()}")
+                    with open(preview_file, 'rb') as f:
+                        image_data = base64.b64encode(f.read()).decode('utf-8')
+                    return JSONResponse({
+                        "status": "success",
+                        "image": f"data:image/jpeg;base64,{image_data}",
+                        "format": "jpeg"
+                    })
 @router.post("/batch", response_model=ScanJobResponse)
 async def start_batch_scan(payload: BatchScanRequest):
     """Combine multiple scanned pages into one PDF and upload to target."""
@@ -259,64 +262,55 @@ async def start_batch_scan(payload: BatchScanRequest):
                     images.append(Image.open(BytesIO(image_data)))
                 else:
                     raise Exception(f"Invalid page URL format for page {idx + 1}")
-            
-            # Convert all images to PDF
-            pdf_file = temp_dir / f"{payload.filename_prefix or 'batch_scan'}_{batch_id}.pdf"
-            
-            if len(images) > 0:
-                # Convert all images to RGB (PDF requires RGB)
-                rgb_images = [img.convert('RGB') for img in images]
-                
-                # Get quality and DPI from profile
-                quality = profile.get('quality', 85)
-                dpi = profile.get('dpi', 200)
-                
-                # Save first image as PDF with additional pages
-                rgb_images[0].save(
-                    pdf_file,
-                    save_all=True,
-                    append_images=rgb_images[1:] if len(rgb_images) > 1 else [],
-                    resolution=float(dpi),
-                    quality=quality
-                )
-                
-                print(f"✓ Created PDF with {len(images)} pages: {pdf_file}")
-                
-                # Now create a job to upload this PDF
-                from app.core.jobs.manager import JobManager
-                from app.core.jobs.models import JobRecord, JobStatus
-                
-                job_id = str(uuid.uuid4())
-                job = JobRecord(
-                    id=job_id,
-                    device_id=payload.device_id,
-                    target_id=payload.target_id,
-                    profile_id=payload.profile_id or "batch_scan",
-                    filename=pdf_file.name,
-                    status=JobStatus.completed,  # Scan is done
-                    file_path=str(pdf_file)
-                )
-                
-                # Add job and trigger upload
-                job_manager = JobManager()
-                job_manager.create_job(job)
-                
-                # Enqueue upload task
-                from app.core.worker import enqueue_upload
-                enqueue_upload(job_id, payload.target_id, str(pdf_file))
-                
-                return ScanJobResponse(job_id=job_id, status=JobStatus.queued)
-            else:
-                raise Exception("No images to process")
-                
-        finally:
-            # Cleanup images
-            for img in images:
-                img.close()
+            # Profil-Einstellungen holen
+            scanner_mgr = ScannerManager()
+            profiles = scanner_mgr.list_profiles()
+            profile = next((p for p in profiles if p['id'] == payload.profile_id), None)
+            if not profile:
+                raise HTTPException(status_code=400, detail=f"Profile '{payload.profile_id}' not found")
+            try:
+                # Base64-Images dekodieren
+                images = []
+                for idx, page_url in enumerate(payload.page_urls):
+                    print(f"Processing batch page {idx + 1}/{len(payload.page_urls)}")
+                    if page_url.startswith('data:image'):
+                        base64_data = page_url.split(',', 1)[1]
+                        image_data = base64.b64decode(base64_data)
+                        from io import BytesIO
+                        images.append(Image.open(BytesIO(image_data)))
+                    else:
+                        raise Exception(f"Invalid page URL format for page {idx + 1}")
+                pdf_file = temp_dir / f"{payload.filename_prefix or 'batch_scan'}_{batch_id}.pdf"
+                if len(images) > 0:
+                    rgb_images = [img.convert('RGB') for img in images]
+                    quality = profile.get('quality', 85)
+                    dpi = profile.get('dpi', 200)
+                    rgb_images[0].save(
+                        pdf_file,
+                        save_all=True,
+                        append_images=rgb_images[1:] if len(rgb_images) > 1 else [],
+                        resolution=float(dpi),
+                        quality=quality
+                    )
+                    print(f"✓ Created PDF with {len(images)} pages: {pdf_file}")
+                    from app.core.jobs.manager import JobManager
+                    from app.core.jobs.models import JobRecord, JobStatus
+                    job_id = str(uuid.uuid4())
+                    job = JobRecord(
+                        id=job_id,
+                        device_id=payload.device_id,
+                        target_id=payload.target_id,
+                        profile_id=payload.profile_id or "batch_scan",
+                        filename=pdf_file.name,
+                        status=JobStatus.completed,
+                        file_path=str(pdf_file)
+                    )
+                    job_manager = JobManager()
+                    job_manager.create_job(job)
+                    from app.core.worker import enqueue_upload
+                    enqueue_upload(job_id, payload.target_id, str(pdf_file))
+                    return ScanJobResponse(job_id=job_id, status=JobStatus.queued)
+                else:
+                    raise Exception("No images to process")
+            finally:
     
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Batch scan failed: {str(e)}")
