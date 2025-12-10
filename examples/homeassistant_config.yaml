@@ -11,7 +11,13 @@ rest_command:
     url: "http://192.168.1.100/api/v1/homeassistant/scan"
     method: POST
     content_type: "application/json"
-    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "document_200_pdf"}'
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "flatbed_document_200_gray_pdf"}'
+  
+  scan_multipage:
+    url: "http://192.168.1.100/api/v1/homeassistant/scan"
+    method: POST
+    content_type: "application/json"
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "adf_document_200_gray_pdf"}'
 
 # Scripts for simple buttons (recommended for beginners)
 script:
@@ -54,11 +60,14 @@ input_select:
   scan_profile:
     name: Scan-Profil
     options:
-      - "Dokument (200 DPI, Grau)"
-      - "Mehrseiten ADF"
-      - "Farbe (300 DPI)"
-      - "Foto (600 DPI)"
-    initial: "Dokument (200 DPI, Grau)"
+      - "📄 Dokument (200 DPI, Klein)"
+      - "📄 Dokument (300 DPI, Mittel)"
+      - "📄 Farbe (300 DPI)"
+      - "📄 Foto (600 DPI)"
+      - "📚 Mehrseiten ADF (200 DPI)"
+      - "📚 Mehrseiten ADF (300 DPI)"
+      - "📚 Mehrseiten Farbe (300 DPI)"
+    initial: "📄 Dokument (200 DPI, Klein)"
     icon: mdi:cog
 
 # Input Text für benutzerdefinierte Dateinamen
@@ -128,7 +137,7 @@ rest_command:
       {
         "scanner_id": "favorite",
         "target_id": "favorite",
-        "profile": "{% if states('input_select.scan_profile') == 'Dokument (200 DPI, Grau)' %}document_200_pdf{% elif states('input_select.scan_profile') == 'Mehrseiten ADF' %}document_adf_200_pdf{% elif states('input_select.scan_profile') == 'Farbe (300 DPI)' %}color_300_pdf{% else %}photo_600_jpeg{% endif %}",
+        "profile": "{% set profile = states('input_select.scan_profile') %}{% if '200 DPI, Klein' in profile %}flatbed_document_200_gray_pdf{% elif '300 DPI, Mittel' in profile %}flatbed_document_300_gray_pdf{% elif 'Farbe (300 DPI)' in profile %}flatbed_color_300_pdf{% elif 'Foto (600 DPI)' in profile %}flatbed_photo_600_jpeg{% elif 'Mehrseiten ADF (200 DPI)' in profile %}adf_document_200_gray_pdf{% elif 'Mehrseiten ADF (300 DPI)' in profile %}adf_document_300_gray_pdf{% elif 'Mehrseiten Farbe' in profile %}adf_color_300_pdf{% else %}flatbed_document_200_gray_pdf{% endif %}",
         "filename": "{{ states('input_text.scan_filename') if states('input_text.scan_filename') != '' else omit }}"
       }
   
@@ -137,25 +146,25 @@ rest_command:
     url: "http://192.168.1.100/api/v1/homeassistant/scan"
     method: POST
     content_type: "application/json"
-    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "document_200_pdf"}'
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "flatbed_document_200_gray_pdf"}'
   
   scan_multipage:
     url: "http://192.168.1.100/api/v1/homeassistant/scan"
     method: POST
     content_type: "application/json"
-    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "document_adf_200_pdf"}'
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "adf_document_200_gray_pdf"}'
   
   scan_color:
     url: "http://192.168.1.100/api/v1/homeassistant/scan"
     method: POST
     content_type: "application/json"
-    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "color_300_pdf"}'
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "flatbed_color_300_pdf"}'
   
   scan_photo:
     url: "http://192.168.1.100/api/v1/homeassistant/scan"
     method: POST
     content_type: "application/json"
-    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "photo_600_jpeg"}'
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "flatbed_photo_600_jpeg"}'
 
 # Automations
 automation:

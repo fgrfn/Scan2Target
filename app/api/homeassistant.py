@@ -322,12 +322,20 @@ async def list_targets_for_homeassistant(
 async def list_profiles_for_homeassistant(current_user = Depends(get_current_user_optional)):
     """
     List available scan profiles for Home Assistant dropdown/select.
+    
+    Returns both Flatbed and ADF profiles with their full profile IDs.
     """
     return {
         "profiles": [
-            {"id": "document", "name": "Document @200 DPI (Gray)"},
-            {"id": "adf", "name": "Multi-Page (ADF)"},
-            {"id": "color", "name": "Color @300 DPI"},
-            {"id": "photo", "name": "Photo @600 DPI"}
+            # Flatbed profiles
+            {"id": "flatbed_document_200_gray_pdf", "name": "📄 Document @200 DPI (Small)", "source": "Flatbed"},
+            {"id": "flatbed_document_300_gray_pdf", "name": "📄 Document @300 DPI (Medium)", "source": "Flatbed"},
+            {"id": "flatbed_color_300_pdf", "name": "📄 Color @300 DPI", "source": "Flatbed"},
+            {"id": "flatbed_photo_600_jpeg", "name": "📄 Photo @600 DPI", "source": "Flatbed"},
+            
+            # ADF (Multi-page) profiles
+            {"id": "adf_document_200_gray_pdf", "name": "📚 Multi-Page @200 DPI (Small)", "source": "ADF"},
+            {"id": "adf_document_300_gray_pdf", "name": "📚 Multi-Page @300 DPI (Medium)", "source": "ADF"},
+            {"id": "adf_color_300_pdf", "name": "📚 Multi-Page Color @300 DPI", "source": "ADF"}
         ]
     }
