@@ -21,6 +21,7 @@ class Target(BaseModel):
 
 
 @router.get("", response_model=List[Target])
+@router.get("/", response_model=List[Target])
 async def list_targets():
     """List all configured targets."""
     start = time.time()
@@ -44,6 +45,7 @@ async def list_targets():
 
 
 @router.post("", response_model=Target)
+@router.post("/", response_model=Target)
 async def create_target(target: Target, validate: bool = True):
     """
     Create a new target configuration.

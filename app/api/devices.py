@@ -119,6 +119,7 @@ def _update_scanner_cache():
             print(f"[CACHE] Failed to update scanner cache: {e}")
 
 
+@router.get("", response_model=List[DeviceResponse])
 @router.get("/", response_model=List[DeviceResponse])
 async def list_devices(device_type: str | None = None):
     """

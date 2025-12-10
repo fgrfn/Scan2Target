@@ -9,6 +9,7 @@ from app.core.targets.manager import TargetManager
 router = APIRouter()
 
 
+@router.get("", response_model=List[JobRecord])
 @router.get("/", response_model=List[JobRecord])
 async def list_history():
     """Return unified scan/print history."""
