@@ -282,16 +282,111 @@ class TargetManager:
                 if not url:
                     return {"status": "error", "message": "URL is required"}
                 
-                response = requests.head(url, timeout=5)
+                try:
+                    response = requests.head(url, timeout=5)
+                    
+                    if response.status_code < 500:
+                        return {"status": "ok", "message": f"Webhook endpoint reachable (HTTP {response.status_code})"}
+                    else:
+                        return {"status": "error", "message": f"Server error: {response.status_code}"}
+                except requests.exceptions.RequestException as e:
+                    return {"status": "error", "message": f"Cannot reach webhook: {str(e)}"}
+            
+            elif target.type == 'Google Drive':
+                # Basic validation for Google Drive
+                access_token = target.config.get('access_token', '')
+                if not access_token:
+                    return {"status": "error", "message": "Access token is required"}
                 
-                if response.status_code < 500:
-                    return {"status": "ok"}
-                else:
-                    return {"status": "error", "message": f"Server error: {response.status_code}"}
+                # Test with a simple API call to verify token
+                try:
+                    headers = {'Authorization': f'Bearer {access_token}'}
+                    response = requests.get('https://www.googleapis.com/drive/v3/about?fields=user', 
+                                          headers=headers, timeout=10)
+                    if response.status_code == 200:
+                        user_info = response.json()
+                        return {"status": "ok", "message": f"Connected to Google Drive as {user_info.get('user', {}).get('emailAddress', 'user')}"}
+                    elif response.status_code == 401:
+                        return {"status": "error", "message": "Invalid or expired access token"}
+                    else:
+                        return {"status": "error", "message": f"Google Drive API error: {response.status_code}"}
+                except requests.exceptions.RequestException as e:
+                    return {"status": "error", "message": f"Cannot connect to Google Drive: {str(e)}"}
+            
+            elif target.type == 'Dropbox':
+                # Basic validation for Dropbox
+                access_token = target.config.get('access_token', '')
+                if not access_token:
+                    return {"status": "error", "message": "Access token is required"}
+                
+                # Test with account info API
+                try:
+                    headers = {'Authorization': f'Bearer {access_token}'}
+                    response = requests.post('https://api.dropboxapi.com/2/users/get_current_account',
+                                           headers=headers, timeout=10)
+                    if response.status_code == 200:
+                        account = response.json()
+                        return {"status": "ok", "message": f"Connected to Dropbox as {account.get('name', {}).get('display_name', 'user')}"}
+                    elif response.status_code == 401:
+                        return {"status": "error", "message": "Invalid or expired access token"}
+                    else:
+                        return {"status": "error", "message": f"Dropbox API error: {response.status_code}"}
+                except requests.exceptions.RequestException as e:
+                    return {"status": "error", "message": f"Cannot connect to Dropbox: {str(e)}"}
+            
+            elif target.type == 'OneDrive':
+                # Basic validation for OneDrive
+                access_token = target.config.get('access_token', '')
+                if not access_token:
+                    return {"status": "error", "message": "Access token is required"}
+                
+                # Test with Microsoft Graph API
+                try:
+                    headers = {'Authorization': f'Bearer {access_token}'}
+                    response = requests.get('https://graph.microsoft.com/v1.0/me/drive',
+                                          headers=headers, timeout=10)
+                    if response.status_code == 200:
+                        drive = response.json()
+                        return {"status": "ok", "message": f"Connected to OneDrive ({drive.get('driveType', 'personal')} drive)"}
+                    elif response.status_code == 401:
+                        return {"status": "error", "message": "Invalid or expired access token"}
+                    else:
+                        return {"status": "error", "message": f"OneDrive API error: {response.status_code}"}
+                except requests.exceptions.RequestException as e:
+                    return {"status": "error", "message": f"Cannot connect to OneDrive: {str(e)}"}
+            
+            elif target.type == 'Nextcloud':
+                # Basic validation for Nextcloud/WebDAV
+                webdav_url = target.config.get('webdav_url', '')
+                username = target.config.get('username', '')
+                password = target.config.get('password', '')
+                
+                if not webdav_url:
+                    return {"status": "error", "message": "WebDAV URL is required"}
+                if not username:
+                    return {"status": "error", "message": "Username is required"}
+                
+                # Test WebDAV connection with PROPFIND
+                try:
+                    from requests.auth import HTTPBasicAuth
+                    response = requests.request('PROPFIND', webdav_url, 
+                                              auth=HTTPBasicAuth(username, password),
+                                              timeout=10)
+                    if response.status_code in [200, 207]:  # 207 = Multi-Status (WebDAV success)
+                        return {"status": "ok", "message": "Successfully connected to Nextcloud"}
+                    elif response.status_code == 401:
+                        return {"status": "error", "message": "Authentication failed - check username and password"}
+                    elif response.status_code == 404:
+                        return {"status": "error", "message": "WebDAV URL not found - check URL"}
+                    else:
+                        return {"status": "error", "message": f"WebDAV error: {response.status_code}"}
+                except requests.exceptions.RequestException as e:
+                    return {"status": "error", "message": f"Cannot connect to Nextcloud: {str(e)}"}
                 
             else:
-                # Unknown type - skip validation
-                return {"status": "ok"}
+                # Unknown type - skip validation but warn
+                print(f"[WARN] No validation implemented for target type: {target.type}")
+                return {"status": "ok", "message": "No validation available for this target type"}
                 
         except subprocess.TimeoutExpired:
             return {"status": "error", "message": "Connection timeout - server not reachable"}
@@ -301,7 +396,29 @@ class TargetManager:
             return {"status": "error", "message": str(e)}
 
     def test_target(self, target_id: str) -> dict:
-        """Test connectivity to a target."""
+        """
+        Test connectivity to a target.
+        
+        This method delegates to _validate_target_config for consistency.
+        Returns dict with target_id, status, and optional message.
+        """
+        target = self.repo.get(target_id)
+        if not target:
+            return {"target_id": target_id, "status": "error", "message": "Target not found"}
+        
+        # Use the same validation logic as create/update
+        result = self._validate_target_config(target)
+        
+        # Add target_id to result
+        result["target_id"] = target_id
+        
+        return result
+        
+    def test_target_legacy(self, target_id: str) -> dict:
+        """
+        Legacy test method - kept for reference.
+        Use test_target() instead which delegates to _validate_target_config.
+        """
         target = self.repo.get(target_id)
         if not target:
             return {"target_id": target_id, "status": "error", "message": "Target not found"}
@@ -504,13 +621,11 @@ class TargetManager:
         username = target.config.get('username', 'guest')
         password = target.config.get('password', '')
         connection = target.config['connection']
-        upload_path = target.config.get('upload_path', '')
         
         print(f"[SMB] Delivering file: {file.name}")
         print(f"[SMB] Connection: {connection}")
-        print(f"[SMB] Upload path: {upload_path}")
         
-        # Parse connection string
+        # Parse connection string (path is already included in connection)
         try:
             server, share_name, base_path = self._parse_smb_connection(connection)
         except ValueError as e:
@@ -519,15 +634,11 @@ class TargetManager:
         # Build full share path for smbclient
         share_path = f"//{server}/{share_name}"
         
-        # Combine base path from connection, upload_path from config, and filename
-        path_parts = []
+        # Build target file path: base_path from connection + filename
         if base_path:
-            path_parts.append(base_path.strip('/'))
-        if upload_path and upload_path.strip() and upload_path.strip() != '.':
-            path_parts.append(upload_path.strip('/'))
-        path_parts.append(file.name)
-        
-        target_file = '/'.join(path_parts) if path_parts else file.name
+            target_file = f"{base_path.strip('/')}/{file.name}"
+        else:
+            target_file = file.name
         
         print(f"[SMB] Share path: {share_path}")
         print(f"[SMB] Target file path: {target_file}")
