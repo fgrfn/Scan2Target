@@ -20,6 +20,7 @@ class Target(BaseModel):
     is_favorite: bool = False
 
 
+@router.get("", response_model=List[Target])
 @router.get("/", response_model=List[Target])
 async def list_targets():
     """List all configured targets."""
@@ -43,6 +44,7 @@ async def list_targets():
         raise HTTPException(status_code=500, detail=f"Failed to list targets: {str(e)}")
 
 
+@router.post("", response_model=Target)
 @router.post("/", response_model=Target)
 async def create_target(target: Target, validate: bool = True):
     """
