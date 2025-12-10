@@ -3,6 +3,7 @@ from typing import List
 from fastapi import APIRouter
 from pydantic import BaseModel
 import subprocess
+import base64
 
 from app.core.scanning.manager import ScannerManager
 from app.core.jobs.models import JobStatus, JobRecord
@@ -131,6 +132,8 @@ async def preview_scan(request: dict):
     import base64
     
     device_id = request.get('device_id')
+    profile_id = request.get('profile_id')
+    
     if not device_id:
         raise HTTPException(status_code=400, detail="device_id is required")
     
@@ -144,18 +147,27 @@ async def preview_scan(request: dict):
         
         device_uri = device.uri
         
+        # Get profile settings
+        scanner_mgr = ScannerManager()
+        profiles = scanner_mgr.list_profiles()
+        profile = next((p for p in profiles if p['id'] == profile_id), None)
+        
+        # Use profile settings or defaults
+        color_mode = profile['color_mode'] if profile else 'Gray'
+        dpi = min(profile['dpi'] if profile else 150, 200)  # Cap preview at 200 DPI for speed
+        
         # Create temp file for preview
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
             preview_file = Path(tmp.name)
         
         try:
-            # Low-res preview scan (100 DPI, grayscale, JPEG)
+            # Preview scan with profile settings
             result = subprocess.run(
                 [
                     'scanimage',
                     '--device-name', device_uri,
-                    '--resolution', '100',
-                    '--mode', 'Gray',
+                    '--resolution', str(dpi),
+                    '--mode', color_mode,
                     '--format', 'jpeg'
                 ],
                 stdout=open(preview_file, 'wb'),
@@ -223,34 +235,30 @@ async def start_batch_scan(payload: BatchScanRequest):
         temp_dir.mkdir(parents=True, exist_ok=True)
         
         try:
-            # Download/collect all page images
+            # Get profile settings
+            scanner_mgr = ScannerManager()
+            profiles = scanner_mgr.list_profiles()
+            profile = next((p for p in profiles if p['id'] == payload.profile_id), None)
+            
+            if not profile:
+                raise HTTPException(status_code=400, detail=f"Profile '{payload.profile_id}' not found")
+            
+            # Decode and save all page images from base64
             images = []
             for idx, page_url in enumerate(payload.page_urls):
-                # page_url is like: /api/v1/scan/preview?image=xxx
-                # We need to extract the actual file path from the preview storage
-                # For now, we'll use the scanimage approach for each page
                 print(f"Processing batch page {idx + 1}/{len(payload.page_urls)}")
                 
-                # Trigger a real scan for this page
-                page_file = temp_dir / f"page_{idx + 1:03d}.jpg"
-                
-                result = subprocess.run(
-                    [
-                        'scanimage',
-                        '--device-name', device.uri,
-                        '--resolution', '300',  # High res for final PDF
-                        '--mode', 'Color',
-                        '--format', 'jpeg'
-                    ],
-                    stdout=open(page_file, 'wb'),
-                    stderr=subprocess.PIPE,
-                    timeout=60
-                )
-                
-                if result.returncode != 0:
-                    raise Exception(f"Scan failed for page {idx + 1}: {result.stderr.decode()}")
-                
-                images.append(Image.open(page_file))
+                # page_url is a base64 data URL like: "data:image/jpeg;base64,..."
+                if page_url.startswith('data:image'):
+                    # Extract base64 data
+                    base64_data = page_url.split(',', 1)[1]
+                    image_data = base64.b64decode(base64_data)
+                    
+                    # Open image from bytes
+                    from io import BytesIO
+                    images.append(Image.open(BytesIO(image_data)))
+                else:
+                    raise Exception(f"Invalid page URL format for page {idx + 1}")
             
             # Convert all images to PDF
             pdf_file = temp_dir / f"{payload.filename_prefix or 'batch_scan'}_{batch_id}.pdf"
@@ -259,13 +267,17 @@ async def start_batch_scan(payload: BatchScanRequest):
                 # Convert all images to RGB (PDF requires RGB)
                 rgb_images = [img.convert('RGB') for img in images]
                 
+                # Get quality and DPI from profile
+                quality = profile.get('quality', 85)
+                dpi = profile.get('dpi', 200)
+                
                 # Save first image as PDF with additional pages
                 rgb_images[0].save(
                     pdf_file,
                     save_all=True,
                     append_images=rgb_images[1:] if len(rgb_images) > 1 else [],
-                    resolution=300.0,
-                    quality=85
+                    resolution=float(dpi),
+                    quality=quality
                 )
                 
                 print(f"✓ Created PDF with {len(images)} pages: {pdf_file}")
