@@ -2047,10 +2047,18 @@
             <div style="margin-bottom: 0.25rem;">
               <span class="muted">{t.target}:</span> {targets.find(t => t.id === lastCompletedJob.target_id)?.name || lastCompletedJob.target_id || 'N/A'}
             </div>
-            <div>
+            <div style="margin-bottom: 0.75rem;">
               <span class="muted">{t.completed}:</span> {new Date(lastCompletedJob.created_at).toLocaleTimeString()}
             </div>
           </div>
+          
+          <button 
+            class="danger small block" 
+            style="width: 100%; margin-top: 0.5rem;"
+            on:click={() => deleteJob(lastCompletedJob.id)}
+          >
+            🗑️ {t.deleteJob}
+          </button>
         </div>
       {/if}
     </div>
