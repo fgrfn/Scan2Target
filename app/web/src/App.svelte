@@ -66,6 +66,14 @@
       flatbed: '📄 Flatbed (single page)',
       adf: '📚 Document Feeder (ADF) - Multi-page',
       adfDesc: 'ADF automatically scans all pages in the feeder',
+      batchMode: '📑 Batch Mode (Multi-page)',
+      batchModeDesc: 'Scan multiple pages and combine into one PDF',
+      batchModeActive: '📑 Batch Mode Active',
+      addPage: '➕ Add Page',
+      finishBatch: '✅ Finish & Upload Batch',
+      cancelBatch: '❌ Cancel Batch',
+      pagesInBatch: 'Pages in batch',
+      scanningPage: 'Scanning page',
       profile: 'Profile',
       target: 'Target',
       selectTarget: '-- Select target --',
@@ -250,6 +258,14 @@
       flatbed: '📄 Flachbett (einzelne Seite)',
       adf: '📚 Dokumenteneinzug (ADF) - Mehrere Seiten',
       adfDesc: 'ADF scannt automatisch alle Seiten im Einzug',
+      batchMode: '📑 Stapel-Modus (Mehrseitig)',
+      batchModeDesc: 'Mehrere Seiten scannen und zu einer PDF zusammenführen',
+      batchModeActive: '📑 Stapel-Modus aktiv',
+      addPage: '➕ Seite hinzufügen',
+      finishBatch: '✅ Stapel abschließen & hochladen',
+      cancelBatch: '❌ Stapel abbrechen',
+      pagesInBatch: 'Seiten im Stapel',
+      scanningPage: 'Scanne Seite',
       profile: 'Profil',
       target: 'Ziel',
       selectTarget: '-- Ziel auswählen --',
@@ -399,6 +415,11 @@
   let selectedTarget = '';
   let scanFilename = '';
   let scanSource = 'Flatbed';
+  
+  // Batch scan state
+  let batchMode = false;
+  let batchPages = [];
+  let isBatchScanning = false;
   
   // Auto-select profile when scan source changes
   $: if (scanSource) {
@@ -971,6 +992,103 @@
   function closePreview() {
     showPreview = false;
     previewImage = null;
+  }
+
+  async function startBatchMode() {
+    if (!selectedScanner) {
+      alert(t.pleaseSelectScanner);
+      return;
+    }
+    batchMode = true;
+    batchPages = [];
+  }
+
+  async function addPageToBatch() {
+    if (!selectedScanner || !selectedProfile) {
+      alert(t.pleaseSelectScanner);
+      return;
+    }
+    
+    isBatchScanning = true;
+    try {
+      const response = await fetch(`${API_BASE}/scan/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_id: selectedScanner,
+          profile_id: selectedProfile
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        batchPages.push({
+          id: Date.now(),
+          url: data.preview_url,
+          pageNumber: batchPages.length + 1
+        });
+        alert(`✅ ${t.scanningPage} ${batchPages.length} ${t.done.toLowerCase()}`);
+      } else {
+        const error = await response.json();
+        alert(`❌ ${error.detail || 'Scan failed'}`);
+      }
+    } catch (error) {
+      console.error('Batch scan error:', error);
+      alert(`❌ Error: ${error.message}`);
+    } finally {
+      isBatchScanning = false;
+    }
+  }
+
+  async function finishBatch() {
+    if (batchPages.length === 0) {
+      alert('No pages in batch');
+      return;
+    }
+    
+    if (!selectedTarget) {
+      alert(t.pleaseSelectTarget);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/scan/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_id: selectedScanner,
+          profile_id: selectedProfile || quickProfiles[0].id,
+          target_id: selectedTarget,
+          filename_prefix: scanFilename || 'batch_scan',
+          page_urls: batchPages.map(p => p.url)
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`✅ Batch scan started: ${batchPages.length} pages combined into PDF`);
+        
+        // Reset batch mode
+        batchMode = false;
+        batchPages = [];
+        
+        // Reload data to show new job
+        await loadData();
+      } else {
+        const error = await response.json();
+        alert(`❌ ${error.detail || 'Batch scan failed'}`);
+      }
+    } catch (error) {
+      console.error('Finish batch error:', error);
+      alert(`❌ Error: ${error.message}`);
+    }
+  }
+
+  function cancelBatch() {
+    if (confirm(`${t.cancelBatch}? ${batchPages.length} ${t.pagesInBatch.toLowerCase()}`)) {
+      batchMode = false;
+      batchPages = [];
+    }
   }
 
   async function startScan() {
@@ -1881,24 +1999,93 @@
           />
           <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">{t.filenameDesc}</p>
           
-          <div style="display: flex; gap: 0.5rem;">
-            <button 
-              class="ghost block" 
-              on:click={previewScan} 
-              disabled={!selectedScanner || isPreviewing}
-              style="flex: 1;"
-            >
-              {isPreviewing ? t.previewing : t.previewScan}
-            </button>
-            <button 
-              class="primary block" 
-              on:click={startScan}
-              style="flex: 2;"
-            >
-              {t.startScanButton}
-            </button>
-          </div>
-          <p class="muted small" style="margin-top: 0.5rem;">{t.previewDesc}</p>
+          {#if !batchMode}
+            <!-- Normal scan mode -->
+            <div style="display: flex; gap: 0.5rem;">
+              <button 
+                class="ghost block" 
+                on:click={previewScan} 
+                disabled={!selectedScanner || isPreviewing}
+                style="flex: 1;"
+              >
+                {isPreviewing ? t.previewing : t.previewScan}
+              </button>
+              <button 
+                class="primary block" 
+                on:click={startScan}
+                disabled={!selectedScanner || !selectedTarget}
+                style="flex: 2;"
+              >
+                {t.startScanButton}
+              </button>
+            </div>
+            <p class="muted small" style="margin-top: 0.5rem;">{t.previewDesc}</p>
+            
+            <!-- Batch mode toggle (only for Flatbed) -->
+            {#if scanSource === 'Flatbed'}
+              <button 
+                class="ghost block" 
+                on:click={startBatchMode}
+                disabled={!selectedScanner}
+                style="margin-top: 0.75rem; border: 2px dashed var(--border);"
+              >
+                📑 {t.batchMode}
+              </button>
+              <p class="muted small" style="margin-top: 0.25rem;">{t.batchModeDesc}</p>
+            {/if}
+          {:else}
+            <!-- Batch mode active -->
+            <div style="padding: 1rem; background: rgba(100, 150, 255, 0.1); border: 2px solid var(--primary); border-radius: 8px; margin-bottom: 0.75rem;">
+              <div style="font-weight: 600; margin-bottom: 0.5rem;">📑 {t.batchModeActive}</div>
+              <div style="font-size: 0.875rem; margin-bottom: 0.75rem;">
+                {t.pagesInBatch}: <strong>{batchPages.length}</strong>
+              </div>
+              
+              {#if batchPages.length > 0}
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 0.5rem; margin-bottom: 0.75rem;">
+                  {#each batchPages as page}
+                    <div style="position: relative;">
+                      <img src={page.url} alt="Page {page.pageNumber}" style="width: 100%; height: auto; border-radius: 4px; border: 1px solid var(--border);" />
+                      <div style="position: absolute; top: 2px; left: 2px; background: var(--primary); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">
+                        {page.pageNumber}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+              
+              <button 
+                class="primary block" 
+                on:click={addPageToBatch}
+                disabled={isBatchScanning}
+                style="margin-bottom: 0.5rem;"
+              >
+                {isBatchScanning ? `${t.scanningPage}...` : t.addPage}
+              </button>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <button 
+                  class="success block" 
+                  on:click={finishBatch}
+                  disabled={batchPages.length === 0 || !selectedTarget}
+                >
+                  {t.finishBatch}
+                </button>
+                <button 
+                  class="danger block" 
+                  on:click={cancelBatch}
+                >
+                  {t.cancelBatch}
+                </button>
+              </div>
+            </div>
+          {/if}
+          
+          {#if !batchMode && !selectedScanner || !selectedTarget}
+            <p class="muted small" style="margin-top: 0.5rem;">
+              {!selectedScanner ? t.pleaseSelectScanner : t.pleaseSelectTarget}
+            </p>
+          {/if}
         </div>
       </div>
     </div>
