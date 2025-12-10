@@ -68,6 +68,14 @@ def create_app() -> FastAPI:
         @app.get("/")
         async def serve_root():
             return FileResponse(str(web_dist / "index.html"))
+        
+        @app.get("/mobile")
+        async def serve_mobile():
+            mobile_html = web_dist / "mobile.html"
+            if mobile_html.exists():
+                return FileResponse(str(mobile_html))
+            else:
+                return FileResponse(str(web_dist / "index.html"))
     elif web_dev.exists():
         # Development: serve from web directory
         app.mount("/src", StaticFiles(directory=str(web_dev.parent / "src")), name="src")
@@ -75,6 +83,14 @@ def create_app() -> FastAPI:
         @app.get("/")
         async def serve_root():
             return FileResponse(str(web_dev))
+        
+        @app.get("/mobile")
+        async def serve_mobile():
+            mobile_html = web_dev.parent / "mobile.html"
+            if mobile_html.exists():
+                return FileResponse(str(mobile_html))
+            else:
+                return FileResponse(str(web_dev))
     else:
         @app.get("/")
         async def serve_root():
