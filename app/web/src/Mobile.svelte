@@ -182,7 +182,7 @@
         const data = await response.json();
         batchPages.push({
           id: Date.now(),
-          url: data.preview_url,
+          url: data.image,
           pageNumber: batchPages.length + 1
         });
       } else {
