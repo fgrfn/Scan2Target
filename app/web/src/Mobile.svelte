@@ -202,6 +202,11 @@
       return;
     }
 
+    if (!selectedProfile) {
+      alert(t.pleaseSelect);
+      return;
+    }
+
     isScanning = true;
     try {
       const response = await fetch(`${API_BASE}/scan/batch`, {
@@ -209,9 +214,10 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           device_id: selectedScanner,
-          pages: batchPages.map(p => ({ preview_url: p.url })),
+          profile_id: selectedProfile,
           target_id: selectedTarget,
-          filename_prefix: scanFilename || 'scan'
+          filename_prefix: scanFilename || 'batch_scan',
+          page_urls: batchPages.map(p => p.url)
         })
       });
 
@@ -369,7 +375,7 @@
             <button 
               class="btn btn-success"
               on:click={finishBatch}
-              disabled={batchPages.length === 0 || !selectedTarget || isScanning}
+              disabled={batchPages.length === 0 || !selectedTarget || !selectedProfile || isScanning}
             >
               {isScanning ? t.scanning : t.finishBatch}
             </button>

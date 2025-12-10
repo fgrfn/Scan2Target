@@ -2067,7 +2067,7 @@
                 <button 
                   class="success block" 
                   on:click={finishBatch}
-                  disabled={batchPages.length === 0 || !selectedTarget}
+                  disabled={batchPages.length === 0 || !selectedTarget || !selectedProfile}
                 >
                   {t.finishBatch}
                 </button>
