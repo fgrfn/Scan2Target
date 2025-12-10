@@ -2108,8 +2108,11 @@
           
           {#if targetType === 'SMB'}
             <label for="target-connection">{t.connection}</label>
-            <input id="target-connection" type="text" placeholder="//10.10.10.11/sharename" bind:value={targetConnection} />
-            <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">⚠️ Must start with // (two slashes). Example: //192.168.1.100/documents</p>
+            <input id="target-connection" type="text" placeholder="192.168.1.100/scans  or  //nas.local/documents" bind:value={targetConnection} />
+            <p class="muted small" style="margin-top: 0.25rem; margin-bottom: 0.75rem;">
+              💡 Formats: <code>server/share</code> or <code>//server/share</code> or <code>\\server\share</code><br/>
+              Examples: <code>192.168.1.100/documents</code> or <code>//nas.local/scans/inbox</code>
+            </p>
             <label for="target-username">{t.username}</label>
             <input id="target-username" type="text" placeholder={t.usernamePlaceholder} bind:value={targetUsername} />
             <label for="target-password">{t.password}</label>

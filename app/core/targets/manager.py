@@ -19,6 +19,49 @@ class TargetManager:
 
     def __init__(self):
         self.repo = TargetRepository()
+    
+    @staticmethod
+    def _parse_smb_connection(connection: str) -> tuple[str, str, str]:
+        """
+        Parse SMB connection string into server, share, and path components.
+        
+        Supports multiple formats:
+        - //server/share/path
+        - \\\\server\\share\\path
+        - server/share/path
+        - 192.168.1.100/sharename
+        
+        Returns:
+            (server, share_name, path) tuple
+        """
+        if not connection:
+            raise ValueError("Connection string is empty")
+        
+        # Normalize to Unix format: replace backslashes with forward slashes
+        normalized = connection.replace('\\', '/')
+        
+        # Remove leading slashes
+        normalized = normalized.lstrip('/')
+        
+        # Split into parts
+        parts = normalized.split('/')
+        
+        if len(parts) < 2:
+            raise ValueError(f"Invalid SMB path format: '{connection}'. Expected format: //server/share or server/share")
+        
+        server = parts[0]
+        share_name = parts[1]
+        path = '/'.join(parts[2:]) if len(parts) > 2 else ''
+        
+        # Validate server (IP or hostname)
+        if not server:
+            raise ValueError("Server name/IP is required")
+        
+        # Validate share name
+        if not share_name:
+            raise ValueError("Share name is required")
+        
+        return server, share_name, path
 
     def list_targets(self) -> List[TargetConfig]:
         return self.repo.list()
@@ -88,26 +131,26 @@ class TargetManager:
                 if not connection:
                     return {"status": "error", "message": "Connection string is required"}
                 
-                print(f"Testing SMB connection to: {connection}")
-                print(f"Username: {username}")
+                print(f"[SMB] Testing connection to: {connection}")
+                print(f"[SMB] Username: {username}")
                 
-                # Parse connection string - can be //server/share or \\server\share
-                # Convert Windows format to Unix format
-                connection_unix = connection.replace('\\', '/')
-                if not connection_unix.startswith('//'):
-                    connection_unix = '//' + connection_unix
+                # Parse connection string robustly
+                try:
+                    server, share_name, path = self._parse_smb_connection(connection)
+                    print(f"[SMB] Parsed - Server: {server}, Share: {share_name}, Path: {path}")
+                except ValueError as e:
+                    return {"status": "error", "message": str(e)}
                 
-                # Extract server for -L command (just list shares, don't access)
-                # Format: //server/share -> just use //server for listing
-                server = connection_unix.split('/')[2] if len(connection_unix.split('/')) > 2 else connection_unix
-                
-                print(f"Testing server: //{server}")
+                # Build full share path for smbclient
+                share_path = f"//{server}/{share_name}"
+                print(f"[SMB] Testing share path: {share_path}")
                 
                 try:
-                    # Build smbclient command
-                    # Format: smbclient -L //server -U username%password
-                    # Do NOT use -N (no password) flag if password is provided
-                    cmd = ['smbclient', '-L', f'//{server}', '-U', f"{username}%{password}"]
+                    # Test by trying to list files in the share (more accurate than -L)
+                    # Format: smbclient //server/share -U username%password -c 'ls'
+                    cmd = ['smbclient', share_path, '-U', f"{username}%{password}", '-c', 'ls']
+                    
+                    print(f"[SMB] Running command: {' '.join(cmd[:3])} [credentials hidden] -c 'ls'")
                     
                     result = subprocess.run(
                         cmd,
@@ -116,12 +159,12 @@ class TargetManager:
                         text=True
                     )
                     
-                    print(f"smbclient exit code: {result.returncode}")
-                    print(f"stdout: {result.stdout[:200]}")
-                    print(f"stderr: {result.stderr[:200]}")
+                    print(f"[SMB] Exit code: {result.returncode}")
+                    print(f"[SMB] stdout: {result.stdout[:200]}")
+                    print(f"[SMB] stderr: {result.stderr[:200]}")
                     
                     if result.returncode == 0:
-                        return {"status": "ok"}
+                        return {"status": "ok", "message": f"Successfully connected to {share_path}"}
                     else:
                         # Check both stdout and stderr for error messages
                         error_output = result.stderr + result.stdout
@@ -129,15 +172,19 @@ class TargetManager:
                         
                         # Common errors and user-friendly messages
                         if "NT_STATUS_LOGON_FAILURE" in error_output:
-                            error_msg = f"Login failed - check username and password for {server}"
+                            error_msg = f"Login failed - check username and password (Server: {server}, User: {username})"
                         elif "NT_STATUS_HOST_UNREACHABLE" in error_output or "NT_STATUS_IO_TIMEOUT" in error_output:
-                            error_msg = f"Server {server} not reachable - check IP address and network"
+                            error_msg = f"Server '{server}' not reachable - check IP/hostname and network connection"
                         elif "NT_STATUS_BAD_NETWORK_NAME" in error_output:
-                            error_msg = f"Share not found on {server}"
+                            error_msg = f"Share '{share_name}' not found on server '{server}' - check share name"
                         elif "NT_STATUS_ACCESS_DENIED" in error_output:
-                            error_msg = f"Access denied - check permissions for user {username}"
+                            error_msg = f"Access denied to '{share_path}' for user '{username}' - check permissions"
+                        elif "NT_STATUS_OBJECT_NAME_NOT_FOUND" in error_output:
+                            error_msg = f"Path '{path}' not found in share '{share_name}' - check folder path"
+                        elif "Connection to" in error_output and "failed" in error_output:
+                            error_msg = f"Cannot connect to '{server}' - check if SMB is enabled and firewall allows connection"
                         
-                        print(f"SMB validation failed: {error_msg}")
+                        print(f"[SMB] Validation failed: {error_msg}")
                         return {"status": "error", "message": error_msg}
                 except FileNotFoundError:
                     return {"status": "error", "message": "smbclient not installed. Install with: sudo apt install smbclient"}
@@ -200,7 +247,36 @@ class TargetManager:
                 server.quit()
                 return {"status": "ok"}
                 
-            elif target.type in ['Paperless-ngx', 'Webhook']:
+            elif target.type == 'Paperless-ngx':
+                # Test Paperless-ngx API endpoint
+                url = target.config.get('connection', '').rstrip('/')
+                if not url:
+                    return {"status": "error", "message": "Paperless-ngx URL is required"}
+                
+                token = target.config.get('api_token') or target.config.get('token', '')
+                if not token:
+                    return {"status": "error", "message": "API token is required"}
+                
+                # Test API endpoint
+                api_url = url + '/api/'
+                headers = {'Authorization': f'Token {token}'}
+                
+                try:
+                    response = requests.get(api_url, headers=headers, timeout=5)
+                    if response.status_code == 200:
+                        return {"status": "ok", "message": "Successfully connected to Paperless-ngx"}
+                    elif response.status_code == 401:
+                        return {"status": "error", "message": "Authentication failed - check API token"}
+                    elif response.status_code == 403:
+                        return {"status": "error", "message": "Access forbidden - check API token permissions"}
+                    else:
+                        return {"status": "error", "message": f"Server returned status {response.status_code}"}
+                except requests.exceptions.ConnectionError:
+                    return {"status": "error", "message": "Cannot connect to Paperless-ngx - check URL"}
+                except requests.exceptions.Timeout:
+                    return {"status": "error", "message": "Connection timeout"}
+                
+            elif target.type == 'Webhook':
                 # Test HTTP endpoint
                 url = target.config.get('connection', '')
                 if not url:
@@ -232,7 +308,7 @@ class TargetManager:
         
         try:
             if target.type == 'SMB':
-                # Test SMB connectivity by attempting to create a test file
+                # Test SMB connectivity by attempting to create and delete a test file
                 import tempfile
                 
                 # Create a small test file
@@ -244,22 +320,30 @@ class TargetManager:
                     # Try to upload the test file
                     username = target.config.get('username', 'guest')
                     password = target.config.get('password', '')
-                    share_path = target.config.get('connection', '')
+                    connection = target.config.get('connection', '')
                     
-                    if not share_path:
+                    if not connection:
                         return {"target_id": target_id, "status": "error", "message": "Connection string is missing"}
                     
-                    # Normalize path format
-                    share_path = share_path.replace('\\', '/')
-                    if not share_path.startswith('//'):
-                        share_path = '//' + share_path
+                    # Parse connection using the robust parser
+                    try:
+                        server, share_name, base_path = self._parse_smb_connection(connection)
+                        share_path = f"//{server}/{share_name}"
+                    except ValueError as e:
+                        return {"target_id": target_id, "status": "error", "message": f"Invalid connection format: {e}"}
                     
                     print(f"[SMB Test] Testing upload to: {share_path}")
+                    print(f"[SMB Test] Base path in share: {base_path if base_path else '(root)'}") 
                     print(f"[SMB Test] Username: {username}")
                     
-                    # Test file name
+                    # Test file name with path if base_path exists
                     test_filename = f".scan2target_test_{int(time.time())}.txt"
+                    if base_path:
+                        test_filename = f"{base_path}/{test_filename}"
                     
+                    print(f"[SMB Test] Test file path: {test_filename}")
+                    
+                    # Try to upload and then delete the test file
                     result = subprocess.run(
                         ['smbclient', share_path, '-U', f"{username}%{password}", 
                          '-c', f'put "{test_file}" "{test_filename}"; del "{test_filename}"'],
@@ -319,7 +403,17 @@ class TargetManager:
                 status = "ok"
                 message = None
                 
-            elif target.type in ['Paperless-ngx', 'Webhook']:
+            elif target.type == 'Paperless-ngx':
+                # Test Paperless-ngx API
+                url = target.config['connection'].rstrip('/')
+                token = target.config.get('api_token') or target.config.get('token', '')
+                headers = {'Authorization': f'Token {token}'} if token else {}
+                api_url = url + '/api/'
+                response = requests.get(api_url, headers=headers, timeout=5)
+                status = "ok" if response.status_code == 200 else "error"
+                message = f"Status code: {response.status_code}" if status == "error" else None
+                
+            elif target.type == 'Webhook':
                 # Test HTTP endpoint
                 url = target.config['connection']
                 response = requests.head(url, timeout=5)
@@ -406,28 +500,83 @@ class TargetManager:
         raise Exception(f"Delivery to {target.name} failed after {max_retries} attempts: {last_error}")
     
     def _deliver_smb(self, target: TargetConfig, file: Path) -> None:
-        """Upload file to SMB share."""
+        """Upload file to SMB share with robust path handling."""
         username = target.config.get('username', 'guest')
         password = target.config.get('password', '')
-        share = target.config['connection']
-        upload_path = target.config.get('upload_path', '.')
+        connection = target.config['connection']
+        upload_path = target.config.get('upload_path', '')
         
-        # Normalize upload path
-        if upload_path and upload_path != '.':
-            upload_path = upload_path.strip('/')
-            target_file = f"{upload_path}/{file.name}"
-        else:
-            target_file = file.name
+        print(f"[SMB] Delivering file: {file.name}")
+        print(f"[SMB] Connection: {connection}")
+        print(f"[SMB] Upload path: {upload_path}")
+        
+        # Parse connection string
+        try:
+            server, share_name, base_path = self._parse_smb_connection(connection)
+        except ValueError as e:
+            raise Exception(f"Invalid SMB connection string: {e}")
+        
+        # Build full share path for smbclient
+        share_path = f"//{server}/{share_name}"
+        
+        # Combine base path from connection, upload_path from config, and filename
+        path_parts = []
+        if base_path:
+            path_parts.append(base_path.strip('/'))
+        if upload_path and upload_path.strip() and upload_path.strip() != '.':
+            path_parts.append(upload_path.strip('/'))
+        path_parts.append(file.name)
+        
+        target_file = '/'.join(path_parts) if path_parts else file.name
+        
+        print(f"[SMB] Share path: {share_path}")
+        print(f"[SMB] Target file path: {target_file}")
+        
+        # Create directory if needed (for nested paths)
+        commands = []
+        if '/' in target_file:
+            # Extract directory path
+            dir_path = '/'.join(target_file.split('/')[:-1])
+            # Try to create directory (ignore errors if it exists)
+            commands.append(f'mkdir "{dir_path}"')
+        
+        # Add upload command
+        commands.append(f'put "{file}" "{target_file}"')
+        
+        # Combine all commands with semicolon
+        cmd_string = '; '.join(commands)
         
         # Use smbclient to upload
         cmd = [
-            'smbclient', share,
+            'smbclient', share_path,
             '-U', f"{username}%{password}",
-            '-c', f'put "{file}" "{target_file}"'
+            '-c', cmd_string
         ]
-        result = subprocess.run(cmd, capture_output=True, timeout=60)
+        
+        print(f"[SMB] Executing: smbclient {share_path} [credentials] -c '{cmd_string}'")
+        
+        result = subprocess.run(cmd, capture_output=True, timeout=60, text=True)
+        
+        print(f"[SMB] Exit code: {result.returncode}")
+        if result.stdout:
+            print(f"[SMB] stdout: {result.stdout[:300]}")
+        if result.stderr:
+            print(f"[SMB] stderr: {result.stderr[:300]}")
+        
         if result.returncode != 0:
-            raise Exception(f"smbclient failed: {result.stderr.decode()}")
+            error_msg = result.stderr or result.stdout or "Unknown error"
+            
+            # Parse common errors
+            if "NT_STATUS_OBJECT_NAME_NOT_FOUND" in error_msg:
+                raise Exception(f"SMB upload failed: Directory '{dir_path if '/' in target_file else ''}' not found on share. Create it manually or check path.")
+            elif "NT_STATUS_ACCESS_DENIED" in error_msg:
+                raise Exception(f"SMB upload failed: Access denied. Check if user '{username}' has write permissions on '{share_path}'.")
+            elif "NT_STATUS_LOGON_FAILURE" in error_msg:
+                raise Exception(f"SMB upload failed: Authentication failed. Check username and password.")
+            else:
+                raise Exception(f"SMB upload failed: {error_msg[:200]}")
+        
+        print(f"[SMB] ✓ Upload successful: {target_file}")
     
     def _deliver_sftp(self, target: TargetConfig, file: Path) -> None:
         """Upload file via SFTP."""
@@ -495,15 +644,46 @@ class TargetManager:
     
     def _deliver_paperless(self, target: TargetConfig, file: Path, metadata: dict) -> None:
         """Upload to Paperless-ngx via API."""
-        url = target.config['connection'].rstrip('/') + '/api/documents/post_document/'
-        token = target.config.get('api_token', '')
+        base_url = target.config.get('connection', '').rstrip('/')
+        if not base_url:
+            raise Exception("Paperless-ngx URL is not configured")
         
-        headers = {'Authorization': f'Token {token}'} if token else {}
+        url = base_url + '/api/documents/post_document/'
         
-        with open(file, 'rb') as f:
-            files = {'document': (file.name, f, 'application/pdf')}
-            response = requests.post(url, files=files, headers=headers, timeout=30)
-            response.raise_for_status()
+        # Support both 'api_token' and 'token' field names
+        token = target.config.get('api_token') or target.config.get('token', '')
+        if not token:
+            raise Exception("Paperless-ngx API token is missing")
+        
+        print(f"[Paperless] Uploading {file.name} to {base_url}")
+        print(f"[Paperless] URL: {url}")
+        
+        headers = {'Authorization': f'Token {token}'}
+        
+        # Detect MIME type based on file extension
+        import mimetypes
+        mime_type, _ = mimetypes.guess_type(file.name)
+        if not mime_type:
+            mime_type = 'application/octet-stream'
+        
+        print(f"[Paperless] MIME type: {mime_type}")
+        
+        try:
+            with open(file, 'rb') as f:
+                files = {'document': (file.name, f, mime_type)}
+                response = requests.post(url, files=files, headers=headers, timeout=30)
+                
+                print(f"[Paperless] Response status: {response.status_code}")
+                print(f"[Paperless] Response: {response.text[:200]}")
+                
+                response.raise_for_status()
+                print(f"[Paperless] ✓ Upload successful")
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Paperless-ngx upload failed: {str(e)}"
+            if hasattr(e, 'response') and e.response is not None:
+                error_msg += f" - Status: {e.response.status_code}, Response: {e.response.text[:200]}"
+            print(f"[Paperless] ✗ {error_msg}")
+            raise Exception(error_msg)
     
     def _deliver_webhook(self, target: TargetConfig, file: Path, metadata: dict) -> None:
         """POST file to webhook endpoint."""
