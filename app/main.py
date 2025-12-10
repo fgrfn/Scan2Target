@@ -26,7 +26,8 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Scan2Target",
         version="0.1.0",
-        lifespan=lifespan
+        lifespan=lifespan,
+        redirect_slashes=False  # Prevent 307 redirects on trailing slashes
     )
 
     app.add_middleware(
