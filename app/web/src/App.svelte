@@ -1838,7 +1838,7 @@
         <div class="panel-body">
           <label for="scanner-select">{t.chooseScanner}</label>
           <select id="scanner-select" bind:value={selectedScanner}>
-            <option value="">-- Select scanner --</option>
+            <option value="">{t.selectScanner}</option>
             {#each scanners as scanner}
               <option value={scanner.id}>
                 {#if scanner.is_favorite}⭐ {/if}{scanner.name}
