@@ -527,7 +527,6 @@
   let wsReconnectTimeout = null;
   
   // New features
-  let isDarkMode = localStorage.getItem('scan2target_darkmode') !== 'false'; // Default true (dark mode)
   let checkingScannerStatus = false;
   let scannerStatusMessage = '';
   let scannerIsOnline = null;
@@ -550,11 +549,6 @@
   onMount(() => {
     const pageStart = performance.now();
     console.log('[TIMING] Page load started');
-    
-    // Set dark mode class on body
-    if (!isDarkMode) {
-      document.body.classList.add('light-mode');
-    }
     
     loadData();
     
@@ -1152,12 +1146,6 @@
     } finally {
       checkingScannerStatus = false;
     }
-  }
-  
-  function toggleDarkMode() {
-    isDarkMode = !isDarkMode;
-    localStorage.setItem('scan2target_darkmode', isDarkMode);
-    document.body.classList.toggle('light-mode', !isDarkMode);
   }
   
   async function cancelJob(jobId) {
@@ -1846,7 +1834,7 @@
   }
 </script>
 
-<NavBar brand={t.brand} links={navLinks} {currentLang} onLanguageChange={changeLanguage} {isDarkMode} onDarkModeToggle={toggleDarkMode} />
+<NavBar brand={t.brand} links={navLinks} {currentLang} onLanguageChange={changeLanguage} />
 
 <main class="page">
   <section id="dashboard" class="hero">
