@@ -19,6 +19,9 @@ RUN npm run build
 # Stage 2: Build final image
 FROM python:3.12-slim
 
+# Avoid debconf warnings during build
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     avahi-daemon \
