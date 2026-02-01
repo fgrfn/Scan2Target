@@ -33,27 +33,38 @@ echo "Starting Avahi daemon for scanner discovery..."
 # Create dbus directory if it doesn't exist
 mkdir -p /var/run/dbus
 
-# Start dbus (required for Avahi)
-if [ ! -f /var/run/dbus/pid ]; then
-    dbus-daemon --system --fork 2>/dev/null || true
-fi
-
 # Ensure any previous Avahi instance is stopped cleanly (handles fast restarts)
 if pgrep -x avahi-daemon >/dev/null 2>&1; then
     echo "Stopping existing Avahi daemon..."
     avahi-daemon --kill 2>/dev/null || pkill -TERM avahi-daemon || true
+    sleep 2
+fi
+
+# Remove stale PID files and sockets that would block startup
+rm -f /var/run/avahi-daemon/pid
+rm -f /var/run/avahi-daemon/socket
+
+# Ensure dbus is running
+if ! pgrep -x dbus-daemon >/dev/null 2>&1; then
+    echo "Starting dbus..."
+    dbus-daemon --system --fork 2>/dev/null || true
     sleep 1
 fi
 
-# Remove stale PID files that would block startup
-rm -f /var/run/avahi-daemon/pid
-
-# Start Avahi daemon directly (will exit non-zero if it fails)
-/usr/sbin/avahi-daemon --daemonize 2>/dev/null || echo "Note: Avahi may already be running or failed to start"
-
-# Wait for Avahi to initialize and discover network devices
-# Increased wait time to ensure scanner discovery is complete before app starts
-sleep 8
+# Start Avahi daemon with error checking
+echo "Starting Avahi daemon..."
+if /usr/sbin/avahi-daemon --daemonize 2>&1; then
+    echo "✓ Avahi daemon started successfully"
+    
+    # Wait for Avahi to initialize and discover network devices
+    # Critical: mDNS needs time to propagate on the network
+    echo "Waiting 10 seconds for mDNS scanner discovery..."
+    sleep 10
+else
+    echo "⚠️  WARNING: Avahi daemon failed to start! Scanner discovery may not work."
+    echo "⚠️  Network scanners will NOT be auto-discovered."
+    sleep 2
+fi
 
 echo "Starting Scan2Target application..."
 # Start the main application - main.py liegt jetzt direkt in /app
