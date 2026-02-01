@@ -58,20 +58,9 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          # Only build multi-platform for main/tags, single platform for dev
-          platforms: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Docker Scout CVE scan
-        if: github.event_name != 'pull_request'
-        uses: docker/scout-action@v1
-        continue-on-error: true
-        with:
-          command: cves
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-          only-severities: critical,high
-          exit-code: false
