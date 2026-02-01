@@ -40,7 +40,18 @@ async def lifespan(app: FastAPI):
     # Initialize scanner cache in background (non-blocking)
     # This prevents the WebUI from being unavailable during scanner discovery
     logger.info("Starting scanner discovery in background...")
-    asyncio.create_task(asyncio.to_thread(devices.init_scanner_cache))
+    
+    async def safe_scanner_init():
+        """Wrapper für Scanner-Discovery mit Error-Handling"""
+        try:
+            logger.info("Background task: Starting scanner initialization...")
+            await asyncio.to_thread(devices.init_scanner_cache)
+            logger.info("Background task: Scanner initialization completed successfully")
+        except Exception as e:
+            logger.error(f"Background task: Scanner initialization failed: {e}", exc_info=True)
+    
+    # Task referenz behalten damit er nicht vorzeitig beendet wird
+    scanner_task = asyncio.create_task(safe_scanner_init())
     
     logger.info("=" * 60)
     logger.info("Scan2Target is ready!")
@@ -50,6 +61,16 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down Scan2Target...")
+    
+    # Scanner-Task abbrechen falls noch aktiv
+    if not scanner_task.done():
+        logger.info("Cancelling scanner discovery task...")
+        scanner_task.cancel()
+        try:
+            await scanner_task
+        except asyncio.CancelledError:
+            logger.info("Scanner discovery task cancelled")
+    
     await health_monitor.stop()
     logger.info("Scan2Target stopped")
 
