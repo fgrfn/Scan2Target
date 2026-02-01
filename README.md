@@ -123,6 +123,7 @@ docker run -d \
 - `SCAN2TARGET_REQUIRE_AUTH` - Force authentication (default: true)
 - `SCAN2TARGET_DATA_DIR` - Data directory path (default: /data)
 - `SCAN2TARGET_DB_PATH` - Database file path (default: /data/db/scan2target.db)
+- `SCAN2TARGET_SCANNER_CHECK_INTERVAL` - Scanner reachability check interval in seconds (default: 30)
 
 **Volumes:**
 - `/data` - Persistent storage for database and scans (**REQUIRED**)

@@ -3,6 +3,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import time
+import os
 
 from core.devices.repository import DeviceRepository, DeviceRecord
 from core.scanning.manager import ScannerManager
@@ -10,11 +11,13 @@ from core.database import get_db
 
 router = APIRouter()
 
-# Cache for scanner status (updated every 30 seconds)
+# Cache for scanner status (configurable via environment variable)
+# Default: check every 30 seconds
+# Configure via: SCAN2TARGET_SCANNER_CHECK_INTERVAL=60 (for 60 seconds)
 _scanner_cache = {
     'devices': [],
     'last_update': 0,
-    'cache_duration': 30  # seconds
+    'cache_duration': int(os.getenv('SCAN2TARGET_SCANNER_CHECK_INTERVAL', '30'))  # seconds
 }
 
 
@@ -213,7 +216,8 @@ async def list_devices(device_type: str | None = None):
     Query params:
     - device_type: Filter by 'scanner' (optional, for API compatibility)
     
-    Scanner status is cached for 30 seconds for performance.
+    Scanner status is cached for performance. The cache duration is configurable
+    via the SCAN2TARGET_SCANNER_CHECK_INTERVAL environment variable (default: 30 seconds).
     """
     start = time.time()
     

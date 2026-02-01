@@ -52,6 +52,12 @@ SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
+
+# Optional: Scanner reachability check interval (default: 30 seconds)
+# How often the system checks if already added scanners are still online
+# Lower values = more frequent checks, higher server load
+# Higher values = less server load, slower detection of offline scanners
+SCAN2TARGET_SCANNER_CHECK_INTERVAL=30
 ```
 
 **Generate a secure key:**
