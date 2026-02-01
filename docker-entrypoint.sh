@@ -38,12 +38,22 @@ if [ ! -f /var/run/dbus/pid ]; then
     dbus-daemon --system --fork 2>/dev/null || true
 fi
 
-# Start Avahi daemon directly
+# Ensure any previous Avahi instance is stopped cleanly (handles fast restarts)
+if pgrep -x avahi-daemon >/dev/null 2>&1; then
+    echo "Stopping existing Avahi daemon..."
+    avahi-daemon --kill 2>/dev/null || pkill -TERM avahi-daemon || true
+    sleep 1
+fi
+
+# Remove stale PID files that would block startup
+rm -f /var/run/avahi-daemon/pid
+
+# Start Avahi daemon directly (will exit non-zero if it fails)
 /usr/sbin/avahi-daemon --daemonize 2>/dev/null || echo "Note: Avahi may already be running or failed to start"
 
 # Wait for Avahi to initialize and discover network devices
 # Increased wait time to ensure scanner discovery is complete before app starts
-sleep 5
+sleep 8
 
 echo "Starting Scan2Target application..."
 # Start the main application - main.py liegt jetzt direkt in /app
