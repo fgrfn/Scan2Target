@@ -1,5 +1,14 @@
 # Deployment - Änderungen anwenden
 
+## Problem: Scanner wird nach Neustart nicht gefunden
+
+**Ursache:** mDNS/Avahi-Discovery braucht Zeit (10-30 Sekunden), bis Scanner im Netzwerk erkannt werden.
+
+**Lösung:** 
+1. Längere Delays beim Startup (3s, 8s, 15s, 25s)
+2. Schnelle Health-Checks (alle 15s) in den ersten 5 Minuten
+3. Danach normale Intervalle (60s)
+
 ## Docker Container neu bauen und starten
 
 ```bash
@@ -22,33 +31,93 @@ docker-compose logs -f
 docker-compose down && docker-compose build --no-cache && docker-compose up -d && docker-compose logs -f
 ```
 
-## Wichtig
+## Was passiert jetzt beim Start?
 
-Nach jedem Code-Update muss das Docker-Image neu gebaut werden, damit die Änderungen wirksam werden!
+### Startup-Sequenz (bis zu 51 Sekunden)
+
+```
+Start
+  ↓
+Versuch 1 (sofort + 3s Wartezeit)
+  ↓
+Versuch 2 (nach 3s + 8s Wartezeit) 
+  ↓
+Versuch 3 (nach 11s + 15s Wartezeit)
+  ↓
+Versuch 4 (nach 26s + 25s Wartezeit)
+  ↓
+Health Monitor startet
+  ↓
+Erste 5 Minuten: Prüfung alle 15 Sekunden
+  ↓
+Danach: Prüfung alle 60 Sekunden
+```
+
+### Erwartete Logs bei erfolgreichem Start
+
+```
+[STARTUP] Initializing scanner cache (attempt 1/4)...
+[STARTUP] No scanners found on attempt 1
+[STARTUP] Retry 2/4 - waiting 8s...
+[STARTUP] Initializing scanner cache (attempt 2/4)...
+airscan-discover found 1 scanner(s)
+[STARTUP] ✓ Scanner cache initialized with 1 device(s)
+Health monitor started (interval: 60s)
+Note: Using 15s intervals for first 5 minutes to detect scanners quickly
+```
+
+### Wenn Scanner erst später erkannt wird
+
+```
+[STARTUP] Scanner cache initialization completed with 0 devices after 4 attempts
+Health monitor started (interval: 60s)
+
+# 15 Sekunden später...
+✓ Scanner 'HP ENVY 6400' is now ONLINE
+```
 
 ## Logs überprüfen
 
-Nach dem Neustart sollten Sie diese Logs sehen:
+```bash
+# Nach dem Neustart
+docker-compose logs -f | grep -E "(STARTUP|Scanner|ONLINE|OFFLINE)"
 
-```
-Starting Scan2Target...
-Database initialized
-[STARTUP] Initializing scanner cache (attempt 1/3)...
-[STARTUP] ✓ Scanner cache initialized with X device(s)
-Health monitor started (interval: 60s)
-Scan2Target is ready!
-```
-
-Wenn beim ersten Versuch keine Scanner gefunden werden:
-
-```
-[STARTUP] No scanners found on attempt 1
-[STARTUP] Retry 2/3 - waiting 2s...
+# Sollte zeigen:
+# - 4 Startup-Versuche mit steigenden Delays
+# - Scanner-Discovery Ergebnisse
+# - Health-Monitor findet Scanner spätestens nach 15s
 ```
 
-Und nach 60 Sekunden sollte der Health-Monitor Scanner finden:
+## Troubleshooting
 
+Wenn Scanner immer noch nicht gefunden wird:
+
+```bash
+# 1. mDNS/Avahi im Container prüfen
+docker exec scan2target ps aux | grep avahi
+
+# 2. Direkter airscan-discover Test
+docker exec scan2target airscan-discover
+
+# 3. Netzwerk prüfen
+docker exec scan2target ping -c 3 <SCANNER_IP>
+
+# 4. Scanner manuell hinzufügen
+# URI Format: airscan:escl:ScannerName:http://<IP>:8080/eSCL/
 ```
-✓ Scanner 'XY' is now ONLINE
-Health check complete: 1/1 scanner(s) online
+
+## Timing-Parameter anpassen
+
+Falls 51 Sekunden zu lang sind oder Scanner noch später erkannt werden:
+
+```yaml
+# docker-compose.yml
+environment:
+  # Standard Health-Check Intervall (nach 5 Minuten)
+  SCAN2TARGET_HEALTH_CHECK_INTERVAL: 60
 ```
+
+Im Code können Sie die Delays anpassen:
+- `app/api/devices.py`: delays-Array ändern
+- `app/core/scanning/health.py`: `_fast_check_duration` und fast check interval ändern
+
