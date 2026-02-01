@@ -1,7 +1,10 @@
 """Cleanup old scan files and thumbnails to prevent disk from filling up."""
 from pathlib import Path
+import logging
 import time
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 class CleanupManager:
@@ -26,7 +29,7 @@ class CleanupManager:
         freed_bytes = 0
         cutoff_time = time.time() - (self.thumbnail_max_age_days * 86400)
         
-        print(f"Cleaning up thumbnails older than {self.thumbnail_max_age_days} days...")
+        logger.info(f"Cleaning up thumbnails older than {self.thumbnail_max_age_days} days...")
         
         for thumb_file in self.scan_dir.glob('*_thumb.jpg'):
             try:
@@ -35,14 +38,14 @@ class CleanupManager:
                     thumb_file.unlink()
                     deleted_count += 1
                     freed_bytes += file_size
-                    print(f"  Deleted old thumbnail: {thumb_file.name}")
+                    logger.debug(f"  Deleted old thumbnail: {thumb_file.name}")
             except Exception as e:
-                print(f"  Warning: Failed to delete {thumb_file.name}: {e}")
+                logger.warning(f"  Warning: Failed to delete {thumb_file.name}: {e}")
         
         if deleted_count > 0:
-            print(f"✓ Cleaned up {deleted_count} old thumbnails, freed {freed_bytes / 1024 / 1024:.2f} MB")
+            logger.info(f"✓ Cleaned up {deleted_count} old thumbnails, freed {freed_bytes / 1024 / 1024:.2f} MB")
         else:
-            print("✓ No old thumbnails to clean up")
+            logger.info("✓ No old thumbnails to clean up")
         
         return {"deleted": deleted_count, "freed_bytes": freed_bytes}
     
@@ -60,7 +63,7 @@ class CleanupManager:
         freed_bytes = 0
         cutoff_time = time.time() - (self.failed_scan_max_age_days * 86400)
         
-        print(f"Cleaning up failed scan files older than {self.failed_scan_max_age_days} days...")
+        logger.info(f"Cleaning up failed scan files older than {self.failed_scan_max_age_days} days...")
         
         # Find all scan files (not thumbnails)
         for scan_file in self.scan_dir.glob('scan_*.pdf'):
@@ -70,9 +73,9 @@ class CleanupManager:
                     scan_file.unlink()
                     deleted_count += 1
                     freed_bytes += file_size
-                    print(f"  Deleted old scan: {scan_file.name}")
+                    logger.debug(f"  Deleted old scan: {scan_file.name}")
             except Exception as e:
-                print(f"  Warning: Failed to delete {scan_file.name}: {e}")
+                logger.warning(f"  Warning: Failed to delete {scan_file.name}: {e}")
         
         # Also check for JPEG files
         for scan_file in self.scan_dir.glob('scan_*.jpg'):
@@ -86,22 +89,22 @@ class CleanupManager:
                     scan_file.unlink()
                     deleted_count += 1
                     freed_bytes += file_size
-                    print(f"  Deleted old scan: {scan_file.name}")
+                    logger.debug(f"  Deleted old scan: {scan_file.name}")
             except Exception as e:
-                print(f"  Warning: Failed to delete {scan_file.name}: {e}")
+                logger.warning(f"  Warning: Failed to delete {scan_file.name}: {e}")
         
         if deleted_count > 0:
-            print(f"✓ Cleaned up {deleted_count} old scan files, freed {freed_bytes / 1024 / 1024:.2f} MB")
+            logger.info(f"✓ Cleaned up {deleted_count} old scan files, freed {freed_bytes / 1024 / 1024:.2f} MB")
         else:
-            print("✓ No old scan files to clean up")
+            logger.info("✓ No old scan files to clean up")
         
         return {"deleted": deleted_count, "freed_bytes": freed_bytes}
     
     def cleanup_all(self):
         """Run all cleanup tasks."""
-        print("=" * 60)
-        print("Starting Scan2Target cleanup...")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("Starting Scan2Target cleanup...")
+        logger.info("=" * 60)
         
         thumb_result = self.cleanup_old_thumbnails()
         scan_result = self.cleanup_old_failed_scans()
@@ -109,9 +112,9 @@ class CleanupManager:
         total_freed = (thumb_result['freed_bytes'] + scan_result['freed_bytes']) / 1024 / 1024
         total_deleted = thumb_result['deleted'] + scan_result['deleted']
         
-        print("=" * 60)
-        print(f"Cleanup complete: {total_deleted} files deleted, {total_freed:.2f} MB freed")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info(f"Cleanup complete: {total_deleted} files deleted, {total_freed:.2f} MB freed")
+        logger.info("=" * 60)
         
         return {
             "thumbnails": thumb_result,
@@ -162,9 +165,9 @@ if __name__ == '__main__':
     manager = CleanupManager()
     result = manager.cleanup_all()
     
-    print("\nCurrent disk usage:")
+    logger.info("\nCurrent disk usage:")
     usage = manager.get_disk_usage()
-    print(f"  Total: {usage['total_mb']:.2f} MB ({usage['file_count']} files)")
-    print(f"  Thumbnails: {usage['breakdown']['thumbnails']['bytes'] / 1024 / 1024:.2f} MB ({usage['breakdown']['thumbnails']['count']} files)")
-    print(f"  PDF Scans: {usage['breakdown']['pdf_scans']['bytes'] / 1024 / 1024:.2f} MB ({usage['breakdown']['pdf_scans']['count']} files)")
-    print(f"  JPEG Scans: {usage['breakdown']['jpeg_scans']['bytes'] / 1024 / 1024:.2f} MB ({usage['breakdown']['jpeg_scans']['count']} files)")
+    logger.info(f"  Total: {usage['total_mb']:.2f} MB ({usage['file_count']} files)")
+    logger.info(f"  Thumbnails: {usage['breakdown']['thumbnails']['bytes'] / 1024 / 1024:.2f} MB ({usage['breakdown']['thumbnails']['count']} files)")
+    logger.info(f"  PDF Scans: {usage['breakdown']['pdf_scans']['bytes'] / 1024 / 1024:.2f} MB ({usage['breakdown']['pdf_scans']['count']} files)")
+    logger.info(f"  JPEG Scans: {usage['breakdown']['jpeg_scans']['bytes'] / 1024 / 1024:.2f} MB ({usage['breakdown']['jpeg_scans']['count']} files)")

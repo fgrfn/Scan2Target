@@ -16,7 +16,7 @@ async def list_history():
     import time
     start = time.time()
     result = JobManager().list_history()
-    print(f"[TIMING] list_history: took {time.time() - start:.3f}s")
+    logger.debug(f"[TIMING] list_history: took {time.time() - start:.3f}s")
     return result
 
 
@@ -53,9 +53,9 @@ async def delete_job(job_id: str):
             if file_path.exists():
                 try:
                     file_path.unlink()
-                    print(f"✓ Deleted scan file: {file_path}")
+                    logger.debug(f"✓ Deleted scan file: {file_path}")
                 except Exception as cleanup_error:
-                    print(f"Warning: Failed to delete file: {cleanup_error}")
+                    logger.warning(f"Warning: Failed to delete file: {cleanup_error}")
         
         # Delete job from database
         success = job_manager.delete_job(job_id)
@@ -133,7 +133,7 @@ async def retry_upload(job_id: str):
             raise HTTPException(status_code=400, detail="Scan file no longer exists on disk")
         
         # Retry delivery
-        print(f"Manual retry upload for job {job_id} to target {job.target_id}")
+        logger.info(f"Manual retry upload for job {job_id} to target {job.target_id}")
         
         try:
             TargetManager().deliver(job.target_id, job.file_path, {'job_id': job_id})
@@ -145,9 +145,9 @@ async def retry_upload(job_id: str):
             # Clean up local file after successful retry
             try:
                 file_path.unlink()
-                print(f"✓ Deleted scan file after successful retry: {file_path}")
+                logger.debug(f"✓ Deleted scan file after successful retry: {file_path}")
             except Exception as cleanup_error:
-                print(f"Warning: Failed to delete file after retry: {cleanup_error}")
+                logger.warning(f"Warning: Failed to delete file after retry: {cleanup_error}")
             
             return {
                 "status": "success",

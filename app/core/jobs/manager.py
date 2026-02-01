@@ -1,11 +1,14 @@
 """Job manager with SQLite persistence."""
 from __future__ import annotations
+import logging
 from typing import List, Optional
 from datetime import datetime
 import asyncio
 
 from core.jobs.models import JobRecord, JobStatus
 from core.jobs.repository import JobRepository
+
+logger = logging.getLogger(__name__)
 
 
 class JobManager:
@@ -39,7 +42,7 @@ class JobManager:
                 pass
         except Exception as e:
             # Don't fail job updates if WebSocket broadcast fails
-            print(f"WebSocket broadcast failed: {e}")
+            logger.error(f"WebSocket broadcast failed: {e}")
 
     def create_job(
         self,

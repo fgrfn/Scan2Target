@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import List
 import subprocess
+import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -12,6 +13,8 @@ import time
 
 from core.targets.models import TargetConfig
 from core.targets.repository import TargetRepository
+
+logger = logging.getLogger(__name__)
 
 
 class TargetManager:
@@ -131,26 +134,26 @@ class TargetManager:
                 if not connection:
                     return {"status": "error", "message": "Connection string is required"}
                 
-                print(f"[SMB] Testing connection to: {connection}")
-                print(f"[SMB] Username: {username}")
+                logger.debug(f"[SMB] Testing connection to: {connection}")
+                logger.debug(f"[SMB] Username: {username}")
                 
                 # Parse connection string robustly
                 try:
                     server, share_name, path = self._parse_smb_connection(connection)
-                    print(f"[SMB] Parsed - Server: {server}, Share: {share_name}, Path: {path}")
+                    logger.debug(f"[SMB] Parsed - Server: {server}, Share: {share_name}, Path: {path}")
                 except ValueError as e:
                     return {"status": "error", "message": str(e)}
                 
                 # Build full share path for smbclient
                 share_path = f"//{server}/{share_name}"
-                print(f"[SMB] Testing share path: {share_path}")
+                logger.debug(f"[SMB] Testing share path: {share_path}")
                 
                 try:
                     # Test by trying to list files in the share (more accurate than -L)
                     # Format: smbclient //server/share -U username%password -c 'ls'
                     cmd = ['smbclient', share_path, '-U', f"{username}%{password}", '-c', 'ls']
                     
-                    print(f"[SMB] Running command: {' '.join(cmd[:3])} [credentials hidden] -c 'ls'")
+                    logger.debug(f"[SMB] Running command: {' '.join(cmd[:3])} [credentials hidden] -c 'ls'")
                     
                     result = subprocess.run(
                         cmd,
@@ -159,9 +162,9 @@ class TargetManager:
                         text=True
                     )
                     
-                    print(f"[SMB] Exit code: {result.returncode}")
-                    print(f"[SMB] stdout: {result.stdout[:200]}")
-                    print(f"[SMB] stderr: {result.stderr[:200]}")
+                    logger.debug(f"[SMB] Exit code: {result.returncode}")
+                    logger.debug(f"[SMB] stdout: {result.stdout[:200]}")
+                    logger.debug(f"[SMB] stderr: {result.stderr[:200]}")
                     
                     if result.returncode == 0:
                         return {"status": "ok", "message": f"Successfully connected to {share_path}"}
@@ -184,7 +187,7 @@ class TargetManager:
                         elif "Connection to" in error_output and "failed" in error_output:
                             error_msg = f"Cannot connect to '{server}' - check if SMB is enabled and firewall allows connection"
                         
-                        print(f"[SMB] Validation failed: {error_msg}")
+                        logger.debug(f"[SMB] Validation failed: {error_msg}")
                         return {"status": "error", "message": error_msg}
                 except FileNotFoundError:
                     return {"status": "error", "message": "smbclient not installed. Install with: sudo apt install smbclient"}
@@ -385,7 +388,7 @@ class TargetManager:
                 
             else:
                 # Unknown type - skip validation but warn
-                print(f"[WARN] No validation implemented for target type: {target.type}")
+                logger.warning(f"[WARN] No validation implemented for target type: {target.type}")
                 return {"status": "ok", "message": "No validation available for this target type"}
                 
         except subprocess.TimeoutExpired:
@@ -449,16 +452,16 @@ class TargetManager:
                     except ValueError as e:
                         return {"target_id": target_id, "status": "error", "message": f"Invalid connection format: {e}"}
                     
-                    print(f"[SMB Test] Testing upload to: {share_path}")
-                    print(f"[SMB Test] Base path in share: {base_path if base_path else '(root)'}") 
-                    print(f"[SMB Test] Username: {username}")
+                    logger.debug(f"[SMB Test] Testing upload to: {share_path}")
+                    logger.debug(f"[SMB Test] Base path in share: {base_path if base_path else '(root)'}") 
+                    logger.debug(f"[SMB Test] Username: {username}")
                     
                     # Test file name with path if base_path exists
                     test_filename = f".scan2target_test_{int(time.time())}.txt"
                     if base_path:
                         test_filename = f"{base_path}/{test_filename}"
                     
-                    print(f"[SMB Test] Test file path: {test_filename}")
+                    logger.debug(f"[SMB Test] Test file path: {test_filename}")
                     
                     # Try to upload and then delete the test file
                     result = subprocess.run(
@@ -469,9 +472,9 @@ class TargetManager:
                         timeout=10
                     )
                     
-                    print(f"[SMB Test] Exit code: {result.returncode}")
-                    print(f"[SMB Test] stdout: {result.stdout[:300]}")
-                    print(f"[SMB Test] stderr: {result.stderr[:300]}")
+                    logger.debug(f"[SMB Test] Exit code: {result.returncode}")
+                    logger.debug(f"[SMB Test] stdout: {result.stdout[:300]}")
+                    logger.debug(f"[SMB Test] stderr: {result.stderr[:300]}")
                     
                     if result.returncode == 0:
                         status = "ok"
@@ -574,7 +577,7 @@ class TargetManager:
         
         for attempt in range(max_retries):
             try:
-                print(f"Delivery attempt {attempt + 1}/{max_retries} to {target.name}")
+                logger.info(f"Delivery attempt {attempt + 1}/{max_retries} to {target.name}")
                 
                 if target.type == 'SMB':
                     self._deliver_smb(target, file)
@@ -597,21 +600,21 @@ class TargetManager:
                 else:
                     raise Exception(f"Unsupported target type: {target.type}")
                 
-                print(f"✓ Delivery to {target.name} successful")
+                logger.info(f"✓ Delivery to {target.name} successful")
                 return  # Success!
                 
             except Exception as e:
                 last_error = e
-                print(f"✗ Delivery attempt {attempt + 1} failed: {str(e)}")
+                logger.warning(f"✗ Delivery attempt {attempt + 1} failed: {str(e)}")
                 
                 # Don't retry on final attempt
                 if attempt < max_retries - 1:
                     # Exponential backoff: 2s, 4s, 8s...
                     delay = 2 ** attempt
-                    print(f"Retrying in {delay} seconds...")
+                    logger.info(f"Retrying in {delay} seconds...")
                     time.sleep(delay)
                 else:
-                    print(f"All {max_retries} delivery attempts failed")
+                    logger.error(f"All {max_retries} delivery attempts failed")
         
         # All retries failed
         raise Exception(f"Delivery to {target.name} failed after {max_retries} attempts: {last_error}")
@@ -622,8 +625,8 @@ class TargetManager:
         password = target.config.get('password', '')
         connection = target.config['connection']
         
-        print(f"[SMB] Delivering file: {file.name}")
-        print(f"[SMB] Connection: {connection}")
+        logger.debug(f"[SMB] Delivering file: {file.name}")
+        logger.debug(f"[SMB] Connection: {connection}")
         
         # Parse connection string (path is already included in connection)
         try:
@@ -640,8 +643,8 @@ class TargetManager:
         else:
             target_file = file.name
         
-        print(f"[SMB] Share path: {share_path}")
-        print(f"[SMB] Target file path: {target_file}")
+        logger.debug(f"[SMB] Share path: {share_path}")
+        logger.debug(f"[SMB] Target file path: {target_file}")
         
         # Create directory if needed (for nested paths)
         commands = []
@@ -664,15 +667,15 @@ class TargetManager:
             '-c', cmd_string
         ]
         
-        print(f"[SMB] Executing: smbclient {share_path} [credentials] -c '{cmd_string}'")
+        logger.debug(f"[SMB] Executing: smbclient {share_path} [credentials] -c '{cmd_string}'")
         
         result = subprocess.run(cmd, capture_output=True, timeout=60, text=True)
         
-        print(f"[SMB] Exit code: {result.returncode}")
+        logger.debug(f"[SMB] Exit code: {result.returncode}")
         if result.stdout:
-            print(f"[SMB] stdout: {result.stdout[:300]}")
+            logger.debug(f"[SMB] stdout: {result.stdout[:300]}")
         if result.stderr:
-            print(f"[SMB] stderr: {result.stderr[:300]}")
+            logger.debug(f"[SMB] stderr: {result.stderr[:300]}")
         
         if result.returncode != 0:
             error_msg = result.stderr or result.stdout or "Unknown error"
@@ -687,7 +690,7 @@ class TargetManager:
             else:
                 raise Exception(f"SMB upload failed: {error_msg[:200]}")
         
-        print(f"[SMB] ✓ Upload successful: {target_file}")
+        logger.debug(f"[SMB] ✓ Upload successful: {target_file}")
     
     def _deliver_sftp(self, target: TargetConfig, file: Path) -> None:
         """Upload file via SFTP."""
@@ -766,8 +769,8 @@ class TargetManager:
         if not token:
             raise Exception("Paperless-ngx API token is missing")
         
-        print(f"[Paperless] Uploading {file.name} to {base_url}")
-        print(f"[Paperless] URL: {url}")
+        logger.debug(f"[Paperless] Uploading {file.name} to {base_url}")
+        logger.debug(f"[Paperless] URL: {url}")
         
         headers = {'Authorization': f'Token {token}'}
         
@@ -777,23 +780,23 @@ class TargetManager:
         if not mime_type:
             mime_type = 'application/octet-stream'
         
-        print(f"[Paperless] MIME type: {mime_type}")
+        logger.debug(f"[Paperless] MIME type: {mime_type}")
         
         try:
             with open(file, 'rb') as f:
                 files = {'document': (file.name, f, mime_type)}
                 response = requests.post(url, files=files, headers=headers, timeout=30)
                 
-                print(f"[Paperless] Response status: {response.status_code}")
-                print(f"[Paperless] Response: {response.text[:200]}")
+                logger.debug(f"[Paperless] Response status: {response.status_code}")
+                logger.debug(f"[Paperless] Response: {response.text[:200]}")
                 
                 response.raise_for_status()
-                print(f"[Paperless] ✓ Upload successful")
+                logger.debug(f"[Paperless] ✓ Upload successful")
         except requests.exceptions.RequestException as e:
             error_msg = f"Paperless-ngx upload failed: {str(e)}"
             if hasattr(e, 'response') and e.response is not None:
                 error_msg += f" - Status: {e.response.status_code}, Response: {e.response.text[:200]}"
-            print(f"[Paperless] ✗ {error_msg}")
+            logger.debug(f"[Paperless] ✗ {error_msg}")
             raise Exception(error_msg)
     
     def _deliver_webhook(self, target: TargetConfig, file: Path, metadata: dict) -> None:

@@ -1,12 +1,15 @@
 """Background task worker for async job execution."""
 from __future__ import annotations
 import asyncio
+import logging
 from typing import Callable, Dict, Any
 from datetime import datetime
 import traceback
 
 from core.jobs.manager import JobManager
 from core.jobs.models import JobStatus
+
+logger = logging.getLogger(__name__)
 
 
 class BackgroundWorker:
@@ -58,8 +61,7 @@ class BackgroundWorker:
                 job.message = f"Error: {str(e)}"
                 self.job_manager.update_job(job)
             
-            print(f"Task {job_id} failed: {e}")
-            traceback.print_exc()
+            logger.error(f"Task {job_id} failed: {e}", exc_info=True)
         
         finally:
             # Clean up task reference

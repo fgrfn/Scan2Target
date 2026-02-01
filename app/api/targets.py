@@ -27,7 +27,7 @@ async def list_targets():
     start = time.time()
     try:
         targets = TargetManager().list_targets()
-        print(f"[TIMING] list_targets: took {time.time() - start:.3f}s")
+        logger.debug(f"[TIMING] list_targets: took {time.time() - start:.3f}s")
         return [
             Target(
                 id=t.id,
@@ -59,9 +59,9 @@ async def create_target(target: Target, validate: bool = True):
     Set validate=false to skip connection test (not recommended).
     """
     try:
-        print(f"Creating target: {target.name} (type: {target.type})")
-        print(f"Config: {target.config}")
-        print(f"Validate: {validate}")
+        logger.info(f"Creating target: {target.name} (type: {target.type})")
+        logger.debug(f"Config: {target.config}")
+        logger.debug(f"Validate: {validate}")
         
         # Convert Pydantic model to TargetConfig
         target_config = TargetConfig(
@@ -76,7 +76,7 @@ async def create_target(target: Target, validate: bool = True):
         
         result = TargetManager().create_target(target_config, validate=validate)
         
-        print(f"✓ Target '{target.name}' created successfully")
+        logger.info(f"✓ Target '{target.name}' created successfully")
         
         return Target(
             id=result.id,
@@ -88,7 +88,7 @@ async def create_target(target: Target, validate: bool = True):
             is_favorite=result.is_favorite
         )
     except Exception as e:
-        print(f"ERROR creating target: {str(e)}")
+        logger.error(f"ERROR creating target: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))

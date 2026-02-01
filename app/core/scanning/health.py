@@ -77,7 +77,7 @@ class ScannerHealthMonitor:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"[HEALTH] Error in monitor loop: {e}")
+                logger.error(f"[HEALTH] Error in monitor loop: {e}", exc_info=True)
                 await asyncio.sleep(self.check_interval)
     
     async def _check_scanners(self):
@@ -156,7 +156,7 @@ class ScannerHealthMonitor:
             True if scanner is online, False otherwise
         """
         try:
-            print(f"[HEALTH] Checking scanner: {uri}")
+            logger.info(f"[HEALTH] Checking scanner: {uri}")
             scanner_manager = ScannerManager()
             available_scanners = await asyncio.to_thread(scanner_manager.list_devices)
             available_uris = {scanner['id'] for scanner in available_scanners}
@@ -182,7 +182,7 @@ class ScannerHealthMonitor:
             return is_online
             
         except Exception as e:
-            print(f"[HEALTH] Error checking scanner {uri}: {e}")
+            logger.error(f"[HEALTH] Error checking scanner {uri}: {e}", exc_info=True)
             return False
 
 

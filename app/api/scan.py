@@ -1,4 +1,5 @@
 """Scan-related API routes."""
+import logging
 from typing import List
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -6,6 +7,8 @@ import subprocess
 import base64
 
 from core.scanning.manager import ScannerManager
+
+logger = logging.getLogger(__name__)
 from core.jobs.models import JobStatus, JobRecord
 
 router = APIRouter()
@@ -89,7 +92,7 @@ async def start_scan(payload: ScanRequest):
         
         # Use the device URI for scanning
         device_uri = device.uri
-        print(f"Starting scan with device ID: {payload.device_id} -> URI: {device_uri}")
+        logger.info(f"Starting scan with device ID: {payload.device_id} -> URI: {device_uri}")
         
         job_id = ScannerManager().start_scan(
             device_id=device_uri,  # Pass URI instead of database ID
@@ -102,7 +105,7 @@ async def start_scan(payload: ScanRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Scan error: {e}")
+        logger.error(f"Scan error: {e}")
         error_msg = str(e)
         
         # Add helpful suggestions based on error type
@@ -300,7 +303,7 @@ async def start_batch_scan(payload: BatchScanRequest):
         # Decode all page images from base64
         images = []
         for idx, page_url in enumerate(payload.page_urls):
-            print(f"Processing batch page {idx + 1}/{len(payload.page_urls)}")
+            logger.debug(f"Processing batch page {idx + 1}/{len(payload.page_urls)}")
             if page_url.startswith('data:image'):
                 base64_data = page_url.split(',', 1)[1]
                 image_data = base64.b64decode(base64_data)
@@ -322,7 +325,7 @@ async def start_batch_scan(payload: BatchScanRequest):
             resolution=float(dpi),
             quality=quality
         )
-        print(f"✓ Created PDF with {len(images)} pages: {pdf_file}")
+        logger.info(f"✓ Created PDF with {len(images)} pages: {pdf_file}")
         
         job_id = str(uuid.uuid4())
         job_manager = JobManager()

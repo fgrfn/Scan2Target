@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Optional
 import secrets
+import logging
 import hashlib
 import hmac
 import base64
@@ -10,6 +11,8 @@ import json
 
 from core.auth.models import User, UserRepository
 from core.database import get_db
+
+logger = logging.getLogger(__name__)
 
 
 class AuthManager:
@@ -134,7 +137,7 @@ class AuthManager:
             return user
             
         except Exception as e:
-            print(f"Token verification error: {e}")
+            logger.error(f"Token verification error: {e}", exc_info=True)
             return None
     
     def revoke_token(self, token: str) -> bool:

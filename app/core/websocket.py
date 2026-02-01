@@ -1,8 +1,11 @@
 """WebSocket connection manager for real-time updates."""
+import logging
 from typing import Dict, Set
 from fastapi import WebSocket
 import json
 import asyncio
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -19,7 +22,7 @@ class ConnectionManager:
             if client_id not in self.active_connections:
                 self.active_connections[client_id] = set()
             self.active_connections[client_id].add(websocket)
-        print(f"WebSocket connected: {client_id} (total: {self.get_connection_count()})")
+        logger.debug(f"WebSocket connected: {client_id} (total: {self.get_connection_count()})")
     
     async def disconnect(self, websocket: WebSocket, client_id: str = "default"):
         """Remove a WebSocket connection."""
@@ -28,7 +31,7 @@ class ConnectionManager:
                 self.active_connections[client_id].discard(websocket)
                 if not self.active_connections[client_id]:
                     del self.active_connections[client_id]
-        print(f"WebSocket disconnected: {client_id} (total: {self.get_connection_count()})")
+        logger.debug(f"WebSocket disconnected: {client_id} (total: {self.get_connection_count()})")
     
     def get_connection_count(self) -> int:
         """Get total number of active connections."""
@@ -52,7 +55,7 @@ class ConnectionManager:
                     try:
                         await connection.send_text(message_json)
                     except Exception as e:
-                        print(f"Error sending to {client_id}: {e}")
+                        logger.error(f"Error sending to {client_id}: {e}")
                         disconnected.add(connection)
                 
                 # Clean up disconnected
@@ -69,7 +72,7 @@ class ConnectionManager:
                     try:
                         await connection.send_text(message_json)
                     except Exception as e:
-                        print(f"Error broadcasting: {e}")
+                        logger.error(f"Error broadcasting: {e}")
                         disconnected.append(connection)
                 
                 # Clean up disconnected

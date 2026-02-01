@@ -312,9 +312,9 @@ async def delete_target_statistics(target_name: str):
                     if file_path.exists():
                         try:
                             file_path.unlink()
-                            print(f"✓ Deleted scan file: {file_path}")
+                            logger.debug(f"✓ Deleted scan file: {file_path}")
                         except Exception as e:
-                            print(f"Warning: Failed to delete file {file_path}: {e}")
+                            logger.warning(f"Warning: Failed to delete file {file_path}: {e}")
             
             # Delete jobs from database
             cursor.execute("""

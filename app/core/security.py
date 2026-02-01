@@ -4,8 +4,11 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 import os
+import logging
 import base64
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class SecureStorage:
@@ -53,8 +56,8 @@ class SecureStorage:
         key_file.write_bytes(key)
         key_file.chmod(0o600)  # Owner read/write only
         
-        print(f"[SECURITY] Generated new encryption key: {key_file}")
-        print("[SECURITY] For production, set SCAN2TARGET_SECRET_KEY environment variable")
+        logger.warning(f"[SECURITY] Generated new encryption key: {key_file}")
+        logger.warning("[SECURITY] For production, set SCAN2TARGET_SECRET_KEY environment variable")
         
         return key
     
@@ -76,7 +79,7 @@ class SecureStorage:
             decrypted = self.cipher.decrypt(decoded)
             return decrypted.decode()
         except Exception as e:
-            print(f"[SECURITY] Decryption failed: {e}")
+            logger.error(f"[SECURITY] Decryption failed: {e}")
             # Return empty string instead of crashing
             # This handles cases where data wasn't encrypted yet
             return ""

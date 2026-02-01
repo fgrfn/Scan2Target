@@ -288,7 +288,7 @@ class ScannerManager:
             profiles = {p['id']: p for p in self.list_profiles()}
             profile = profiles.get(profile_id, profiles['color_300_pdf'])
             
-            print(f"Starting scan with profile: {profile}")
+            logger.info(f"Starting scan with profile: {profile}")
             
             # Create temp output file
             output_dir = Path(tempfile.gettempdir()) / 'scan2target' / 'scans'
@@ -304,7 +304,7 @@ class ScannerManager:
             
             # For ADF batch scans, use scanimage --batch mode to scan all pages at once
             if batch_scan and source == 'ADF':
-                print(f"Using --batch mode for ADF scanning")
+                logger.info(f"Using --batch mode for ADF scanning")
                 batch_pattern = output_dir / f"{prefix}_{job_id}_page%03d.tiff"
                 
                 # Build scanimage command with --batch
@@ -318,8 +318,8 @@ class ScannerManager:
                     '--batch=' + str(batch_pattern)
                 ]
                 
-                print(f"Executing batch scan command: {' '.join(cmd)}")
-                print(f"Output pattern: {batch_pattern}")
+                logger.debug(f"Executing batch scan command: {' '.join(cmd)}")
+                logger.debug(f"Output pattern: {batch_pattern}")
                 
                 try:
                     result = subprocess.run(
@@ -331,7 +331,7 @@ class ScannerManager:
                     
                     if result.returncode != 0:
                         error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
-                        print(f"Batch scan error: {error_msg}")
+                        logger.error(f"Batch scan error: {error_msg}")
                         raise Exception(f"Batch scan failed: {error_msg}")
                     
                     # Find all scanned files matching the pattern
@@ -340,10 +340,10 @@ class ScannerManager:
                     if not scanned_files:
                         raise Exception("No pages were scanned in batch mode")
                     
-                    print(f"Batch scan completed: {len(scanned_files)} page(s)")
+                    logger.info(f"Batch scan completed: {len(scanned_files)} page(s)")
                     for idx, tiff_file in enumerate(scanned_files, 1):
                         file_size = tiff_file.stat().st_size
-                        print(f"  Page {idx}: {tiff_file} ({file_size} bytes)")
+                        logger.debug(f"  Page {idx}: {tiff_file} ({file_size} bytes)")
                     
                     # Generate thumbnail from first page
                     try:
@@ -360,9 +360,9 @@ class ScannerManager:
                             timeout=10
                         )
                         if thumbnail_file.exists():
-                            print(f"Thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
+                            logger.debug(f"Thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
                     except Exception as e:
-                        print(f"Warning: Failed to generate thumbnail: {e}")
+                        logger.warning(f"Warning: Failed to generate thumbnail: {e}")
                         
                 except subprocess.TimeoutExpired:
                     raise Exception("Batch scan timeout after 5 minutes")
@@ -393,8 +393,8 @@ class ScannerManager:
                     # Note: Don't use --batch-prompt for ADF as it's interactive
                     # Instead, we scan one page at a time and stop when we get an error
                     
-                    print(f"Executing scan command (page {page_num}): {' '.join(cmd)}")
-                    print(f"Output file: {tiff_file}")
+                    logger.debug(f"Executing scan command (page {page_num}): {' '.join(cmd)}")
+                    logger.debug(f"Output file: {tiff_file}")
                     
                     # Execute scan
                     try:
@@ -418,45 +418,45 @@ class ScannerManager:
                             ]
                             
                             if batch_scan and any(indicator in error_msg.lower() for indicator in adf_empty_indicators):
-                                print(f"ADF empty (detected: '{error_msg}'), batch scan complete.")
+                                logger.info(f"ADF empty (detected: '{error_msg}'), batch scan complete.")
                                 # Check if a file was created before the error
                                 if tiff_file.exists():
                                     file_size = tiff_file.stat().st_size
                                     if file_size > 0:
-                                        print(f"Page {page_num} was partially scanned before ADF empty: {tiff_file} ({file_size} bytes)")
+                                        logger.debug(f"Page {page_num} was partially scanned before ADF empty: {tiff_file} ({file_size} bytes)")
                                         scanned_files.append(tiff_file)
-                                        print(f"Total pages scanned: {len(scanned_files)}")
+                                        logger.info(f"Total pages scanned: {len(scanned_files)}")
                                     else:
-                                        print(f"Page {page_num} file is empty, removing")
+                                        logger.warning(f"Page {page_num} file is empty, removing")
                                         tiff_file.unlink()
-                                        print(f"Total pages scanned: {len(scanned_files)}")
+                                        logger.info(f"Total pages scanned: {len(scanned_files)}")
                                 else:
-                                    print(f"No file created for page {page_num}")
-                                    print(f"Total pages scanned: {len(scanned_files)}")
+                                    logger.warning(f"No file created for page {page_num}")
+                                    logger.info(f"Total pages scanned: {len(scanned_files)}")
                                 break
                             
-                            print(f"Scan failed: {error_msg}")
+                            logger.error(f"Scan failed: {error_msg}")
                             raise Exception(f"scanimage failed: {error_msg}")
                         
                         file_size = tiff_file.stat().st_size if tiff_file.exists() else 0
                         
                         # Check if file is actually empty (sometimes scan "succeeds" but creates empty file)
                         if file_size == 0:
-                            print(f"Page {page_num}: Empty file, assuming ADF is empty")
+                            logger.info(f"Page {page_num}: Empty file, assuming ADF is empty")
                             tiff_file.unlink()
                             if batch_scan and page_num > 1:
-                                print(f"ADF empty, batch scan complete. Scanned {page_num - 1} pages.")
+                                logger.info(f"ADF empty, batch scan complete. Scanned {page_num - 1} pages.")
                                 break
                             else:
                                 raise Exception("Scanner returned empty file")
                         
-                        print(f"Page {page_num} scanned successfully: {tiff_file} ({file_size} bytes)")
+                        logger.info(f"Page {page_num} scanned successfully: {tiff_file} ({file_size} bytes)")
                         scanned_files.append(tiff_file)
                         
                     except subprocess.TimeoutExpired:
-                        print(f"Scan timeout on page {page_num}")
+                        logger.warning(f"Scan timeout on page {page_num}")
                         if batch_scan and page_num > 1:
-                            print(f"Assuming ADF is empty. Scanned {page_num - 1} pages.")
+                            logger.info(f"Assuming ADF is empty. Scanned {page_num - 1} pages.")
                             break
                         raise Exception("Scan timeout")
                     
@@ -476,9 +476,9 @@ class ScannerManager:
                                 timeout=10
                             )
                             if thumbnail_file.exists():
-                                print(f"Live preview thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
+                                logger.debug(f"Live preview thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
                         except Exception as e:
-                            print(f"Warning: Failed to generate live preview thumbnail: {e}")
+                            logger.warning(f"Warning: Failed to generate live preview thumbnail: {e}")
                     
                     # If not batch mode, stop after first page
                     if not batch_scan:
@@ -488,19 +488,19 @@ class ScannerManager:
                     
                     # Safety limit for batch scanning
                     if page_num > 100:
-                        print("Warning: Reached 100-page limit for batch scanning")
+                        logger.warning("Warning: Reached 100-page limit for batch scanning")
                         break
             
             if not scanned_files:
                 raise Exception("No pages were scanned successfully")
             
-            print(f"Scan completed: {len(scanned_files)} page(s)")
+            logger.info(f"Scan completed: {len(scanned_files)} page(s)")
             
             # Convert TIFF(s) to requested format
             final_file = None
             if output_format == 'pdf':
                 pdf_file = output_dir / f"{prefix}_{job_id}.pdf"
-                print(f"Converting {len(scanned_files)} TIFF(s) to PDF: {pdf_file}")
+                logger.info(f"Converting {len(scanned_files)} TIFF(s) to PDF: {pdf_file}")
                 
                 # Get quality setting from profile (default 85)
                 quality = str(profile.get('quality', 85))
@@ -527,7 +527,7 @@ class ScannerManager:
                 # Add output file
                 convert_cmd.append(str(pdf_file))
                 
-                print(f"PDF conversion command: {' '.join(convert_cmd)}")
+                logger.debug(f"PDF conversion command: {' '.join(convert_cmd)}")
                 
                 convert_result = subprocess.run(
                     convert_cmd,
@@ -540,9 +540,9 @@ class ScannerManager:
                     total_tiff_size = sum(f.stat().st_size for f in scanned_files)
                     pdf_size = pdf_file.stat().st_size
                     ratio = (1 - pdf_size / total_tiff_size) * 100 if total_tiff_size > 0 else 0
-                    print(f"PDF conversion successful: {pdf_file}")
-                    print(f"  Pages: {len(scanned_files)}")
-                    print(f"  Size: {pdf_size:,} bytes (saved {ratio:.1f}%)")
+                    logger.info(f"PDF conversion successful: {pdf_file}")
+                    logger.info(f"  Pages: {len(scanned_files)}")
+                    logger.info(f"  Size: {pdf_size:,} bytes (saved {ratio:.1f}%)")
                     
                     # Remove TIFF files after successful conversion
                     for tiff in scanned_files:
@@ -550,17 +550,17 @@ class ScannerManager:
                     
                     final_file = pdf_file
                 else:
-                    print(f"Warning: PDF conversion failed: {convert_result.stderr}")
+                    logger.warning(f"Warning: PDF conversion failed: {convert_result.stderr}")
                     # Keep first TIFF file as fallback
                     final_file = scanned_files[0] if scanned_files else None
             elif output_format == 'jpeg':
                 # JPEG only supports single page, use first page
                 tiff_file = scanned_files[0]
                 jpeg_file = output_dir / f"{prefix}_{job_id}.jpg"
-                print(f"Converting TIFF to JPEG: {jpeg_file}")
+                logger.info(f"Converting TIFF to JPEG: {jpeg_file}")
                 
                 if len(scanned_files) > 1:
-                    print(f"Warning: JPEG format only supports single page, using page 1 of {len(scanned_files)}")
+                    logger.warning(f"Warning: JPEG format only supports single page, using page 1 of {len(scanned_files)}")
                 
                 # Get quality setting from profile (default 90)
                 quality = str(profile.get('quality', 90))
@@ -576,8 +576,8 @@ class ScannerManager:
                     tiff_size = tiff_file.stat().st_size
                     jpeg_size = jpeg_file.stat().st_size
                     ratio = (1 - jpeg_size / tiff_size) * 100 if tiff_size > 0 else 0
-                    print(f"JPEG conversion successful: {jpeg_file}")
-                    print(f"  Size: {jpeg_size:,} bytes (saved {ratio:.1f}%)")
+                    logger.info(f"JPEG conversion successful: {jpeg_file}")
+                    logger.info(f"  Size: {jpeg_size:,} bytes (saved {ratio:.1f}%)")
                     
                     # Remove TIFF files
                     for tiff in scanned_files:
@@ -585,7 +585,7 @@ class ScannerManager:
                     
                     final_file = jpeg_file
                 else:
-                    print(f"Warning: JPEG conversion failed: {convert_result.stderr}")
+                    logger.warning(f"Warning: JPEG conversion failed: {convert_result.stderr}")
                     final_file = tiff_file
             
             # Update job with file path
@@ -598,7 +598,7 @@ class ScannerManager:
                 job.status = JobStatus.completed
                 job_manager.update_job(job)
             
-            print(f"Delivering scan to target: {target_id}")
+            logger.info(f"Delivering scan to target: {target_id}")
             
             # Generate thumbnail preview
             thumbnail_file = None
@@ -616,9 +616,9 @@ class ScannerManager:
                     timeout=10
                 )
                 if thumbnail_file.exists():
-                    print(f"Thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
+                    logger.debug(f"Thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
             except Exception as e:
-                print(f"Warning: Failed to generate thumbnail: {e}")
+                logger.warning(f"Warning: Failed to generate thumbnail: {e}")
             
             # Deliver to target
             try:
@@ -631,22 +631,22 @@ class ScannerManager:
                     job.message = None
                     job_manager.update_job(job)
                 
-                print(f"✓ Scan job {job_id} completed successfully")
+                logger.info(f"✓ Scan job {job_id} completed successfully")
                 
                 # Clean up local files after successful upload
                 try:
                     if final_file.exists():
                         final_file.unlink()
-                        print(f"✓ Deleted scan file: {final_file}")
+                        logger.debug(f"✓ Deleted scan file: {final_file}")
                     
                     # Keep thumbnail for preview in UI (small file ~10-50KB)
                     # Thumbnails can be cleaned up separately with a cron job if needed
                     
                 except Exception as cleanup_error:
-                    print(f"Warning: Failed to delete scan file: {cleanup_error}")
+                    logger.warning(f"Warning: Failed to delete scan file: {cleanup_error}")
                 
             except Exception as delivery_error:
-                print(f"⚠️ Delivery failed for job {job_id}: {delivery_error}")
+                logger.warning(f"⚠️ Delivery failed for job {job_id}: {delivery_error}")
                 
                 # Mark job as completed but with delivery failure
                 job = job_manager.get_job(job_id)
@@ -655,7 +655,7 @@ class ScannerManager:
                     job.message = f"Upload failed: {str(delivery_error)}"
                     job_manager.update_job(job)
                 
-                print(f"⚠️ Scan completed but delivery failed. File kept locally for retry: {final_file}")
+                logger.warning(f"⚠️ Scan completed but delivery failed. File kept locally for retry: {final_file}")
                 # Don't raise - scan was successful, just delivery failed
                 # File is kept for manual retry
             
@@ -675,7 +675,7 @@ class ScannerManager:
                 )
             
         except Exception as e:
-            print(f"Scan error for job {job_id}: {e}")
+            logger.error(f"Scan error for job {job_id}: {e}")
             import traceback
             traceback.print_exc()
             
@@ -710,7 +710,7 @@ class ScannerManager:
                 'metadata': metadata
             }
             
-            print(f"Sending webhook notification to {webhook_url}")
+            logger.info(f"Sending webhook notification to {webhook_url}")
             
             req = urllib.request.Request(
                 webhook_url,
@@ -720,9 +720,9 @@ class ScannerManager:
             )
             
             with urllib.request.urlopen(req, timeout=10) as response:
-                print(f"Webhook notification sent successfully: {response.status}")
+                logger.info(f"Webhook notification sent successfully: {response.status}")
         except Exception as e:
-            print(f"Warning: Failed to send webhook notification: {e}")
+            logger.warning(f"Warning: Failed to send webhook notification: {e}")
 
     def list_jobs(self) -> List[JobRecord]:
         return JobManager().list_jobs(job_type="scan")

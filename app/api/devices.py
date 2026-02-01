@@ -84,14 +84,14 @@ async def discover_devices():
     added_devices = device_repo.list_devices(device_type='scanner', active_only=True)
     added_uris = {dev.uri for dev in added_devices}
     
-    print("[DISCOVERY] Starting scanner discovery...")
+    logger.info("[DISCOVERY] Starting scanner discovery...")
     
     # Method 1: Use ScannerManager (airscan-discover)
     try:
         scanner_manager = ScannerManager()
         discovered_scanners = scanner_manager.list_devices()
         
-        print(f"[DISCOVERY] Found {len(discovered_scanners)} scanners via airscan-discover")
+        logger.info(f"[DISCOVERY] Found {len(discovered_scanners)} scanners via airscan-discover")
         
         for scanner in discovered_scanners:
             scanner_uri = scanner['id']
@@ -114,7 +114,7 @@ async def discover_devices():
                 already_added=scanner_uri in added_uris
             ))
     except Exception as e:
-        print(f"[DISCOVERY] Error with airscan-discover: {e}")
+        logger.error(f"[DISCOVERY] Error with airscan-discover: {e}")
     
     # Method 2: Fallback to scanimage -L for other SANE backends
     try:
@@ -129,7 +129,7 @@ async def discover_devices():
         )
         
         if result.returncode == 0 and result.stdout:
-            print(f"[DISCOVERY] scanimage -L output:\n{result.stdout}")
+            logger.debug(f"[DISCOVERY] scanimage -L output:\n{result.stdout}")
             
             # Parse scanimage -L output
             # Format: "device `pixma:04A91820_247F69' is a CANON Canon PIXMA MG5200 multi-function peripheral"
@@ -176,19 +176,19 @@ async def discover_devices():
                             already_added=scanner_uri in added_uris
                         ))
                         
-                        print(f"[DISCOVERY] Found via scanimage -L: {scanner_name} ({scanner_uri})")
+                        logger.info(f"[DISCOVERY] Found via scanimage -L: {scanner_name} ({scanner_uri})")
     except Exception as e:
-        print(f"[DISCOVERY] Error with scanimage -L: {e}")
+        logger.error(f"[DISCOVERY] Error with scanimage -L: {e}")
     
-    print(f"[DISCOVERY] Total devices found: {len(devices)}")
+    logger.info(f"[DISCOVERY] Total devices found: {len(devices)}")
     
     if not devices:
-        print("[DISCOVERY] No scanners found. Possible reasons:")
-        print("  - Scanner not turned on or not connected")
-        print("  - Scanner not on same network (for network scanners)")
-        print("  - Firewall blocking mDNS/scanner traffic")
-        print("  - Scanner doesn't support eSCL/AirScan or SANE")
-        print("  - Try adding scanner manually with IP address")
+        logger.warning("[DISCOVERY] No scanners found. Possible reasons:")
+        logger.warning("  - Scanner not turned on or not connected")
+        logger.warning("  - Scanner not on same network (for network scanners)")
+        logger.warning("  - Firewall blocking mDNS/scanner traffic")
+        logger.warning("  - Scanner doesn't support eSCL/AirScan or SANE")
+        logger.warning("  - Try adding scanner manually with IP address")
     
     return devices
 
@@ -201,9 +201,9 @@ def _update_scanner_cache():
             scanner_manager = ScannerManager()
             _scanner_cache['devices'] = scanner_manager.list_devices()
             _scanner_cache['last_update'] = current_time
-            print(f"[CACHE] Scanner status cache updated")
+            logger.debug(f"[CACHE] Scanner status cache updated")
         except Exception as e:
-            print(f"[CACHE] Failed to update scanner cache: {e}")
+            logger.error(f"[CACHE] Failed to update scanner cache: {e}")
 
 
 def init_scanner_cache():
@@ -274,7 +274,7 @@ async def list_devices(device_type: str | None = None):
     # Update scanner cache if needed
     _update_scanner_cache()
     
-    print(f"[TIMING] list_devices: DB query took {time.time() - start:.3f}s")
+    logger.debug(f"[TIMING] list_devices: DB query took {time.time() - start:.3f}s")
     
     response = []
     health_monitor = get_health_monitor()
