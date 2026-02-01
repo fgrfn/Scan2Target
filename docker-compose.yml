@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  scan2target:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: scan2target:latest
+    container_name: scan2target
+    restart: unless-stopped
+    
+    ports:
+      - "8000:8000"
+    
+    volumes:
+      # Persistent data storage
+      - scan2target-data:/data
+      # Scanner device access (if using USB scanner)
+      - /dev/bus/usb:/dev/bus/usb
+    
+    devices:
+      # Grant access to USB devices for scanners
+      - /dev/bus/usb
+    
+    environment:
+      # Application settings
+      - SCAN2TARGET_DATA_DIR=/data
+      - SCAN2TARGET_DB_PATH=/data/db/scan2target.db
+      
+      # Security settings (CHANGE THESE!)
+      - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY:-changeme-generate-a-secure-key}
+      - SCAN2TARGET_REQUIRE_AUTH=${SCAN2TARGET_REQUIRE_AUTH:-true}
+      
+      # Optional: SMTP settings for email targets
+      # - SMTP_SERVER=${SMTP_SERVER:-}
+      # - SMTP_PORT=${SMTP_PORT:-587}
+      # - SMTP_USERNAME=${SMTP_USERNAME:-}
+      # - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+    
+    # Required for scanner discovery and network scanning
+    network_mode: host
+    
+    # Privileged mode may be needed for USB scanner access
+    # privileged: true
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  scan2target-data:
+    driver: local
