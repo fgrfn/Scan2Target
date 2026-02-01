@@ -7,6 +7,7 @@ import os
 
 from core.devices.repository import DeviceRepository, DeviceRecord
 from core.scanning.manager import ScannerManager
+from core.scanning.health import get_health_monitor
 from core.database import get_db
 
 router = APIRouter()
@@ -246,15 +247,22 @@ async def list_devices(device_type: str | None = None):
     print(f"[TIMING] list_devices: DB query took {time.time() - start:.3f}s")
     
     response = []
+    health_monitor = get_health_monitor()
+    
     for device in devices:
         status = "unknown"
         
-        # Check status from cache
-        cached_scanners = _scanner_cache.get('devices', [])
-        if any(s['id'] == device.uri for s in cached_scanners):
-            status = "online"
+        # Check status from health monitor first (more reliable)
+        scanner_health = health_monitor.get_scanner_status(device.uri)
+        if scanner_health:
+            status = "online" if scanner_health.get('online', False) else "offline"
         else:
-            status = "offline"
+            # Fallback: Check status from cache
+            cached_scanners = _scanner_cache.get('devices', [])
+            if any(s['id'] == device.uri for s in cached_scanners):
+                status = "online"
+            else:
+                status = "offline"
         
         response.append(DeviceResponse(
             id=device.id,
@@ -436,6 +444,48 @@ async def toggle_device_favorite(device_id: str, request: ToggleFavoriteRequest)
     }
 
 
+@router.get("/health/status")
+async def get_health_status():
+    """
+    Get health monitoring status for all registered scanners.
+    
+    Returns:
+    - Overall health monitor status
+    - Individual scanner status with last check time
+    - Configuration (check interval)
+    """
+    health_monitor = get_health_monitor()
+    all_status = health_monitor.get_all_status()
+    
+    # Get registered scanners
+    device_repo = DeviceRepository()
+    devices = device_repo.list_devices(device_type='scanner', active_only=True)
+    
+    scanner_details = []
+    for device in devices:
+        health_info = all_status.get(device.uri, {})
+        scanner_details.append({
+            "id": device.id,
+            "name": device.name,
+            "uri": device.uri,
+            "online": health_info.get('online', False),
+            "last_check": health_info.get('last_check').isoformat() if health_info.get('last_check') else None,
+            "last_seen": device.last_seen.isoformat() if device.last_seen else None
+        })
+    
+    online_count = sum(1 for s in scanner_details if s['online'])
+    
+    return {
+        "monitor_active": health_monitor.is_running,
+        "check_interval": health_monitor.check_interval,
+        "last_check": health_monitor._last_check,
+        "total_scanners": len(devices),
+        "online_scanners": online_count,
+        "offline_scanners": len(devices) - online_count,
+        "scanners": scanner_details
+    }
+
+
 @router.get("/{device_id}/check")
 async def check_scanner_online(device_id: str):
     """Check if a scanner is currently online and accessible."""
@@ -445,7 +495,18 @@ async def check_scanner_online(device_id: str):
     if not device:
         raise HTTPException(status_code=404, detail=f"Scanner '{device_id}' not found")
     
-    # Try to detect scanner
+    # Use health monitor for immediate check
+    health_monitor = get_health_monitor()
+    is_online = await health_monitor.check_scanner_now(device.uri)
+    
+    if is_online:
+        return {
+            "online": True,
+            "device_id": device_id,
+            "message": "Scanner is online and ready"
+        }
+    
+    # If health monitor says offline, try direct detection as fallback
     try:
         scanner_manager = ScannerManager()
         scanners = scanner_manager.list_devices()

@@ -5,9 +5,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from pathlib import Path
+import os
 
 from api import scan, targets, auth, history, devices, maintenance, websocket, stats, homeassistant
 from core.init_db import init_database
+from core.scanning.health import get_health_monitor
 
 
 @asynccontextmanager
@@ -16,11 +18,21 @@ async def lifespan(app: FastAPI):
     # Startup
     print("Starting Scan2Target...")
     init_database()
+    
     # Initialize scanner cache to prevent scanners showing as offline after restart
     devices.init_scanner_cache()
+    
+    # Start health monitor for automatic scanner status checks
+    health_check_interval = int(os.getenv('SCAN2TARGET_HEALTH_CHECK_INTERVAL', '60'))
+    health_monitor = get_health_monitor(check_interval=health_check_interval)
+    await health_monitor.start()
+    print(f"[STARTUP] Health monitor started (interval: {health_check_interval}s)")
+    
     yield
+    
     # Shutdown
     print("Shutting down Scan2Target...")
+    await health_monitor.stop()
 
 
 def create_app() -> FastAPI:
