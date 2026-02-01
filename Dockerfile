@@ -63,7 +63,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV SCAN2TARGET_DATA_DIR=/data
-ENV SCAN2TARGET_DATABASE_PATH=/app/scan2target.db
+ENV SCAN2TARGET_DATABASE_PATH=/data/db/scan2target.db
 ENV PYTHONPATH=/app
 
 # Expose port

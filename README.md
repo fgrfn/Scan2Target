@@ -125,8 +125,10 @@ docker run -d \
 - `SCAN2TARGET_DB_PATH` - Database file path (default: /data/db/scan2target.db)
 
 **Volumes:**
-- `/data` - Persistent storage for database and scans
+- `/data` - Persistent storage for database and scans (**REQUIRED**)
 - `/dev/bus/usb` - USB device access for scanners
+
+⚠️ **IMPORTANT:** Do NOT mount any volume to `/app` - this will overwrite the application code and cause startup failures. Always use `/data` for persistent storage.
 
 **Network:**
 - `host` network mode required for scanner discovery (mDNS/Avahi)
@@ -235,6 +237,44 @@ docker restart scan2target     # Restart
 docker ps                      # Status
 docker logs -f scan2target     # Logs
 ```
+
+## Troubleshooting
+
+### Error: "Could not import module 'main'"
+
+**Problem:** Container fails to start with error: `ERROR: Error loading ASGI app. Could not import module "main".`
+
+**Cause:** A volume is incorrectly mounted to `/app`, overwriting the application code.
+
+**Solution:**
+1. Check your Docker volume configuration
+2. Ensure you're mapping to `/data`, NOT `/app`
+
+**Correct configuration:**
+```bash
+# Docker CLI
+-v /mnt/user/appdata/Scan2Target:/data
+
+# Docker Compose
+volumes:
+  - /mnt/user/appdata/Scan2Target:/data
+```
+
+**For Unraid users:**
+- Container Path: `/data` ✅
+- Host Path: `/mnt/user/appdata/Scan2Target`
+
+**NEVER use:**
+- Container Path: `/app` ❌
+
+### Scanner Discovery Not Working
+
+If scanners aren't automatically discovered:
+1. Ensure `--network host` is used
+2. Manually add scanner via IP address in the UI
+3. Check scanner is on the same network
+
+For more help, check the [docs/docker.md](docs/docker.md) guide.
 
 ## Home Assistant Integration
 

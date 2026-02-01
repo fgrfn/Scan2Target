@@ -61,14 +61,23 @@ openssl rand -base64 32
 
 ### Volume Mapping
 
-The default `docker-compose.yml` creates a named volume for persistent data:
+⚠️ **CRITICAL: Never mount volumes to `/app`**
 
+The application code resides in `/app`. Mounting a volume to this path will overwrite the code and cause startup failures.
+
+**CORRECT:** Use `/data` for persistent storage ✅
 ```yaml
 volumes:
   - scan2target-data:/data
 ```
 
-To use a local directory instead:
+**INCORRECT:** Do NOT mount to `/app` ❌
+```yaml
+volumes:
+  - ./mydata:/app  # THIS WILL BREAK THE APPLICATION!
+```
+
+To use a local directory instead of a named volume:
 
 ```yaml
 volumes:
@@ -212,6 +221,37 @@ docker stats scan2target
 ```
 
 ## Troubleshooting
+
+### Error: "Could not import module 'main'"
+
+**Problem:** Container fails to start with:
+```
+ERROR: Error loading ASGI app. Could not import module "main".
+```
+
+**Cause:** A volume is mounted to `/app`, overwriting the application code.
+
+**Solution:**
+1. Check your volume mappings
+2. Remove any mapping to `/app`
+3. Use `/data` for persistent storage
+
+**Example fix for docker-compose.yml:**
+```yaml
+volumes:
+  - ./mydata:/data  # ✅ Correct
+  # NOT: - ./mydata:/app  # ❌ Wrong - will break application
+```
+
+**Example fix for Docker CLI:**
+```bash
+docker run -v /path/to/data:/data ...  # ✅ Correct
+# NOT: docker run -v /path/to/data:/app ...  # ❌ Wrong
+```
+
+**For Unraid users:**
+- Container Path should be: `/data`
+- Do NOT set Container Path to: `/app`
 
 ### Scanner Not Found
 

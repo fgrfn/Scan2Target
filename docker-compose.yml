@@ -20,7 +20,7 @@ services:
     environment:
       # Application settings
       - SCAN2TARGET_DATA_DIR=/data
-      - SCAN2TARGET_DATABASE_PATH=/app/scan2target.db
+      - SCAN2TARGET_DATABASE_PATH=/data/db/scan2target.db
       
       # Security settings (CHANGE THESE!)
       - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY:-changeme-generate-a-secure-key}
