@@ -320,6 +320,7 @@ npm run dev
 
 - **Docker Guide:** [docs/docker.md](docs/docker.md) - Complete Docker deployment guide
 - **Docker Quick Ref:** [DOCKER_QUICKREF.md](DOCKER_QUICKREF.md) - Common commands
+- **GitHub Container Registry:** [docs/github-container-registry.md](docs/github-container-registry.md) - Pre-built images & CI/CD
 - **API:** `http://YOUR_SERVER_IP/docs` - Swagger/OpenAPI docs
 - **Home Assistant:** [docs/homeassistant.md](docs/homeassistant.md) - Integration guide
 - **Architecture:** [docs/architecture.md](docs/architecture.md)
