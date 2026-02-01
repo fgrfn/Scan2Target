@@ -4,8 +4,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import time
 
-from app.core.devices.repository import DeviceRepository, DeviceRecord
-from app.core.scanning.manager import ScannerManager
+from core.devices.repository import DeviceRepository, DeviceRecord
+from core.scanning.manager import ScannerManager
 
 router = APIRouter()
 

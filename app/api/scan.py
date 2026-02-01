@@ -5,8 +5,8 @@ from pydantic import BaseModel
 import subprocess
 import base64
 
-from app.core.scanning.manager import ScannerManager
-from app.core.jobs.models import JobStatus, JobRecord
+from core.scanning.manager import ScannerManager
+from core.jobs.models import JobStatus, JobRecord
 
 router = APIRouter()
 
@@ -62,7 +62,7 @@ async def list_profiles():
 async def start_scan(payload: ScanRequest):
     """Trigger a scan and enqueue delivery to the selected target."""
     from fastapi import HTTPException
-    from app.core.devices.repository import DeviceRepository
+    from core.devices.repository import DeviceRepository
     
     # Validate inputs
     if not payload.device_id or payload.device_id.strip() == "":
@@ -132,7 +132,7 @@ async def get_scan_job(job_id: str):
 async def cancel_scan_job(job_id: str):
     """Cancel a running or queued scan job."""
     from fastapi import HTTPException
-    from app.core.jobs.manager import JobManager
+    from core.jobs.manager import JobManager
     
     job_manager = JobManager()
     success = job_manager.cancel_job(job_id)
@@ -155,7 +155,7 @@ async def get_job_thumbnail(job_id: str):
     """Get thumbnail preview for a completed scan job."""
     from fastapi import HTTPException
     from fastapi.responses import FileResponse
-    from app.core.jobs.manager import JobManager
+    from core.jobs.manager import JobManager
     from pathlib import Path
     
     job_manager = JobManager()
@@ -180,7 +180,7 @@ async def preview_scan(request: dict):
     """
     from fastapi import HTTPException
     from fastapi.responses import JSONResponse
-    from app.core.devices.repository import DeviceRepository
+    from core.devices.repository import DeviceRepository
     import tempfile
     from pathlib import Path
     
@@ -256,10 +256,10 @@ async def preview_scan(request: dict):
 async def start_batch_scan(payload: BatchScanRequest):
     """Combine multiple scanned pages into one PDF and upload to target."""
     from fastapi import HTTPException
-    from app.core.devices.repository import DeviceRepository
-    from app.core.jobs.manager import JobManager
-    from app.core.jobs.models import JobStatus
-    from app.core.targets.manager import TargetManager
+    from core.devices.repository import DeviceRepository
+    from core.jobs.manager import JobManager
+    from core.jobs.models import JobStatus
+    from core.targets.manager import TargetManager
     from PIL import Image
     from pathlib import Path
     import tempfile

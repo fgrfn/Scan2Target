@@ -5,8 +5,8 @@ from typing import Callable, Dict, Any
 from datetime import datetime
 import traceback
 
-from app.core.jobs.manager import JobManager
-from app.core.jobs.models import JobStatus
+from core.jobs.manager import JobManager
+from core.jobs.models import JobStatus
 
 
 class BackgroundWorker:

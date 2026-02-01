@@ -47,11 +47,11 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY app/ ./app/
+# Copy application code directly to /app
+COPY app/ ./
 
 # Copy built frontend from builder stage
-COPY --from=frontend-builder /app/web/dist ./app/web/dist
+COPY --from=frontend-builder /app/web/dist ./web/dist
 
 # Create necessary directories
 RUN mkdir -p /data/scans /data/db /tmp/scan2target/scans
@@ -63,7 +63,8 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV SCAN2TARGET_DATA_DIR=/data
-ENV SCAN2TARGET_DB_PATH=/data/db/scan2target.db
+ENV SCAN2TARGET_DATABASE_PATH=/app/scan2target.db
+ENV PYTHONPATH=/app
 
 # Expose port
 EXPOSE 8000
@@ -71,6 +72,9 @@ EXPOSE 8000
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+
+# Set PYTHONPATH to /app for module resolution
+ENV PYTHONPATH=/app
 
 # Use entrypoint script to start Avahi and application
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

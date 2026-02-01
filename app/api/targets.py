@@ -4,8 +4,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import time
 
-from app.core.targets.manager import TargetManager
-from app.core.targets.models import TargetConfig
+from core.targets.manager import TargetManager
+from core.targets.models import TargetConfig
 
 router = APIRouter()
 

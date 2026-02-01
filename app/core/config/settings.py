@@ -11,8 +11,8 @@ except ImportError:
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = "sqlite:///./scan2target.db"
-    database_path: str = "scan2target.db"
+    database_url: str = "sqlite:////app/scan2target.db"
+    database_path: str = "/app/scan2target.db"
     
     # Paths
     data_dir: Path = Path("/data/scan2target")

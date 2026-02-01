@@ -10,8 +10,8 @@ from pathlib import Path
 import requests
 import time
 
-from app.core.targets.models import TargetConfig
-from app.core.targets.repository import TargetRepository
+from core.targets.models import TargetConfig
+from core.targets.repository import TargetRepository
 
 
 class TargetManager:
@@ -808,20 +808,20 @@ class TargetManager:
     
     def _deliver_google_drive(self, target: TargetConfig, file: Path) -> None:
         """Upload to Google Drive."""
-        from app.core.targets.cloud import GoogleDriveHandler
+        from core.targets.cloud import GoogleDriveHandler
         GoogleDriveHandler.upload(file, target.config)
     
     def _deliver_dropbox(self, target: TargetConfig, file: Path) -> None:
         """Upload to Dropbox."""
-        from app.core.targets.cloud import DropboxHandler
+        from core.targets.cloud import DropboxHandler
         DropboxHandler.upload(file, target.config)
     
     def _deliver_onedrive(self, target: TargetConfig, file: Path) -> None:
         """Upload to OneDrive."""
-        from app.core.targets.cloud import OneDriveHandler
+        from core.targets.cloud import OneDriveHandler
         OneDriveHandler.upload(file, target.config)
     
     def _deliver_nextcloud(self, target: TargetConfig, file: Path) -> None:
         """Upload to Nextcloud/ownCloud."""
-        from app.core.targets.cloud import NextcloudHandler
+        from core.targets.cloud import NextcloudHandler
         NextcloudHandler.upload(file, target.config)

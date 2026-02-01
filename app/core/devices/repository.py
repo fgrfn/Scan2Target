@@ -3,7 +3,7 @@ from typing import List, Optional
 from datetime import datetime
 import json
 
-from app.core.database import get_db
+from core.database import get_db
 
 
 class DeviceRecord:

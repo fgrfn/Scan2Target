@@ -1,8 +1,8 @@
 """Example of protected API routes using authentication."""
 from fastapi import APIRouter, Depends
 
-from app.core.auth.dependencies import get_current_user, get_current_admin_user
-from app.core.auth.models import User
+from core.auth.dependencies import get_current_user, get_current_admin_user
+from core.auth.models import User
 
 router = APIRouter()
 

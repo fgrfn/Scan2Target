@@ -4,7 +4,7 @@ from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel
 
-from app.core.database import get_db
+from core.database import get_db
 
 
 class User(BaseModel):

@@ -8,10 +8,10 @@ import os
 import tempfile
 from pathlib import Path
 
-from app.core.jobs.manager import JobManager
-from app.core.jobs.models import JobRecord, JobStatus
-from app.core.targets.manager import TargetManager
-from app.core.worker import get_worker
+from core.jobs.manager import JobManager
+from core.jobs.models import JobRecord, JobStatus
+from core.targets.manager import TargetManager
+from core.worker import get_worker
 
 
 class ScannerManager:

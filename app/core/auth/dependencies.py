@@ -3,8 +3,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 
-from app.core.auth.models import User
-from app.core.auth.manager import get_auth_manager
+from core.auth.models import User
+from core.auth.manager import get_auth_manager
 
 
 security = HTTPBearer()

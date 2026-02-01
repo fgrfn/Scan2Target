@@ -6,8 +6,8 @@ from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from app.api import scan, targets, auth, history, devices, maintenance, websocket, stats, homeassistant
-from app.core.init_db import init_database
+from api import scan, targets, auth, history, devices, maintenance, websocket, stats, homeassistant
+from core.init_db import init_database
 
 
 @asynccontextmanager
