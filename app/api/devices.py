@@ -414,3 +414,64 @@ async def toggle_device_favorite(device_id: str, request: ToggleFavoriteRequest)
         "device_id": device_id,
         "is_favorite": request.is_favorite
     }
+
+
+@router.get("/{device_id}/check")
+async def check_scanner_online(device_id: str):
+    """Check if a scanner is currently online and accessible."""
+    device_repo = DeviceRepository()
+    device = device_repo.get_device(device_id)
+    
+    if not device:
+        raise HTTPException(status_code=404, detail=f"Scanner '{device_id}' not found")
+    
+    # Try to detect scanner
+    try:
+        scanner_manager = ScannerManager()
+        scanners = scanner_manager.list_devices()
+        
+        is_online = any(s['id'] == device.uri for s in scanners)
+        
+        if is_online:
+            return {
+                "online": True,
+                "device_id": device_id,
+                "message": "Scanner is online and ready"
+            }
+        else:
+            # Try a test scan command to verify
+            import subprocess
+            result = subprocess.run(
+                ['scanimage', '--device-name', device.uri, '--test'],
+                capture_output=True,
+                timeout=5,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                return {
+                    "online": True,
+                    "device_id": device_id,
+                    "message": "Scanner is online (verified by test scan)"
+                }
+            else:
+                return {
+                    "online": False,
+                    "device_id": device_id,
+                    "message": "Scanner is offline or not responding",
+                    "suggestion": "Check if scanner is powered on and connected to network"
+                }
+    except subprocess.TimeoutExpired:
+        return {
+            "online": False,
+            "device_id": device_id,
+            "message": "Scanner connection timeout",
+            "suggestion": "Check network connection and scanner IP address"
+        }
+    except Exception as e:
+        return {
+            "online": False,
+            "device_id": device_id,
+            "message": f"Error checking scanner: {str(e)}",
+            "suggestion": "Verify scanner configuration and network connectivity"
+        }

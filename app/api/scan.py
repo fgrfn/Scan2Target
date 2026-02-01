@@ -103,7 +103,17 @@ async def start_scan(payload: ScanRequest):
         raise
     except Exception as e:
         print(f"Scan error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to start scan: {str(e)}")
+        error_msg = str(e)
+        
+        # Add helpful suggestions based on error type
+        if 'device not found' in error_msg.lower():
+            error_msg += " | Suggestion: Check if scanner is powered on and connected"
+        elif 'timeout' in error_msg.lower():
+            error_msg += " | Suggestion: Scanner may be busy or not responding. Wait and try again"
+        elif 'permission denied' in error_msg.lower():
+            error_msg += " | Suggestion: Scanner access permissions issue. Check scanner configuration"
+        
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.get("/jobs", response_model=List[JobRecord])
@@ -116,6 +126,50 @@ async def list_scan_jobs():
 async def get_scan_job(job_id: str):
     """Return a single scan job status."""
     return ScannerManager().get_job(job_id)
+
+
+@router.post("/jobs/{job_id}/cancel")
+async def cancel_scan_job(job_id: str):
+    """Cancel a running or queued scan job."""
+    from fastapi import HTTPException
+    from app.core.jobs.manager import JobManager
+    
+    job_manager = JobManager()
+    success = job_manager.cancel_job(job_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=400,
+            detail="Job not found or cannot be cancelled (already completed/failed)"
+        )
+    
+    return {
+        "status": "cancelled",
+        "job_id": job_id,
+        "message": "Scan job has been cancelled"
+    }
+
+
+@router.get("/jobs/{job_id}/thumbnail")
+async def get_job_thumbnail(job_id: str):
+    """Get thumbnail preview for a completed scan job."""
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+    from app.core.jobs.manager import JobManager
+    from pathlib import Path
+    
+    job_manager = JobManager()
+    job = job_manager.get_job(job_id)
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job.thumbnail_path:
+        thumbnail = Path(job.thumbnail_path)
+        if thumbnail.exists():
+            return FileResponse(thumbnail, media_type="image/jpeg")
+    
+    raise HTTPException(status_code=404, detail="Thumbnail not available")
 
 
 @router.post("/preview")

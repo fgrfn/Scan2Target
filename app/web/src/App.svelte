@@ -198,9 +198,21 @@
       folderPath: 'Folder Path',
       folderPathPlaceholder: '/Documents/Scans',
       webdavUrl: 'WebDAV URL',
+      checkingScanner: '🔍 Checking scanner status...',
+      scannerOffline: '⚠️ Scanner is offline',
+      scannerOnline: '✅ Scanner is online',
+      checkScanner: 'Check Status',
+      darkMode: 'Dark Mode',
+      lightMode: 'Light Mode',
+      dragToReorder: 'Drag to reorder pages',
+      loadingDots: '...',
+      discovering: '🔍 Discovering scanners',
+      autoSelectFavorite: 'Auto-selected favorite scanner',
       webdavUrlPlaceholder: 'https://cloud.example.com/remote.php/dav/files/username/',
       webdavPath: 'Upload Path',
-      webdavPathPlaceholder: '/Scans'
+      webdavPathPlaceholder: '/Scans',
+      testConnection: 'Test Connection',
+      checking: 'Checking...'
     },
     de: {
       brand: 'Scan2Target',
@@ -392,7 +404,19 @@
       webdavUrl: 'WebDAV-URL',
       webdavUrlPlaceholder: 'https://cloud.beispiel.de/remote.php/dav/files/benutzername/',
       webdavPath: 'Upload-Pfad',
-      webdavPathPlaceholder: '/Scans'
+      webdavPathPlaceholder: '/Scans',
+      checkingScanner: '🔍 Prüfe Scanner-Status...',
+      scannerOffline: '⚠️ Scanner ist offline',
+      scannerOnline: '✅ Scanner ist online',
+      checkScanner: 'Status prüfen',
+      checking: 'Prüfe...',
+      darkMode: 'Dunkler Modus',
+      lightMode: 'Heller Modus',
+      dragToReorder: 'Ziehen zum Neuordnen',
+      loadingDots: '...',
+      discovering: '🔍 Suche Scanner',
+      autoSelectFavorite: 'Favoriten-Scanner automatisch ausgewählt',
+      testConnection: 'Verbindung testen'
     }
   };
   
@@ -490,6 +514,10 @@
   let previewImage = null;
   let isPreviewing = false;
   
+  // Scanner status check
+  let scannerOnlineStatus = null;
+  let isCheckingScanner = false;
+  
   let isLoadingDevices = true;
   let isLoadingTargets = true;
   let isLoadingHistory = true;
@@ -497,6 +525,12 @@
   let expandedThumbnail = null; // Track which thumbnail is expanded
   let ws = null; // WebSocket connection
   let wsReconnectTimeout = null;
+  
+  // New features
+  let isDarkMode = localStorage.getItem('scan2target_darkmode') !== 'false'; // Default true (dark mode)
+  let checkingScannerStatus = false;
+  let scannerStatusMessage = '';
+  let scannerIsOnline = null;
 
   $: navLinks = [
     { label: t.dashboard, href: '#dashboard' },
@@ -516,6 +550,12 @@
   onMount(() => {
     const pageStart = performance.now();
     console.log('[TIMING] Page load started');
+    
+    // Set dark mode class on body
+    if (!isDarkMode) {
+      document.body.classList.add('light-mode');
+    }
+    
     loadData();
     
     // Handle hash navigation on page load
@@ -1083,6 +1123,63 @@
       alert(`❌ Error: ${error.message}`);
     }
   }
+  
+  async function checkScannerStatus() {
+    if (!selectedScanner) return;
+    
+    checkingScannerStatus = true;
+    scannerStatusMessage = '';
+    scannerIsOnline = null;
+    
+    try {
+      const response = await fetch(`${API_BASE}/devices/${selectedScanner}/check`);
+      if (response.ok) {
+        const result = await response.json();
+        scannerIsOnline = result.online;
+        scannerStatusMessage = result.message;
+        
+        // Auto-hide after 5 seconds if online
+        if (result.online) {
+          setTimeout(() => {
+            scannerIsOnline = null;
+            scannerStatusMessage = '';
+          }, 5000);
+        }
+      }
+    } catch (error) {
+      scannerIsOnline = false;
+      scannerStatusMessage = 'Failed to check scanner status';
+    } finally {
+      checkingScannerStatus = false;
+    }
+  }
+  
+  function toggleDarkMode() {
+    isDarkMode = !isDarkMode;
+    localStorage.setItem('scan2target_darkmode', isDarkMode);
+    document.body.classList.toggle('light-mode', !isDarkMode);
+  }
+  
+  async function cancelJob(jobId) {
+    if (!confirm(t.cancelJobConfirm)) return;
+    
+    try {
+      const response = await fetch(`${API_BASE}/scan/jobs/${jobId}/cancel`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        alert(t.jobCancelled);
+        await loadData();
+      } else {
+        const error = await response.json();
+        alert(`❌ ${error.detail || 'Cancel failed'}`);
+      }
+    } catch (error) {
+      console.error('Cancel error:', error);
+      alert(`❌ Error: ${error.message}`);
+    }
+  }
 
   function cancelBatch() {
     if (confirm(`${t.cancelBatch}? ${batchPages.length} ${t.pagesInBatch.toLowerCase()}`)) {
@@ -1447,30 +1544,6 @@
     }
   }
 
-  async function cancelJob(jobId) {
-    if (!confirm(t.cancelJobConfirm)) {
-      return;
-    }
-    
-    try {
-      const response = await fetch(`${API_BASE}/history/${jobId}/cancel`, {
-        method: 'POST'
-      });
-      
-      if (response.ok) {
-        alert(`✅ ${t.jobCancelled}`);
-        await pollActiveJobs();
-        await loadHistory();
-      } else {
-        const error = await response.json();
-        alert(`❌ ${error.detail || 'Failed to cancel job'}`);
-      }
-    } catch (error) {
-      console.error('Cancel job error:', error);
-      alert(`❌ Error: ${error.message}`);
-    }
-  }
-
   async function deleteJob(jobId) {
     if (!confirm(t.deleteJobConfirm)) {
       return;
@@ -1773,7 +1846,7 @@
   }
 </script>
 
-<NavBar brand={t.brand} links={navLinks} {currentLang} onLanguageChange={changeLanguage} />
+<NavBar brand={t.brand} links={navLinks} {currentLang} onLanguageChange={changeLanguage} {isDarkMode} onDarkModeToggle={toggleDarkMode} />
 
 <main class="page">
   <section id="dashboard" class="hero">
@@ -1844,7 +1917,11 @@
         <p class="muted">{t.scannerManagementDesc}</p>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
           <button class="primary" on:click={discoverScanners} disabled={isDiscovering} style="flex: 1; min-width: 200px;">
-            {isDiscovering ? t.searching : t.discoverScanners}
+            {#if isDiscovering}
+              <span style="display: inline-block; animation: spin 1s linear infinite;">🔄</span> {t.searching}
+            {:else}
+              {t.discoverScanners}
+            {/if}
           </button>
           <button class="ghost" on:click={() => showManualScannerForm = !showManualScannerForm} style="flex: 1; min-width: 200px;">
             {showManualScannerForm ? t.cancel : t.addManualScanner}
@@ -1981,14 +2058,26 @@
             {/each}
           </select>
           <label for="target-select">{t.target}</label>
-          <select id="target-select" bind:value={selectedTarget}>
-            <option value="">-- Select target --</option>
-            {#each targets as target}
-              <option value={target.id}>
-                {#if target.is_favorite}⭐ {/if}{target.name}
-              </option>
-            {/each}
-          </select>
+          <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+            <select id="target-select" bind:value={selectedTarget} style="flex: 1; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px;">
+              <option value="">-- Select target --</option>
+              {#each targets as target}
+                <option value={target.id}>
+                  {#if target.is_favorite}⭐ {/if}{target.name}
+                </option>
+              {/each}
+            </select>
+            {#if selectedTarget}
+              <button 
+                class="ghost" 
+                on:click={() => testTarget(selectedTarget)}
+                title={t.testConnection}
+                style="padding: 8px 12px; white-space: nowrap;"
+              >
+                🔍 Test
+              </button>
+            {/if}
+          </div>
           <label for="filename-input">{t.filename}</label>
           <input 
             id="filename-input" 
@@ -2001,6 +2090,25 @@
           
           {#if !batchMode}
             <!-- Normal scan mode -->
+            <!-- Scanner Status Check -->
+            {#if selectedScanner && scannerOnlineStatus !== null}
+              <div style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 6px; background: {scannerOnlineStatus ? 'rgba(100, 200, 100, 0.1)' : 'rgba(255, 100, 100, 0.1)'}; border: 1px solid {scannerOnlineStatus ? 'rgba(100, 200, 100, 0.3)' : 'rgba(255, 100, 100, 0.3)'};">
+                <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem;">
+                  <span style="font-size: 1.2rem;">{scannerOnlineStatus ? '✅' : '❌'}</span>
+                  <span style="font-weight: 500;">{scannerOnlineStatus ? t.scannerOnline : t.scannerOffline}</span>
+                </div>
+              </div>
+            {/if}
+            
+            <button 
+              class="ghost block" 
+              on:click={checkScannerStatus}
+              disabled={!selectedScanner || isCheckingScanner}
+              style="margin-bottom: 0.5rem;"
+            >
+              {isCheckingScanner ? '🔄 ' + t.checking : '🔍 ' + t.checkScanner}
+            </button>
+            
             <div style="display: flex; gap: 0.5rem;">
               <button 
                 class="ghost block" 
@@ -2043,12 +2151,47 @@
               
               {#if batchPages.length > 0}
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 0.5rem; margin-bottom: 0.75rem;">
-                  {#each batchPages as page}
-                    <div style="position: relative;">
+                  {#each batchPages as page, index (page.pageNumber)}
+                    <div 
+                      style="position: relative; cursor: move;"
+                      draggable="true"
+                      on:dragstart={(e) => {
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', index);
+                      }}
+                      on:dragover={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.style.opacity = '0.5';
+                      }}
+                      on:dragleave={(e) => {
+                        e.currentTarget.style.opacity = '1';
+                      }}
+                      on:drop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.style.opacity = '1';
+                        const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                        const toIndex = index;
+                        if (fromIndex !== toIndex) {
+                          const newPages = [...batchPages];
+                          const [movedPage] = newPages.splice(fromIndex, 1);
+                          newPages.splice(toIndex, 0, movedPage);
+                          // Renumber pages
+                          batchPages = newPages.map((p, i) => ({ ...p, pageNumber: i + 1 }));
+                        }
+                      }}
+                    >
                       <img src={page.url} alt="Page {page.pageNumber}" style="width: 100%; height: auto; border-radius: 4px; border: 1px solid var(--border);" />
                       <div style="position: absolute; top: 2px; left: 2px; background: var(--primary); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">
                         {page.pageNumber}
                       </div>
+                      <button 
+                        style="position: absolute; top: 2px; right: 2px; background: rgba(255, 100, 100, 0.9); color: white; border: none; border-radius: 4px; font-size: 0.7rem; padding: 2px 6px; cursor: pointer;"
+                        on:click={() => {
+                          batchPages = batchPages.filter((_, i) => i !== index).map((p, i) => ({ ...p, pageNumber: i + 1 }));
+                        }}
+                      >
+                        ✕
+                      </button>
                     </div>
                   {/each}
                 </div>

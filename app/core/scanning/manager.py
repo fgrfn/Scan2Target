@@ -307,30 +307,62 @@ class ScannerManager:
                 if source and source != 'Flatbed':
                     cmd.extend(['--source', source])
                 
-                # Add batch mode for ADF
-                if batch_scan:
-                    cmd.extend(['--batch-prompt'])  # Continue until ADF empty
+                # Note: Don't use --batch-prompt for ADF as it's interactive
+                # Instead, we scan one page at a time and stop when we get an error
                 
                 print(f"Executing scan command (page {page_num}): {' '.join(cmd)}")
                 print(f"Output file: {tiff_file}")
                 
                 # Execute scan
-                with open(tiff_file, 'wb') as f:
-                    result = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=False, timeout=120)
-                
-                if result.returncode != 0:
-                    # Check if ADF is empty (normal end of batch scan)
-                    error_msg = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
-                    if batch_scan and ('out of documents' in error_msg.lower() or 'no documents' in error_msg.lower()):
-                        print(f"ADF empty, batch scan complete. Scanned {page_num - 1} pages.")
+                try:
+                    with open(tiff_file, 'wb') as f:
+                        result = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=False, timeout=120)
+                    
+                    if result.returncode != 0:
+                        # Check if ADF is empty (normal end of batch scan)
+                        error_msg = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
+                        
+                        # Common ADF empty messages
+                        adf_empty_indicators = [
+                            'out of documents',
+                            'no documents',
+                            'document feeder is empty',
+                            'adf empty',
+                            'no more pages',
+                            'end of document'
+                        ]
+                        
+                        if batch_scan and any(indicator in error_msg.lower() for indicator in adf_empty_indicators):
+                            print(f"ADF empty, batch scan complete. Scanned {page_num - 1} pages.")
+                            # Remove the empty TIFF file if it was created
+                            if tiff_file.exists() and tiff_file.stat().st_size == 0:
+                                tiff_file.unlink()
+                            break
+                        
+                        print(f"Scan failed: {error_msg}")
+                        raise Exception(f"scanimage failed: {error_msg}")
+                    
+                    file_size = tiff_file.stat().st_size if tiff_file.exists() else 0
+                    
+                    # Check if file is actually empty (sometimes scan "succeeds" but creates empty file)
+                    if file_size == 0:
+                        print(f"Page {page_num}: Empty file, assuming ADF is empty")
+                        tiff_file.unlink()
+                        if batch_scan and page_num > 1:
+                            print(f"ADF empty, batch scan complete. Scanned {page_num - 1} pages.")
+                            break
+                        else:
+                            raise Exception("Scanner returned empty file")
+                    
+                    print(f"Page {page_num} scanned successfully: {tiff_file} ({file_size} bytes)")
+                    scanned_files.append(tiff_file)
+                    
+                except subprocess.TimeoutExpired:
+                    print(f"Scan timeout on page {page_num}")
+                    if batch_scan and page_num > 1:
+                        print(f"Assuming ADF is empty. Scanned {page_num - 1} pages.")
                         break
-                    print(f"Scan failed: {error_msg}")
-                    raise Exception(f"scanimage failed: {error_msg}")
-                
-                file_size = tiff_file.stat().st_size if tiff_file.exists() else 0
-                print(f"Page {page_num} scanned successfully: {tiff_file} ({file_size} bytes)")
-                
-                scanned_files.append(tiff_file)
+                    raise Exception("Scan timeout")
                 
                 # Generate thumbnail immediately after first page scan (for live preview)
                 if page_num == 1:
@@ -464,6 +496,9 @@ class ScannerManager:
             job = job_manager.get_job(job_id)
             if job:
                 job.file_path = str(final_file)
+                # Store thumbnail path if it exists
+                if thumbnail_file and thumbnail_file.exists():
+                    job.thumbnail_path = str(thumbnail_file)
                 job.status = JobStatus.completed
                 job_manager.update_job(job)
             

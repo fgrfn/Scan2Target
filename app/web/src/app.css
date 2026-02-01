@@ -208,6 +208,48 @@ h1 { margin: 8px 0; font-size: 36px; letter-spacing: -0.04em; }
 
 .muted { color: var(--muted); }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Dark Mode (default dark, light mode override) */
+.light-mode {
+  --bg: #f5f7fa;
+  --card: rgba(0, 0, 0, 0.04);
+  --surface: rgba(0, 0, 0, 0.06);
+  --surface-dim: rgba(0, 0, 0, 0.02);
+  --text: #1a2332;
+  --muted: #5a6b82;
+  --accent: #0099cc;
+  --accent-2: #7755dd;
+  --border: rgba(0, 0, 0, 0.12);
+  --danger: #d93636;
+  background: radial-gradient(circle at 20% 20%, rgba(0, 153, 204, 0.08), transparent 32%),
+    radial-gradient(circle at 80% 0%, rgba(119, 85, 221, 0.06), transparent 36%),
+    #f5f7fa;
+}
+
+.light-mode .primary {
+  color: #ffffff;
+  box-shadow: 0 10px 30px rgba(0, 153, 204, 0.25);
+}
+
+.light-mode .badge.success {
+  color: #0a5c2e;
+  background: #b3f5d1;
+}
+
+.light-mode .badge.warning {
+  color: #7a4500;
+  background: #ffe0b3;
+}
+
+.light-mode .badge.danger {
+  color: #8b0000;
+  background: #ffcccc;
+}
+
 @media (max-width: 960px) {
   .hero { grid-template-columns: 1fr; }
   .grid.two-cols { grid-template-columns: 1fr; }
