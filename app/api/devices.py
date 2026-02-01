@@ -1,4 +1,5 @@
 """Device management API routes - scanners only (cleaned version without printer support)."""
+import logging
 from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -10,6 +11,7 @@ from core.scanning.manager import ScannerManager
 from core.scanning.health import get_health_monitor
 from core.database import get_db
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Cache for scanner status (configurable via environment variable)
