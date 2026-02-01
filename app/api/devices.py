@@ -205,6 +205,22 @@ def _update_scanner_cache():
             print(f"[CACHE] Failed to update scanner cache: {e}")
 
 
+def init_scanner_cache():
+    """Initialize scanner cache on application startup.
+    
+    This ensures scanners are discovered and cached immediately after startup,
+    preventing them from appearing as offline after Docker container restarts.
+    """
+    try:
+        print("[STARTUP] Initializing scanner cache...")
+        scanner_manager = ScannerManager()
+        _scanner_cache['devices'] = scanner_manager.list_devices()
+        _scanner_cache['last_update'] = time.time()
+        print(f"[STARTUP] Scanner cache initialized with {len(_scanner_cache['devices'])} devices")
+    except Exception as e:
+        print(f"[STARTUP] Failed to initialize scanner cache: {e}")
+
+
 @router.get("", response_model=List[DeviceResponse])
 @router.get("/", response_model=List[DeviceResponse])
 async def list_devices(device_type: str | None = None):

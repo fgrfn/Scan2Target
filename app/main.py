@@ -16,6 +16,8 @@ async def lifespan(app: FastAPI):
     # Startup
     print("Starting Scan2Target...")
     init_database()
+    # Initialize scanner cache to prevent scanners showing as offline after restart
+    devices.init_scanner_cache()
     yield
     # Shutdown
     print("Shutting down Scan2Target...")

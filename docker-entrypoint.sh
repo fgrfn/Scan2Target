@@ -41,8 +41,9 @@ fi
 # Start Avahi daemon directly
 /usr/sbin/avahi-daemon --daemonize 2>/dev/null || echo "Note: Avahi may already be running or failed to start"
 
-# Wait a moment for Avahi to initialize
-sleep 2
+# Wait for Avahi to initialize and discover network devices
+# Increased wait time to ensure scanner discovery is complete before app starts
+sleep 5
 
 echo "Starting Scan2Target application..."
 # Start the main application - main.py liegt jetzt direkt in /app
