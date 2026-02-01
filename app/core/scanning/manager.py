@@ -335,10 +335,21 @@ class ScannerManager:
                         ]
                         
                         if batch_scan and any(indicator in error_msg.lower() for indicator in adf_empty_indicators):
-                            print(f"ADF empty (detected: '{error_msg}'), batch scan complete. Scanned {page_num - 1} pages.")
-                            # Remove the empty TIFF file if it was created
-                            if tiff_file.exists() and tiff_file.stat().st_size == 0:
-                                tiff_file.unlink()
+                            print(f"ADF empty (detected: '{error_msg}'), batch scan complete.")
+                            # Check if a file was created before the error
+                            if tiff_file.exists():
+                                file_size = tiff_file.stat().st_size
+                                if file_size > 0:
+                                    print(f"Page {page_num} was partially scanned before ADF empty: {tiff_file} ({file_size} bytes)")
+                                    scanned_files.append(tiff_file)
+                                    print(f"Total pages scanned: {len(scanned_files)}")
+                                else:
+                                    print(f"Page {page_num} file is empty, removing")
+                                    tiff_file.unlink()
+                                    print(f"Total pages scanned: {len(scanned_files)}")
+                            else:
+                                print(f"No file created for page {page_num}")
+                                print(f"Total pages scanned: {len(scanned_files)}")
                             break
                         
                         print(f"Scan failed: {error_msg}")
