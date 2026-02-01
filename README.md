@@ -23,6 +23,26 @@ Modern web-based scan server for network and USB scanners. Control scanners remo
 
 ## Quick Start
 
+### Option 1: Docker (Recommended)
+
+```bash
+# Clone repository
+git clone https://github.com/fgrfn/Scan2Target.git
+cd Scan2Target
+
+# Generate secure encryption key
+echo "SCAN2TARGET_SECRET_KEY=$(openssl rand -base64 32)" > .env
+
+# Start with Docker Compose
+docker-compose up -d
+```
+
+Access at: `http://YOUR_SERVER_IP:8000`
+
+**Default Login:** `admin` / `admin` (**change immediately!**)
+
+### Option 2: Native Installation
+
 ```bash
 git clone https://github.com/fgrfn/Scan2Target.git
 cd Scan2Target
@@ -33,13 +53,91 @@ Access at: `http://YOUR_SERVER_IP`
 
 **Default Login:** `admin` / `admin` (**change immediately!**)
 
+## Docker Deployment
+
+### Using Docker Compose (Recommended)
+
+```bash
+# 1. Clone repository
+git clone https://github.com/fgrfn/Scan2Target.git
+cd Scan2Target
+
+# 2. Create environment file
+cat > .env << 'EOF'
+SCAN2TARGET_SECRET_KEY=$(openssl rand -base64 32)
+SCAN2TARGET_REQUIRE_AUTH=true
+EOF
+
+# 3. Start services
+docker compose up -d
+
+# 4. View logs
+docker compose logs -f
+
+# 5. Stop services
+docker compose down
+```
+
+### Using Docker CLI
+
+```bash
+# Build image
+docker build -t scan2target:latest .
+
+# Run container
+docker run -d \
+  --name scan2target \
+  --network host \
+  -v scan2target-data:/data \
+  -v /dev/bus/usb:/dev/bus/usb \
+  --device /dev/bus/usb \
+  -e SCAN2TARGET_SECRET_KEY="$(openssl rand -base64 32)" \
+  -e SCAN2TARGET_REQUIRE_AUTH=true \
+  scan2target:latest
+```
+
+### Pre-built Images
+
+Images are automatically built and published to GitHub Container Registry:
+
+```bash
+# Pull latest image
+docker pull ghcr.io/fgrfn/scan2target:latest
+
+# Pull specific version
+docker pull ghcr.io/fgrfn/scan2target:v0.1.0
+
+# Run pre-built image
+docker run -d \
+  --name scan2target \
+  --network host \
+  -v scan2target-data:/data \
+  -e SCAN2TARGET_SECRET_KEY="your-secret-key-here" \
+  ghcr.io/fgrfn/scan2target:latest
+```
+
+### Docker Configuration
+
+**Environment Variables:**
+- `SCAN2TARGET_SECRET_KEY` - Encryption key for credentials (required in production)
+- `SCAN2TARGET_REQUIRE_AUTH` - Force authentication (default: true)
+- `SCAN2TARGET_DATA_DIR` - Data directory path (default: /data)
+- `SCAN2TARGET_DB_PATH` - Database file path (default: /data/db/scan2target.db)
+
+**Volumes:**
+- `/data` - Persistent storage for database and scans
+- `/dev/bus/usb` - USB device access for scanners
+
+**Network:**
+- `host` network mode required for scanner discovery (mDNS/Avahi)
+
 ### Security Setup (Production)
 
 ```bash
 # Generate encryption key
 export SCAN2TARGET_SECRET_KEY=$(openssl rand -base64 32)
 
-# Add to service file
+# For native installation: Add to service file
 sudo nano /etc/systemd/system/scan2target.service
 # Add: Environment="SCAN2TARGET_SECRET_KEY=your-key-here"
 
@@ -50,6 +148,13 @@ sudo systemctl restart scan2target
 
 ## Requirements
 
+### Docker (Recommended)
+- Docker 20.10+ or Docker Desktop
+- Docker Compose v2.0+
+- 2GB+ RAM recommended
+- Scanner with SANE or eSCL support
+
+### Native Installation
 - Linux (Debian/Ubuntu/Raspberry Pi OS)
 - 2GB+ RAM recommended
 - Scanner with SANE or eSCL support
@@ -103,12 +208,32 @@ All targets test connection before save and support auto-retry on failure.
 
 ## Service Management
 
+### Native Installation (systemd)
+
 ```bash
 sudo systemctl start scan2target    # Start
 sudo systemctl stop scan2target     # Stop
 sudo systemctl restart scan2target  # Restart
 sudo systemctl status scan2target   # Status
 sudo journalctl -u scan2target -f   # Logs
+```
+
+### Docker Installation
+
+```bash
+# Docker Compose
+docker compose up -d           # Start
+docker compose down            # Stop
+docker compose restart         # Restart
+docker compose ps              # Status
+docker compose logs -f         # Logs
+
+# Docker CLI
+docker start scan2target       # Start
+docker stop scan2target        # Stop
+docker restart scan2target     # Restart
+docker ps                      # Status
+docker logs -f scan2target     # Logs
 ```
 
 ## Home Assistant Integration
@@ -193,9 +318,12 @@ npm run dev
 
 ## Documentation
 
-- **API:** `http://YOUR_SERVER_IP/docs`
-- **Architecture:** `docs/architecture.md`
-- **Implementation:** `docs/implementation_plan.md`
+- **Docker Guide:** [docs/docker.md](docs/docker.md) - Complete Docker deployment guide
+- **Docker Quick Ref:** [DOCKER_QUICKREF.md](DOCKER_QUICKREF.md) - Common commands
+- **API:** `http://YOUR_SERVER_IP/docs` - Swagger/OpenAPI docs
+- **Home Assistant:** [docs/homeassistant.md](docs/homeassistant.md) - Integration guide
+- **Architecture:** [docs/architecture.md](docs/architecture.md)
+- **Implementation:** [docs/implementation_plan.md](docs/implementation_plan.md)
 
 ## Tech Stack
 

@@ -46,3 +46,7 @@ build/
 tmp/
 temp/
 *.tmp
+
+# Environment variables
+.env
+

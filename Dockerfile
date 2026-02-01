@@ -1,0 +1,66 @@
+# Multi-stage Dockerfile for Scan2Target
+# Stage 1: Build frontend
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /app/web
+
+# Copy package files
+COPY app/web/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy frontend source
+COPY app/web/ ./
+
+# Build frontend
+RUN npm run build
+
+# Stage 2: Build final image
+FROM python:3.12-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    avahi-daemon \
+    sane-utils \
+    sane-airscan \
+    smbclient \
+    ssh \
+    sshpass \
+    imagemagick \
+    libsane1 \
+    libsane-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy Python requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY app/ ./app/
+
+# Copy built frontend from builder stage
+COPY --from=frontend-builder /app/web/dist ./app/web/dist
+
+# Create necessary directories
+RUN mkdir -p /data/scans /data/db /tmp/scan2target/scans
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV SCAN2TARGET_DATA_DIR=/data
+ENV SCAN2TARGET_DB_PATH=/data/db/scan2target.db
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+
+# Run the application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
