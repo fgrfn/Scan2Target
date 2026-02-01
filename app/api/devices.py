@@ -67,6 +67,10 @@ async def discover_devices():
     2. Returns list of discovered devices
     3. Shows which devices are already added (`already_added: true/false`)
     4. User must explicitly call POST /devices/add to add a device
+    
+    Uses multiple discovery methods:
+    - airscan-discover for eSCL/AirScan network scanners
+    - scanimage -L for SANE backends (USB, network SANE, etc.)
     """
     devices = []
     device_repo = DeviceRepository()
@@ -75,10 +79,14 @@ async def discover_devices():
     added_devices = device_repo.list_devices(device_type='scanner', active_only=True)
     added_uris = {dev.uri for dev in added_devices}
     
-    # Discover scanners via SANE
+    print("[DISCOVERY] Starting scanner discovery...")
+    
+    # Method 1: Use ScannerManager (airscan-discover)
     try:
         scanner_manager = ScannerManager()
         discovered_scanners = scanner_manager.list_devices()
+        
+        print(f"[DISCOVERY] Found {len(discovered_scanners)} scanners via airscan-discover")
         
         for scanner in discovered_scanners:
             scanner_uri = scanner['id']
@@ -101,7 +109,81 @@ async def discover_devices():
                 already_added=scanner_uri in added_uris
             ))
     except Exception as e:
-        print(f"Error discovering scanners: {e}")
+        print(f"[DISCOVERY] Error with airscan-discover: {e}")
+    
+    # Method 2: Fallback to scanimage -L for other SANE backends
+    try:
+        import subprocess
+        import re
+        
+        result = subprocess.run(
+            ['scanimage', '-L'],
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+        
+        if result.returncode == 0 and result.stdout:
+            print(f"[DISCOVERY] scanimage -L output:\n{result.stdout}")
+            
+            # Parse scanimage -L output
+            # Format: "device `pixma:04A91820_247F69' is a CANON Canon PIXMA MG5200 multi-function peripheral"
+            for line in result.stdout.split('\n'):
+                if 'device' in line.lower() and '`' in line:
+                    # Extract device URI
+                    match = re.search(r"`([^']+)'", line)
+                    if match:
+                        scanner_uri = match.group(1)
+                        
+                        # Skip if already added via airscan-discover
+                        if any(d.uri == scanner_uri for d in devices):
+                            continue
+                        
+                        # Extract device description
+                        desc_match = re.search(r"is a (.+)", line)
+                        scanner_name = desc_match.group(1).strip() if desc_match else scanner_uri
+                        
+                        # Try to extract make from URI or name
+                        parts = scanner_name.split(None, 2)
+                        make = parts[0] if len(parts) > 0 else 'Unknown'
+                        model = ' '.join(parts[1:]) if len(parts) > 1 else scanner_name
+                        
+                        # Determine connection type from URI
+                        if scanner_uri.startswith('pixma:'):
+                            conn_type = 'USB (PIXMA)'
+                        elif scanner_uri.startswith('hpaio:'):
+                            conn_type = 'USB/Network (HP)'
+                        elif scanner_uri.startswith('net:'):
+                            conn_type = 'Network (SANE)'
+                        elif 'usb' in scanner_uri.lower():
+                            conn_type = 'USB'
+                        else:
+                            conn_type = 'Unknown'
+                        
+                        devices.append(DiscoveredDevice(
+                            uri=scanner_uri,
+                            name=scanner_name,
+                            make=make,
+                            model=model,
+                            connection_type=conn_type,
+                            device_type='scanner',
+                            supported=True,
+                            already_added=scanner_uri in added_uris
+                        ))
+                        
+                        print(f"[DISCOVERY] Found via scanimage -L: {scanner_name} ({scanner_uri})")
+    except Exception as e:
+        print(f"[DISCOVERY] Error with scanimage -L: {e}")
+    
+    print(f"[DISCOVERY] Total devices found: {len(devices)}")
+    
+    if not devices:
+        print("[DISCOVERY] No scanners found. Possible reasons:")
+        print("  - Scanner not turned on or not connected")
+        print("  - Scanner not on same network (for network scanners)")
+        print("  - Firewall blocking mDNS/scanner traffic")
+        print("  - Scanner doesn't support eSCL/AirScan or SANE")
+        print("  - Try adding scanner manually with IP address")
     
     return devices
 
@@ -173,17 +255,22 @@ async def list_devices(device_type: str | None = None):
 @router.post("/add", response_model=DeviceResponse)
 async def add_device(request: AddDeviceRequest):
     """
-    **Permanently add** a discovered scanner.
+    **Permanently add** a scanner (discovered or manual).
     
     **MANUAL CONFIRMATION REQUIRED:**
     This endpoint must be explicitly called by the user to add a device.
     
     Process:
-    1. User clicks "Discover Scanners"
+    1. User clicks "Discover Scanners" OR enters scanner details manually
     2. User reviews the list of discovered scanners
     3. User selects a scanner and clicks "Add Scanner"
     4. This endpoint is called
     5. Scanner is saved to database
+    
+    Manual addition examples:
+    - Network eSCL scanner: uri="airscan:escl:MyScanner:http://192.168.1.100:8080/eSCL/"
+    - HP Network scanner: uri="hpaio:/net/HP_LaserJet?ip=192.168.1.100"
+    - Any SANE device: uri="<backend>:<device_identifier>"
     """
     device_repo = DeviceRepository()
     
