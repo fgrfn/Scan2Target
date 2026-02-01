@@ -1,4 +1,5 @@
 """Unified history routes."""
+import logging
 from typing import List
 from fastapi import APIRouter, HTTPException
 
@@ -6,6 +7,7 @@ from core.jobs.manager import JobManager
 from core.jobs.models import JobRecord
 from core.targets.manager import TargetManager
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 

@@ -1,9 +1,11 @@
 """Statistics API routes."""
+import logging
 from fastapi import APIRouter
 from datetime import datetime, timedelta
 from typing import Dict, List
 from core.database import get_db
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 

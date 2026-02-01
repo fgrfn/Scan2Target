@@ -1,4 +1,5 @@
 """Target configuration routes."""
+import logging
 from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -7,6 +8,7 @@ import time
 from core.targets.manager import TargetManager
 from core.targets.models import TargetConfig
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 

@@ -1,7 +1,9 @@
 """WebSocket API endpoint for real-time updates."""
+import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from core.websocket import get_connection_manager
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
