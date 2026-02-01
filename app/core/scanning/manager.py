@@ -329,11 +329,13 @@ class ScannerManager:
                             'document feeder is empty',
                             'adf empty',
                             'no more pages',
-                            'end of document'
+                            'end of document',
+                            'error during device i/o',  # HP scanners return this when ADF is empty
+                            'device i/o error'
                         ]
                         
                         if batch_scan and any(indicator in error_msg.lower() for indicator in adf_empty_indicators):
-                            print(f"ADF empty, batch scan complete. Scanned {page_num - 1} pages.")
+                            print(f"ADF empty (detected: '{error_msg}'), batch scan complete. Scanned {page_num - 1} pages.")
                             # Remove the empty TIFF file if it was created
                             if tiff_file.exists() and tiff_file.stat().st_size == 0:
                                 tiff_file.unlink()
