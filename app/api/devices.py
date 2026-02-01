@@ -6,6 +6,7 @@ import time
 
 from core.devices.repository import DeviceRepository, DeviceRecord
 from core.scanning.manager import ScannerManager
+from core.database import get_db
 
 router = APIRouter()
 
@@ -399,7 +400,6 @@ async def toggle_device_favorite(device_id: str, request: ToggleFavoriteRequest)
     device.is_favorite = request.is_favorite
     
     # Update in database
-    from app.core.database import get_db
     db = get_db()
     with db.get_connection() as conn:
         cursor = conn.cursor()
