@@ -7,9 +7,6 @@ services:
     container_name: scan2target
     restart: unless-stopped
     
-    ports:
-      - "8000:8000"
-    
     volumes:
       # Persistent data storage
       - scan2target-data:/data
@@ -35,7 +32,11 @@ services:
       # - SMTP_USERNAME=${SMTP_USERNAME:-}
       # - SMTP_PASSWORD=${SMTP_PASSWORD:-}
     
-    # Required for scanner discovery and network scanning
+    # Host network mode is required for:
+    # - Scanner discovery via mDNS/Avahi
+    # - Network scanner access (eSCL/AirScan)
+    # - Direct USB scanner access
+    # Note: Application will be accessible on port 8000
     network_mode: host
     
     # Privileged mode may be needed for USB scanner access

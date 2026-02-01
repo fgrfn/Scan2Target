@@ -69,13 +69,13 @@ SCAN2TARGET_REQUIRE_AUTH=true
 EOF
 
 # 3. Start services
-docker-compose up -d
+docker compose up -d
 
 # 4. View logs
-docker-compose logs -f
+docker compose logs -f
 
 # 5. Stop services
-docker-compose down
+docker compose down
 ```
 
 ### Using Docker CLI
@@ -222,11 +222,11 @@ sudo journalctl -u scan2target -f   # Logs
 
 ```bash
 # Docker Compose
-docker-compose up -d           # Start
-docker-compose down            # Stop
-docker-compose restart         # Restart
-docker-compose ps              # Status
-docker-compose logs -f         # Logs
+docker compose up -d           # Start
+docker compose down            # Stop
+docker compose restart         # Restart
+docker compose ps              # Status
+docker compose logs -f         # Logs
 
 # Docker CLI
 docker start scan2target       # Start
