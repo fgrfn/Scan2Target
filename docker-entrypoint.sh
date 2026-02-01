@@ -2,8 +2,17 @@
 set -e
 
 echo "Starting Avahi daemon for scanner discovery..."
-# Start Avahi daemon for mDNS/scanner discovery
-service avahi-daemon start
+
+# Create dbus directory if it doesn't exist
+mkdir -p /var/run/dbus
+
+# Start dbus (required for Avahi)
+if [ ! -f /var/run/dbus/pid ]; then
+    dbus-daemon --system --fork 2>/dev/null || true
+fi
+
+# Start Avahi daemon directly
+/usr/sbin/avahi-daemon --daemonize 2>/dev/null || echo "Note: Avahi may already be running or failed to start"
 
 # Wait a moment for Avahi to initialize
 sleep 2
