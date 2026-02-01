@@ -148,6 +148,13 @@ sudo systemctl restart scan2target
 
 ## Requirements
 
+### Docker (Recommended)
+- Docker 20.10+ or Docker Desktop
+- Docker Compose v2.0+
+- 2GB+ RAM recommended
+- Scanner with SANE or eSCL support
+
+### Native Installation
 - Linux (Debian/Ubuntu/Raspberry Pi OS)
 - 2GB+ RAM recommended
 - Scanner with SANE or eSCL support
@@ -311,9 +318,12 @@ npm run dev
 
 ## Documentation
 
-- **API:** `http://YOUR_SERVER_IP/docs`
-- **Architecture:** `docs/architecture.md`
-- **Implementation:** `docs/implementation_plan.md`
+- **Docker Guide:** [docs/docker.md](docs/docker.md) - Complete Docker deployment guide
+- **Docker Quick Ref:** [DOCKER_QUICKREF.md](DOCKER_QUICKREF.md) - Common commands
+- **API:** `http://YOUR_SERVER_IP/docs` - Swagger/OpenAPI docs
+- **Home Assistant:** [docs/homeassistant.md](docs/homeassistant.md) - Integration guide
+- **Architecture:** [docs/architecture.md](docs/architecture.md)
+- **Implementation:** [docs/implementation_plan.md](docs/implementation_plan.md)
 
 ## Tech Stack
 
