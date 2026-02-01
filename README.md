@@ -7,6 +7,8 @@ Modern web-based scan server for network and USB scanners. Control scanners remo
 ## Features
 
 - 🖨️ **Auto-Discovery** - USB and network scanners (SANE/eSCL)
+- 🔄 **Auto-Recovery** - Automatic scanner health monitoring and reconnection
+- 📝 **Persistent Logging** - Detailed logs survive container restarts
 - 🎯 **9 Target Types** - SMB, SFTP, Email, Paperless-ngx, Webhooks, Google Drive, Dropbox, OneDrive, Nextcloud
 - 🌍 **Multi-Language** - English/German UI with complete translations
 - 📊 **Statistics** - Comprehensive analytics dashboard:
@@ -298,6 +300,52 @@ Full REST API with Swagger docs at: `http://YOUR_SERVER_IP/docs`
 - `GET /api/v1/homeassistant/status` - HA status sensor
 - `WS /api/v1/ws` - Real-time updates
 
+## Troubleshooting
+
+### Scanner shows as offline after restart
+
+The scanner health monitoring system automatically checks scanner availability every 60 seconds. If a scanner appears offline after a container restart:
+
+1. **Wait 60 seconds** - The health monitor will detect it automatically
+2. **Check logs**: `docker logs -f scan2target`
+3. **Manual check**: `curl http://localhost:8000/api/v1/devices/{device_id}/check`
+4. **Debug tool**: `./scripts/debug-scanner.sh`
+
+See: [Scanner Health Monitoring Guide](docs/scanner-health-monitoring.md)
+
+### View logs
+
+```bash
+# Live console logs
+docker logs -f scan2target
+
+# Persistent detailed logs
+docker exec scan2target tail -f /var/log/scan2target/app.log
+
+# Quick debug
+./scripts/debug-scanner.sh
+```
+
+See: [Logging Guide](docs/logging.md)
+
+### Common issues
+
+**Scanner not discovered:**
+- Ensure scanner is powered on and connected to network
+- Check firewall allows mDNS/scanner traffic
+- For network scanners, ensure same network/VLAN
+- Wait for health check (every 60s)
+
+**Container can't access scanner:**
+- Use `network_mode: host` in docker-compose.yml
+- For USB scanners, uncomment device mappings
+
+**Health monitor not running:**
+```bash
+curl http://localhost:8000/api/v1/devices/health/status
+# Should show: "monitor_active": true
+```
+
 ## Development
 
 ```bash
@@ -315,6 +363,9 @@ npm run dev
 - **Docker Guide:** [docs/docker.md](docs/docker.md) - Complete Docker deployment guide
 - **Docker Quick Ref:** [DOCKER_QUICKREF.md](DOCKER_QUICKREF.md) - Common commands
 - **GitHub Container Registry:** [docs/github-container-registry.md](docs/github-container-registry.md) - Pre-built images & CI/CD
+- **Scanner Health Monitoring:** [docs/scanner-health-monitoring.md](docs/scanner-health-monitoring.md) - Auto-recovery & monitoring
+- **Logging Guide:** [docs/logging.md](docs/logging.md) - Comprehensive logging documentation
+- **Scanner Offline Fix:** [docs/fix-scanner-offline-issue.md](docs/fix-scanner-offline-issue.md) - Detailed fix documentation
 - **API:** `http://YOUR_SERVER_IP/docs` - Swagger/OpenAPI docs
 - **Home Assistant:** [docs/homeassistant.md](docs/homeassistant.md) - Integration guide
 - **Architecture:** [docs/architecture.md](docs/architecture.md)

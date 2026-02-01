@@ -29,11 +29,17 @@ class ScannerManager:
         2. USB scanners (direct connection)
         3. Other network protocols
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         devices = []
         device_groups = {}  # Group by normalized name to detect duplicates
         
+        logger.debug("Starting scanner discovery...")
+        
         try:
             # Use airscan-discover instead of scanimage -L (more reliable)
+            logger.debug("Running airscan-discover...")
             result = subprocess.run(
                 ['airscan-discover'],
                 capture_output=True,
@@ -43,7 +49,11 @@ class ScannerManager:
                 timeout=15
             )
             
+            logger.debug(f"airscan-discover return code: {result.returncode}")
+            
             if result.returncode == 0:
+                logger.debug(f"airscan-discover output:\n{result.stdout}")
+                
                 # Parse airscan-discover output
                 # Format: "HP ENVY 6400 series [059A50] = http://10.10.30.146:8080/eSCL/, eSCL"
                 in_devices_section = False
@@ -60,6 +70,7 @@ class ScannerManager:
                     
                     # Parse device line: "HP ENVY 6400 series [059A50] = http://..., eSCL"
                     if '=' in line:
+                        logger.debug(f"Parsing device line: {line}")
                         name_part, url_part = line.split('=', 1)
                         name_part = name_part.strip()
                         url_part = url_part.strip()
@@ -96,6 +107,8 @@ class ScannerManager:
                         # Build SANE device ID for airscan
                         # Format: airscan:escl:Device Name:URL
                         device_id = f"airscan:escl:{device_name.replace(' ', '_')}:{url}"
+                        
+                        logger.debug(f"Found scanner: {device_name} (ID: {device_id}, Type: {device_type})\")")
                         
                         # Use base name for grouping (without serial)
                         base_name = device_name
@@ -138,11 +151,14 @@ class ScannerManager:
                     else:
                         # Only one connection type available
                         devices.append(best_device)
+                
+                logger.info(f"airscan-discover found {len(devices)} scanner(s)")
                         
         except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
-            print(f"Error discovering scanners: {e}")
+            logger.error(f"Error discovering scanners with airscan-discover: {e}", exc_info=True)
             # SANE/scanimage not installed or not accessible
-            
+        
+        logger.info(f"Scanner discovery complete: {len(devices)} device(s) found")
         return devices
 
     def list_profiles(self) -> List[dict]:

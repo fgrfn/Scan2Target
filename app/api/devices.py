@@ -211,15 +211,45 @@ def init_scanner_cache():
     
     This ensures scanners are discovered and cached immediately after startup,
     preventing them from appearing as offline after Docker container restarts.
+    
+    Uses multiple retry attempts with increasing delays to handle scanners
+    that may not be immediately available after container start.
     """
-    try:
-        print("[STARTUP] Initializing scanner cache...")
-        scanner_manager = ScannerManager()
-        _scanner_cache['devices'] = scanner_manager.list_devices()
-        _scanner_cache['last_update'] = time.time()
-        print(f"[STARTUP] Scanner cache initialized with {len(_scanner_cache['devices'])} devices")
-    except Exception as e:
-        print(f"[STARTUP] Failed to initialize scanner cache: {e}")
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    max_attempts = 3
+    delays = [0, 2, 5]  # 0s, 2s, 5s delays between attempts
+    
+    for attempt in range(max_attempts):
+        try:
+            if attempt > 0:
+                delay = delays[min(attempt, len(delays)-1)]
+                logger.info(f"[STARTUP] Retry {attempt+1}/{max_attempts} - waiting {delay}s...")
+                time.sleep(delay)
+            
+            logger.info(f"[STARTUP] Initializing scanner cache (attempt {attempt+1}/{max_attempts})...")
+            scanner_manager = ScannerManager()
+            devices = scanner_manager.list_devices()
+            
+            if devices:
+                _scanner_cache['devices'] = devices
+                _scanner_cache['last_update'] = time.time()
+                logger.info(f"[STARTUP] ✓ Scanner cache initialized with {len(devices)} device(s)")
+                for device in devices:
+                    logger.info(f"[STARTUP]   - {device.get('name', 'Unknown')} ({device.get('type', 'Unknown')})")
+                return  # Success!
+            else:
+                logger.warning(f"[STARTUP] No scanners found on attempt {attempt+1}")
+                
+        except Exception as e:
+            logger.error(f"[STARTUP] Failed to initialize scanner cache (attempt {attempt+1}): {e}", exc_info=True)
+    
+    # All attempts failed
+    logger.warning(f"[STARTUP] Scanner cache initialization completed with 0 devices after {max_attempts} attempts")
+    logger.info("[STARTUP] Scanner health monitor will continue checking in the background...")
+    _scanner_cache['devices'] = []
+    _scanner_cache['last_update'] = time.time()
 
 
 @router.get("", response_model=List[DeviceResponse])

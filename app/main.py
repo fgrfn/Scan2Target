@@ -6,33 +6,48 @@ from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from pathlib import Path
 import os
+import logging
 
+from core.logging_config import setup_logging
 from api import scan, targets, auth, history, devices, maintenance, websocket, stats, homeassistant
 from core.init_db import init_database
 from core.scanning.health import get_health_monitor
+
+# Initialize logging first
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    print("Starting Scan2Target...")
-    init_database()
+    logger.info("=" * 60)
+    logger.info("Starting Scan2Target...")
+    logger.info("=" * 60)
     
-    # Initialize scanner cache to prevent scanners showing as offline after restart
+    init_database()
+    logger.info("Database initialized")
+    
+    # Initialize scanner cache with retries to handle delayed scanner availability
     devices.init_scanner_cache()
     
     # Start health monitor for automatic scanner status checks
     health_check_interval = int(os.getenv('SCAN2TARGET_HEALTH_CHECK_INTERVAL', '60'))
     health_monitor = get_health_monitor(check_interval=health_check_interval)
     await health_monitor.start()
-    print(f"[STARTUP] Health monitor started (interval: {health_check_interval}s)")
+    logger.info(f"Health monitor started (interval: {health_check_interval}s)")
+    
+    logger.info("=" * 60)
+    logger.info("Scan2Target is ready!")
+    logger.info("=" * 60)
     
     yield
     
     # Shutdown
-    print("Shutting down Scan2Target...")
+    logger.info("Shutting down Scan2Target...")
     await health_monitor.stop()
+    logger.info("Scan2Target stopped")
 
 
 def create_app() -> FastAPI:
