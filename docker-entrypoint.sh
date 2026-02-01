@@ -33,33 +33,52 @@ echo "Starting Avahi daemon for scanner discovery..."
 # Create dbus directory if it doesn't exist
 mkdir -p /var/run/dbus
 
-# Ensure any previous Avahi instance is stopped cleanly (handles fast restarts)
+# Cleanup existing dbus and Avahi instances (handles fast restarts)
+echo "Cleaning up existing processes..."
+
+# Stop dbus first (this also stops Avahi if running)
+if pgrep -x dbus-daemon >/dev/null 2>&1; then
+    echo "Stopping existing dbus daemon..."
+    pkill -9 dbus-daemon || true
+    sleep 1
+fi
+
+# Ensure any previous Avahi instance is stopped cleanly
 if pgrep -x avahi-daemon >/dev/null 2>&1; then
     echo "Stopping existing Avahi daemon..."
     avahi-daemon --kill 2>/dev/null || pkill -9 avahi-daemon || true
-    # Wait longer for complete shutdown
-    sleep 3
+    sleep 1
 fi
 
 # Aggressive cleanup of stale files
+rm -rf /var/run/dbus/* 2>/dev/null || true
+rm -f /var/run/dbus/pid 2>/dev/null || true
 rm -f /var/run/avahi-daemon/pid
 rm -f /var/run/avahi-daemon/socket
 rm -rf /var/run/avahi-daemon/*
 
-# Ensure dbus is running
-if ! pgrep -x dbus-daemon >/dev/null 2>&1; then
-    echo "Starting dbus..."
-    DBUS_OUTPUT=$(dbus-daemon --system --fork 2>&1)
-    if [ $? -ne 0 ]; then
-        echo "⚠️  dbus start failed: $DBUS_OUTPUT"
-    fi
-    sleep 2
+# Wait for cleanup to complete
+sleep 2
+
+# Start fresh dbus instance
+echo "Starting dbus..."
+DBUS_OUTPUT=$(dbus-daemon --system --fork 2>&1)
+DBUS_EXIT=$?
+if [ $DBUS_EXIT -ne 0 ]; then
+    echo "❌ ERROR: dbus start failed (exit code: $DBUS_EXIT)"
+    echo "Output: $DBUS_OUTPUT"
+    exit 1
 fi
+sleep 2
 
 # Verify dbus is running
 if ! pgrep -x dbus-daemon >/dev/null 2>&1; then
-    echo "⚠️  WARNING: dbus is not running! Avahi requires dbus."
+    echo "❌ ERROR: dbus failed to start!"
+    echo "Process check failed. Exiting..."
+    exit 1
 fi
+
+echo "✓ dbus daemon started successfully"
 
 # Start Avahi daemon with error checking and retry
 echo "Starting Avahi daemon..."
