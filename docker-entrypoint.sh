@@ -115,5 +115,29 @@ while [ $AVAHI_RETRY -lt $MAX_AVAHI_RETRIES ]; do
 done
 
 echo "Starting Scan2Target application..."
+
+# Verify Python environment
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "❌ ERROR: python3 not found!"
+    exit 1
+fi
+
+# Verify uvicorn is installed
+if ! python3 -c "import uvicorn" 2>/dev/null; then
+    echo "❌ ERROR: uvicorn not installed!"
+    exit 1
+fi
+
+# Verify main.py exists
+if [ ! -f /app/main.py ]; then
+    echo "❌ ERROR: /app/main.py not found!"
+    ls -la /app/
+    exit 1
+fi
+
+echo "✓ Environment check passed"
+echo "✓ Starting uvicorn server..."
+
 # Start the main application - main.py liegt jetzt direkt in /app
+# Using exec to replace shell with uvicorn process (PID 1)
 exec uvicorn main:app --host 0.0.0.0 --port 8000
