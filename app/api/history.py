@@ -2,9 +2,9 @@
 from typing import List
 from fastapi import APIRouter, HTTPException
 
-from app.core.jobs.manager import JobManager
-from app.core.jobs.models import JobRecord
-from app.core.targets.manager import TargetManager
+from core.jobs.manager import JobManager
+from core.jobs.models import JobRecord
+from core.targets.manager import TargetManager
 
 router = APIRouter()
 

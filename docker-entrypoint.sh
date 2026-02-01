@@ -18,5 +18,5 @@ fi
 sleep 2
 
 echo "Starting Scan2Target application..."
-# Start the main application
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Start the main application - main.py liegt jetzt direkt in /app
+exec uvicorn main:app --host 0.0.0.0 --port 8000

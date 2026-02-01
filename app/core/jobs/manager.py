@@ -4,8 +4,8 @@ from typing import List, Optional
 from datetime import datetime
 import asyncio
 
-from app.core.jobs.models import JobRecord, JobStatus
-from app.core.jobs.repository import JobRepository
+from core.jobs.models import JobRecord, JobStatus
+from core.jobs.repository import JobRepository
 
 
 class JobManager:
@@ -15,7 +15,7 @@ class JobManager:
     def _broadcast_job_update(self, job: JobRecord):
         """Broadcast job update via WebSocket (non-blocking)."""
         try:
-            from app.core.websocket import get_connection_manager
+            from core.websocket import get_connection_manager
             manager = get_connection_manager()
             
             # Schedule the broadcast in the event loop
@@ -89,7 +89,7 @@ class JobManager:
     
     def cancel_job(self, job_id: str) -> bool:
         """Cancel a running or queued job."""
-        from app.core.worker import get_worker
+        from core.worker import get_worker
         
         job = self.get_job(job_id)
         if not job:

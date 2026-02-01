@@ -5,10 +5,10 @@ from typing import Optional, List
 from datetime import datetime
 import asyncio
 
-from app.core.devices.repository import DeviceRepository
-from app.core.targets.repository import TargetRepository
-from app.core.scanning.manager import ScannerManager
-from app.core.auth.dependencies import get_current_user_optional
+from core.devices.repository import DeviceRepository
+from core.targets.repository import TargetRepository
+from core.scanning.manager import ScannerManager
+from core.auth.dependencies import get_current_user_optional
 
 router = APIRouter()
 

@@ -4,9 +4,9 @@ from typing import List, Optional
 from datetime import datetime
 import json
 
-from app.core.database import get_db
-from app.core.targets.models import TargetConfig
-from app.core.security import get_secure_storage
+from core.database import get_db
+from core.targets.models import TargetConfig
+from core.security import get_secure_storage
 
 
 class TargetRepository:

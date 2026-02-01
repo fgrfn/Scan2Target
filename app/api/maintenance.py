@@ -1,7 +1,7 @@
 """Cleanup and maintenance API routes."""
 from fastapi import APIRouter
 
-from app.core.cleanup import CleanupManager
+from core.cleanup import CleanupManager
 
 router = APIRouter()
 

@@ -8,8 +8,8 @@ import hmac
 import base64
 import json
 
-from app.core.auth.models import User, UserRepository
-from app.core.database import get_db
+from core.auth.models import User, UserRepository
+from core.database import get_db
 
 
 class AuthManager:

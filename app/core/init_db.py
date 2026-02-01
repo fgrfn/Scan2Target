@@ -1,6 +1,6 @@
 """Database initialization and default data."""
-from app.core.database import get_db
-from app.core.auth.manager import get_auth_manager
+from core.database import get_db
+from core.auth.manager import get_auth_manager
 
 
 def init_database():

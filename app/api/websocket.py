@@ -1,6 +1,6 @@
 """WebSocket API endpoint for real-time updates."""
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.core.websocket import get_connection_manager
+from core.websocket import get_connection_manager
 
 router = APIRouter()
 

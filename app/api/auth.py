@@ -3,9 +3,9 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from app.core.auth.manager import get_auth_manager
-from app.core.auth.models import User
-from app.core.auth.dependencies import get_current_user
+from core.auth.manager import get_auth_manager
+from core.auth.models import User
+from core.auth.dependencies import get_current_user
 
 router = APIRouter()
 security = HTTPBearer()
