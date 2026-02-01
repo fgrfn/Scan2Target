@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI):
     health_monitor = get_health_monitor(check_interval=health_check_interval)
     await health_monitor.start()
     logger.info(f"Health monitor started (interval: {health_check_interval}s)")
+    logger.info("Note: Using 15s intervals for first 5 minutes to detect scanners quickly")
     
     logger.info("=" * 60)
     logger.info("Scan2Target is ready!")

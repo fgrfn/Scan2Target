@@ -218,8 +218,8 @@ def init_scanner_cache():
     import logging
     logger = logging.getLogger(__name__)
     
-    max_attempts = 3
-    delays = [0, 2, 5]  # 0s, 2s, 5s delays between attempts
+    max_attempts = 4
+    delays = [3, 8, 15, 25]  # 3s, 8s, 15s, 25s delays - mDNS needs time!
     
     for attempt in range(max_attempts):
         try:

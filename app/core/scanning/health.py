@@ -35,6 +35,8 @@ class ScannerHealthMonitor:
         self._task = None
         self._last_check = 0
         self._scanner_status: Dict[str, Dict] = {}
+        self._startup_time = time.time()
+        self._fast_check_duration = 300  # 5 minutes of fast checks after startup
         
     async def start(self):
         """Start the health monitoring background task."""
@@ -62,7 +64,16 @@ class ScannerHealthMonitor:
         while self.is_running:
             try:
                 await self._check_scanners()
-                await asyncio.sleep(self.check_interval)
+                
+                # Use faster checks in first 5 minutes after startup (for mDNS discovery)
+                time_since_startup = time.time() - self._startup_time
+                if time_since_startup < self._fast_check_duration:
+                    check_interval = 15  # Fast checks every 15 seconds
+                    logger.debug(f"Using fast check interval: {check_interval}s (startup mode)")
+                else:
+                    check_interval = self.check_interval  # Normal interval
+                
+                await asyncio.sleep(check_interval)
             except asyncio.CancelledError:
                 break
             except Exception as e:
