@@ -1,6 +1,33 @@
 #!/bin/bash
 set -e
 
+# Check if main.py exists in /app
+if [ ! -f "/app/main.py" ]; then
+    echo "=========================================="
+    echo "ERROR: Application files not found!"
+    echo "=========================================="
+    echo ""
+    echo "The /app directory does not contain the application code."
+    echo "This usually happens when you incorrectly mount a volume to /app."
+    echo ""
+    echo "SOLUTION:"
+    echo "  1. Remove any volume mapping to /app"
+    echo "  2. Use /data for persistent data storage instead"
+    echo ""
+    echo "CORRECT Docker volume configuration:"
+    echo "  -v /mnt/user/appdata/Scan2Target:/data"
+    echo ""
+    echo "INCORRECT (DO NOT USE):"
+    echo "  -v /mnt/user/appdata/Scan2Target:/app"
+    echo ""
+    echo "For Unraid users:"
+    echo "  Container Path should be: /data"
+    echo "  Host Path can be: /mnt/user/appdata/Scan2Target"
+    echo ""
+    echo "=========================================="
+    exit 1
+fi
+
 echo "Starting Avahi daemon for scanner discovery..."
 
 # Create dbus directory if it doesn't exist

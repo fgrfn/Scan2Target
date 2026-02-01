@@ -1,5 +1,19 @@
 # Scan2Target - Unraid Template Konfiguration
 
+## ⚠️ WICHTIGE WARNUNG: Volume-Konfiguration
+
+**Der häufigste Fehler:** Volume-Mapping zu `/app` statt `/data`
+
+**KORREKT:** ✅
+- **Container Path:** `/data`
+- **Host Path:** `/mnt/user/appdata/Scan2Target`
+
+**FALSCH:** ❌ 
+- **Container Path:** `/app` (NIEMALS VERWENDEN!)
+- Dies überschreibt den Anwendungscode und verursacht den Fehler: "Could not import module 'main'"
+
+---
+
 ## Erforderliche Umgebungsvariablen
 
 Fügen Sie diese Variablen in Ihrer Unraid-Docker-Template hinzu:
