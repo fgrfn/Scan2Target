@@ -6,12 +6,15 @@ import subprocess
 import re
 import os
 import tempfile
+import logging
 from pathlib import Path
 
 from core.jobs.manager import JobManager
 from core.jobs.models import JobRecord, JobStatus
 from core.targets.manager import TargetManager
 from core.worker import get_worker
+
+logger = logging.getLogger(__name__)
 
 
 class ScannerManager:
