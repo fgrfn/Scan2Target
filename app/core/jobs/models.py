@@ -26,3 +26,4 @@ class JobRecord(BaseModel):
     updated_at: datetime = datetime.utcnow()
     file_path: Optional[str] = None
     message: Optional[str] = None
+    thumbnail_path: Optional[str] = None

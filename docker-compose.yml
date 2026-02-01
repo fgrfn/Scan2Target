@@ -11,11 +11,11 @@ services:
       # Persistent data storage
       - scan2target-data:/data
       # Scanner device access (if using USB scanner)
-      - /dev/bus/usb:/dev/bus/usb
+      # - /dev/bus/usb:/dev/bus/usb
     
-    devices:
+    # devices:
       # Grant access to USB devices for scanners
-      - /dev/bus/usb
+      # - /dev/bus/usb
     
     environment:
       # Application settings

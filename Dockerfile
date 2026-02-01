@@ -19,9 +19,14 @@ RUN npm run build
 # Stage 2: Build final image
 FROM python:3.12-slim
 
+# Avoid debconf warnings during build
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     avahi-daemon \
+    avahi-utils \
+    dbus \
     sane-utils \
     sane-airscan \
     smbclient \
@@ -30,6 +35,7 @@ RUN apt-get update && apt-get install -y \
     imagemagick \
     libsane1 \
     libsane-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -50,6 +56,10 @@ COPY --from=frontend-builder /app/web/dist ./app/web/dist
 # Create necessary directories
 RUN mkdir -p /data/scans /data/db /tmp/scan2target/scans
 
+# Copy and set up entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV SCAN2TARGET_DATA_DIR=/data
@@ -62,5 +72,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use entrypoint script to start Avahi and application
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
