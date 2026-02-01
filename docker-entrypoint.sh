@@ -36,35 +36,52 @@ mkdir -p /var/run/dbus
 # Ensure any previous Avahi instance is stopped cleanly (handles fast restarts)
 if pgrep -x avahi-daemon >/dev/null 2>&1; then
     echo "Stopping existing Avahi daemon..."
-    avahi-daemon --kill 2>/dev/null || pkill -TERM avahi-daemon || true
-    sleep 2
+    avahi-daemon --kill 2>/dev/null || pkill -9 avahi-daemon || true
+    # Wait longer for complete shutdown
+    sleep 3
 fi
 
-# Remove stale PID files and sockets that would block startup
+# Aggressive cleanup of stale files
 rm -f /var/run/avahi-daemon/pid
 rm -f /var/run/avahi-daemon/socket
+rm -rf /var/run/avahi-daemon/*
 
 # Ensure dbus is running
 if ! pgrep -x dbus-daemon >/dev/null 2>&1; then
     echo "Starting dbus..."
     dbus-daemon --system --fork 2>/dev/null || true
-    sleep 1
-fi
-
-# Start Avahi daemon with error checking
-echo "Starting Avahi daemon..."
-if /usr/sbin/avahi-daemon --daemonize 2>&1; then
-    echo "✓ Avahi daemon started successfully"
-    
-    # Wait for Avahi to initialize and discover network devices
-    # Critical: mDNS needs time to propagate on the network
-    echo "Waiting 10 seconds for mDNS scanner discovery..."
-    sleep 10
-else
-    echo "⚠️  WARNING: Avahi daemon failed to start! Scanner discovery may not work."
-    echo "⚠️  Network scanners will NOT be auto-discovered."
     sleep 2
 fi
+
+# Start Avahi daemon with error checking and retry
+echo "Starting Avahi daemon..."
+MAX_AVAHI_RETRIES=3
+AVAHI_RETRY=0
+
+while [ $AVAHI_RETRY -lt $MAX_AVAHI_RETRIES ]; do
+    if /usr/sbin/avahi-daemon --daemonize 2>&1; then
+        echo "✓ Avahi daemon started successfully"
+        
+        # Wait for Avahi to initialize and discover network devices
+        # Critical: mDNS needs time to propagate on the network
+        echo "Waiting 12 seconds for mDNS scanner discovery..."
+        sleep 12
+        break
+    else
+        AVAHI_RETRY=$((AVAHI_RETRY + 1))
+        if [ $AVAHI_RETRY -lt $MAX_AVAHI_RETRIES ]; then
+            echo "⚠️  Avahi start failed, retry $AVAHI_RETRY/$MAX_AVAHI_RETRIES in 3 seconds..."
+            sleep 3
+            # Clean up again before retry
+            rm -rf /var/run/avahi-daemon/*
+        else
+            echo "⚠️  WARNING: Avahi daemon failed to start after $MAX_AVAHI_RETRIES attempts!"
+            echo "⚠️  Network scanners will NOT be auto-discovered."
+            echo "⚠️  Application will start anyway - scanners can be added manually."
+            sleep 2
+        fi
+    fi
+done
 
 echo "Starting Scan2Target application..."
 # Start the main application - main.py liegt jetzt direkt in /app

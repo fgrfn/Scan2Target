@@ -29,15 +29,17 @@ async def lifespan(app: FastAPI):
     init_database()
     logger.info("Database initialized")
     
-    # Initialize scanner cache with retries to handle delayed scanner availability
-    devices.init_scanner_cache()
-    
-    # Start health monitor for automatic scanner status checks
+    # Start health monitor FIRST for automatic scanner status checks
     health_check_interval = int(os.getenv('SCAN2TARGET_HEALTH_CHECK_INTERVAL', '60'))
     health_monitor = get_health_monitor(check_interval=health_check_interval)
     await health_monitor.start()
     logger.info(f"Health monitor started (interval: {health_check_interval}s)")
     logger.info("Note: Using 15s intervals for first 5 minutes to detect scanners quickly")
+    
+    # Initialize scanner cache in background (non-blocking)
+    # This prevents the WebUI from being unavailable during scanner discovery
+    logger.info("Starting scanner discovery in background...")
+    asyncio.create_task(asyncio.to_thread(devices.init_scanner_cache))
     
     logger.info("=" * 60)
     logger.info("Scan2Target is ready!")
