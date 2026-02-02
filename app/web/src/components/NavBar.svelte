@@ -3,6 +3,7 @@
   export let links = [];
   export let currentLang = 'en';
   export let onLanguageChange = () => {};
+  export let version = '';
 </script>
 
 <header class="topbar">
@@ -10,7 +11,7 @@
     <div class="logo">📠</div>
     <div>
       <div class="brand-name">{brand}</div>
-      <div class="brand-sub">Scan Hub</div>
+      <div class="brand-sub">Scan Hub {version ? `v${version}` : ''}</div>
     </div>
   </div>
   <nav class="links">

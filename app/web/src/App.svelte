@@ -530,6 +530,7 @@
   let checkingScannerStatus = false;
   let scannerStatusMessage = '';
   let scannerIsOnline = null;
+  let appVersion = '';
 
   $: navLinks = [
     { label: t.dashboard, href: '#dashboard' },
@@ -725,7 +726,22 @@
     return scannerUri;
   }
 
+  async function loadVersion() {
+    try {
+      const res = await fetch(`${API_BASE}/version`);
+      if (res.ok) {
+        const data = await res.json();
+        appVersion = data.version;
+        console.log('App version:', appVersion);
+      }
+    } catch (error) {
+      console.error('Failed to load version:', error);
+    }
+  }
+
   async function loadData() {
+    // Load version first
+    loadVersion();
     // Load devices first (most important)
     loadDevices();
     // Load other data in parallel, but wait for history before calculating hourly stats
@@ -1834,7 +1850,7 @@
   }
 </script>
 
-<NavBar brand={t.brand} links={navLinks} {currentLang} onLanguageChange={changeLanguage} />
+<NavBar brand={t.brand} links={navLinks} {currentLang} onLanguageChange={changeLanguage} version={appVersion} />
 
 <main class="page">
   <section id="dashboard" class="hero">
@@ -2738,3 +2754,22 @@
   </SectionCard>
 
 </main>
+<footer style="background: var(--surface); border-top: 1px solid var(--border); padding: 2rem 0; margin-top: 4rem; text-align: center; color: var(--muted);">
+  <div style="max-width: 1200px; margin: 0 auto; padding: 0 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div style="font-size: 0.875rem;">
+        📠 <strong>Scan2Target</strong> {appVersion ? `v${appVersion}` : ''}
+      </div>
+      <div style="font-size: 0.875rem;">
+        <a href="https://github.com/fgrfn/Scan2Target" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: none; margin: 0 0.5rem;">GitHub</a>
+        <span style="margin: 0 0.5rem;">·</span>
+        <a href="/docs" style="color: var(--primary); text-decoration: none; margin: 0 0.5rem;">{currentLang === 'de' ? 'Dokumentation' : 'Documentation'}</a>
+        <span style="margin: 0 0.5rem;">·</span>
+        <a href="/api/docs" style="color: var(--primary); text-decoration: none; margin: 0 0.5rem;">API</a>
+      </div>
+      <div style="font-size: 0.75rem;">
+        {currentLang === 'de' ? 'Erstellt mit' : 'Built with'} FastAPI · Svelte
+      </div>
+    </div>
+  </div>
+</footer>

@@ -19,6 +19,15 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
+def get_version() -> str:
+    """Read version from VERSION file."""
+    version_file = Path(__file__).parent.parent / "VERSION"
+    try:
+        return version_file.read_text().strip()
+    except Exception:
+        return "0.0.0"
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
@@ -79,7 +88,7 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
         title="Scan2Target",
-        version="0.1.0",
+        version=get_version(),
         lifespan=lifespan,
         redirect_slashes=False  # Prevent 307 redirects on trailing slashes
     )
@@ -109,7 +118,12 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["health"])
     async def health():
-        return {"status": "ok"}
+        return {"status": "ok", "version": get_version()}
+    
+    @app.get("/api/v1/version", tags=["info"])
+    async def version():
+        """Get application version."""
+        return {"version": get_version()}
 
     # Serve Web UI
     web_dist = Path(__file__).parent / "web" / "dist"
