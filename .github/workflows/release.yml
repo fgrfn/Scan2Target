@@ -6,7 +6,8 @@ on:
       - main
     paths-ignore:
       - 'VERSION'
-      - '.github/workflows/**'
+      - 'docs/**'
+      - '*.md'
   workflow_dispatch:
     inputs:
       bump_type:
@@ -133,12 +134,13 @@ $COMMITS
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.new_version.outputs.version }}
-          release_name: Release v${{ steps.new_version.outputs.version }}
+          name: Release v${{ steps.new_version.outputs.version }}
           body: ${{ steps.changelog.outputs.changelog }}
           draft: false
           prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
