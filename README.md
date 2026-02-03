@@ -2,8 +2,6 @@
 
 <img src="logo.png" alt="Scan2Target Logo" width="300"/>
 
-# 🖨️ Scan2Target
-
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/fgrfn/Scan2Target/releases)
 [![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](https://github.com/fgrfn/Scan2Target/pkgs/container/scan2target)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
