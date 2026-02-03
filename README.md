@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="logo.png" alt="Scan2Target Logo" width="300"/>
+
 # 🖨️ Scan2Target
 
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/fgrfn/Scan2Target/releases)
