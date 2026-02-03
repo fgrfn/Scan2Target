@@ -120,18 +120,21 @@ jobs:
             COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges ${LAST_TAG}..HEAD^)
           fi
           
-          # Create changelog
-          CHANGELOG="## What's Changed
+          # Create changelog file
+          cat > CHANGELOG.md << 'CHANGELOG_EOF'
+          ## What's Changed
           
-$COMMITS
-
-**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${{ steps.new_version.outputs.version }}"
+          CHANGELOG_EOF
+          echo "$COMMITS" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${{ steps.new_version.outputs.version }}" >> CHANGELOG.md
           
-          # Save to file and output
-          echo "$CHANGELOG" > CHANGELOG.md
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Set output
+          {
+            echo "changelog<<EOF"
+            cat CHANGELOG.md
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
