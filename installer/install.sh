@@ -19,20 +19,10 @@ install_packages() {
     echo "[+] Installing system dependencies via apt..."
     apt-get update -y
     apt-get install -y \
-        python3 \
-        python3-venv \
-        python3-pip \
-        avahi-daemon \
-        sane-utils \
-        sane-airscan \
-        smbclient \
-        ssh \
-        sshpass \
-        imagemagick \
-        nodejs \
-        npm
-    
-    # Enable and start services
+        python3 python3-venv python3-pip \
+        avahi-daemon sane-utils sane-airscan \
+        smbclient ssh sshpass imagemagick \
+        nodejs npm curl
     systemctl enable avahi-daemon
     systemctl start avahi-daemon
 }
@@ -40,29 +30,22 @@ install_packages() {
 setup_venv() {
     echo "[+] Creating virtual environment in ${VENV_DIR}..."
     python3 -m venv "${VENV_DIR}"
-    # shellcheck disable=SC1091
     source "${VENV_DIR}/bin/activate"
     pip install --upgrade pip
-    if [[ -f "${APP_DIR}/requirements.txt" ]]; then
-        pip install -r "${APP_DIR}/requirements.txt"
-    else
-        echo "[!] requirements.txt not found; skipping Python dependency installation" >&2
-    fi
+    pip install -r "${APP_DIR}/backend/requirements.txt"
 }
 
 setup_webui() {
-    echo "[+] Setting up Web UI..."
-    local WEB_DIR="${APP_DIR}/app/web"
-    if [[ -d "${WEB_DIR}" && -f "${WEB_DIR}/package.json" ]]; then
-        cd "${WEB_DIR}"
-        echo "[+] Installing npm dependencies..."
-        sudo -u "${RUN_USER}" npm install
-        echo "[+] Building Web UI for production..."
+    echo "[+] Building Web UI..."
+    local FRONTEND_DIR="${APP_DIR}/frontend"
+    if [[ -d "${FRONTEND_DIR}" && -f "${FRONTEND_DIR}/package.json" ]]; then
+        cd "${FRONTEND_DIR}"
+        sudo -u "${RUN_USER}" npm ci
         sudo -u "${RUN_USER}" npm run build
         cd "${APP_DIR}"
-        echo "[✓] Web UI built successfully"
+        echo "[✓] Web UI built → frontend/build/"
     else
-        echo "[!] Web UI directory not found; skipping Web UI setup" >&2
+        echo "[!] frontend/ directory not found; skipping Web UI build" >&2
     fi
 }
 
@@ -70,18 +53,39 @@ create_service() {
     echo "[+] Writing systemd unit to ${SERVICE_FILE}..."
     cat > "${SERVICE_FILE}" <<SERVICE
 [Unit]
-Description=Scan2Target - Network Scan Server
-After=network.target
+Description=Scan2Target - Network Scanner Hub
+Documentation=https://github.com/fgrfn/Scan2Target
+After=network.target avahi-daemon.service
+Wants=avahi-daemon.service
 
 [Service]
 Type=simple
 User=${RUN_USER}
-WorkingDirectory=${APP_DIR}
+Group=${RUN_USER}
+WorkingDirectory=${APP_DIR}/backend
 Environment="VIRTUAL_ENV=${VENV_DIR}"
 Environment="PATH=${VENV_DIR}/bin:/usr/bin:/bin"
-ExecStart=${VENV_DIR}/bin/uvicorn app.main:app --host 0.0.0.0 --port 80
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONPATH=${APP_DIR}/backend"
+Environment="SCAN2TARGET_DATABASE_PATH=/opt/scan2target/data/db/scan2target.db"
+Environment="SCAN2TARGET_DATA_DIR=/opt/scan2target/data"
+Environment="SCAN2TARGET_LOG_DIR=/var/log/scan2target"
+# Set your encryption key:
+# Environment="SCAN2TARGET_SECRET_KEY=$(openssl rand -base64 32)"
+ExecStart=${VENV_DIR}/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=on-failure
 RestartSec=5
+StartLimitBurst=3
+StartLimitInterval=300
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/scan2target/data /var/log/scan2target /tmp/scan2target
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=scan2target
 
 [Install]
 WantedBy=multi-user.target
@@ -97,78 +101,25 @@ enable_service() {
     systemctl status "${SERVICE_NAME}" --no-pager --full || true
 }
 
-setup_cleanup_cron() {
-    echo "[+] Setting up automatic cleanup cron job..."
-    local CLEANUP_SCRIPT="${APP_DIR}/scripts/cleanup.sh"
-    
-    # Make cleanup script executable
-    if [[ -f "${CLEANUP_SCRIPT}" ]]; then
-        chmod +x "${CLEANUP_SCRIPT}"
-        
-        # Add cron job for automatic cleanup (daily at 3 AM)
-        local CRON_LINE="0 3 * * * ${CLEANUP_SCRIPT}"
-        
-        # Check if cron job already exists
-        if sudo -u "${RUN_USER}" crontab -l 2>/dev/null | grep -q "${CLEANUP_SCRIPT}"; then
-            echo "[✓] Cleanup cron job already exists"
-        else
-            # Add to user's crontab
-            (sudo -u "${RUN_USER}" crontab -l 2>/dev/null || true; echo "${CRON_LINE}") | sudo -u "${RUN_USER}" crontab -
-            echo "[✓] Cleanup cron job added (runs daily at 3 AM)"
-        fi
-        
-        # Create log directory
-        mkdir -p /var/log
-        touch /var/log/scan2target-cleanup.log
-        chown "${RUN_USER}:${RUN_USER}" /var/log/scan2target-cleanup.log
-    else
-        echo "[!] Cleanup script not found at ${CLEANUP_SCRIPT}; skipping cron setup" >&2
-    fi
-}
-
 print_info() {
+    local IP
+    IP="$(hostname -I | awk '{print $1}')"
     echo ""
-    echo "╔═══════════════════════════════════════════════════════════════════╗"
-    echo "║                Scan2Target Installation Complete                 ║"
-    echo "╚═══════════════════════════════════════════════════════════════════╝"
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║           Scan2Target Installation Complete               ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
     echo ""
-    echo "✓ Scan2Target is running on: http://$(hostname -I | awk '{print $1}')"
-    echo "✓ API Documentation: http://$(hostname -I | awk '{print $1}')/docs"
-    echo "✓ Health Check: http://$(hostname -I | awk '{print $1}')/health"
+    echo "✓ Web UI:      http://${IP}:8000/"
+    echo "✓ API docs:    http://${IP}:8000/docs"
+    echo "✓ Health:      http://${IP}:8000/health"
     echo ""
-    echo "Default Admin Credentials:"
-    echo "  Username: admin"
-    echo "  Password: admin"
+    echo "Default credentials: admin / admin"
+    echo "⚠  Change the password and set SCAN2TARGET_SECRET_KEY in:"
+    echo "   ${SERVICE_FILE}"
     echo ""
-    echo "⚠️  SECURITY WARNING:"
-    echo "  1. Change the default admin password immediately!"
-    echo "  2. Set encryption key for credentials (REQUIRED for production):"
-    echo "     export SCAN2TARGET_SECRET_KEY=\$(openssl rand -base64 32)"
-    echo "     Add to /etc/systemd/system/scan2target.service"
-    echo "  3. Consider enabling authentication: export SCAN2TARGET_REQUIRE_AUTH=true"
-    echo "  4. Set up HTTPS via reverse proxy (Caddy/nginx)"
-    echo ""
-    echo "Database Location: ${APP_DIR}/scan2target.db"
-    echo "Encryption Key: ~/.scan2target/encryption.key (auto-generated for dev)"
-    echo ""
-    echo "Service Management:"
-    echo "  Start:   sudo systemctl start ${SERVICE_NAME}"
-    echo "  Stop:    sudo systemctl stop ${SERVICE_NAME}"
-    echo "  Restart: sudo systemctl restart ${SERVICE_NAME}"
-    echo "  Status:  sudo systemctl status ${SERVICE_NAME}"
-    echo "  Logs:    sudo journalctl -u ${SERVICE_NAME} -f"
-    echo ""
-    echo "Automatic Cleanup:"
-    echo "  Scheduled: Daily at 3:00 AM"
-    echo "  View cron: crontab -l"
-    echo "  Manual run: cd ${APP_DIR} && python3 -m app.core.cleanup"
-    echo "  Cleanup logs: tail -f /var/log/scan2target-cleanup.log"
-    echo ""
-    echo "Web UI:"
-    echo "  Production build already served at: http://$(hostname -I | awk '{print $1}')/"
-    echo "  For development with hot-reload:"
-    echo "    cd ${APP_DIR}/app/web"
-    echo "    npm run dev"
+    echo "Service management:"
+    echo "  sudo systemctl start|stop|restart|status ${SERVICE_NAME}"
+    echo "  sudo journalctl -u ${SERVICE_NAME} -f"
     echo ""
 }
 
@@ -178,7 +129,6 @@ main() {
     setup_venv
     setup_webui
     create_service
-    setup_cleanup_cron
     enable_service
     print_info
 }

@@ -8,35 +8,16 @@ __pycache__
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
 .venv
 venv/
-ENV/
-env/
 
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.npm
+# Node — exclude source node_modules; the build output is what matters
+frontend/node_modules/
+frontend/.svelte-kit/
+# Keep frontend/build — it's copied into the image
 
-# IDE
+# IDE / OS
 .vscode/
 .idea/
 *.swp
@@ -44,33 +25,33 @@ yarn-error.log*
 *~
 .DS_Store
 
-# Testing
+# Tests
 .pytest_cache/
 .coverage
 htmlcov/
-.tox/
+tests/
+test_*.py
 
-# Documentation
+# Documentation (not needed in image)
 docs/
 *.md
 !README.md
 
-# Examples and tests
+# Examples
 examples/
-test_*.py
-tests/
 
 # CI/CD
 .github/
 
-# Installer scripts (not needed in container)
+# Installer & scripts (not needed in image)
 installer/
-
-# Scripts
 scripts/
 
-# Data and temp files
+# Runtime data
 *.db
 *.sqlite
 *.log
-/tmp/
+secrets/
+
+# Secrets dir placeholder
+secrets/.gitkeep
