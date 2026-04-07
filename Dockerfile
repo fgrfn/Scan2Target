@@ -1,80 +1,44 @@
-# Multi-stage Dockerfile for Scan2Target
-# Stage 1: Build frontend
+# ── Stage 1: Frontend build ───────────────────────────────────────────────────
 FROM node:20-slim AS frontend-builder
-
-WORKDIR /app/web
-
-# Copy package files
-COPY app/web/package*.json ./
-
-# Install dependencies
+WORKDIR /build
+COPY frontend/package*.json ./
 RUN npm ci
-
-# Copy frontend source
-COPY app/web/ ./
-
-# Build frontend
+COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Build final image
+# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM python:3.12-slim
 
-# Avoid debconf warnings during build
-ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    SCAN2TARGET_DATABASE_PATH=/data/db/scan2target.db \
+    SCAN2TARGET_DATA_DIR=/data \
+    SCAN2TARGET_LOG_DIR=/var/log/scan2target \
+    SCAN2TARGET_TEMP_DIR=/tmp/scan2target
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    avahi-daemon \
-    avahi-utils \
-    dbus \
-    sane-utils \
-    sane-airscan \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    avahi-daemon avahi-utils \
+    sane-utils sane-airscan \
     smbclient \
-    ssh \
-    sshpass \
+    ssh sshpass \
     imagemagick \
     libsane1 \
-    libsane-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy Python requirements
-COPY requirements.txt .
-
-# Install Python dependencies
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code directly to /app
-COPY app/ ./
+COPY backend/ .
+COPY --from=frontend-builder /build/build ./frontend/build
 
-# Copy built frontend from builder stage
-COPY --from=frontend-builder /app/web/dist ./web/dist
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
-# Create necessary directories
-RUN mkdir -p /data/scans /data/db /tmp/scan2target/scans
-
-# Copy and set up entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV SCAN2TARGET_DATA_DIR=/data
-ENV SCAN2TARGET_DATABASE_PATH=/data/db/scan2target.db
-ENV PYTHONPATH=/app
-
-# Expose port
 EXPOSE 8000
-
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Set PYTHONPATH to /app for module resolution
-ENV PYTHONPATH=/app
-
-# Use entrypoint script to start Avahi and application
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

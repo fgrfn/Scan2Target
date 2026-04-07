@@ -6,51 +6,42 @@ services:
     image: scan2target:latest
     container_name: scan2target
     restart: unless-stopped
-    
+
     volumes:
-      # Persistent data storage
       - scan2target-data:/data
-      # Persistent log files
       - scan2target-logs:/var/log/scan2target
-      # Scanner device access (if using USB scanner)
+      # USB scanners (uncomment if needed):
       # - /dev/bus/usb:/dev/bus/usb
-    
-    # devices:
-      # Grant access to USB devices for scanners
-      # - /dev/bus/usb
-    
+
     environment:
-      # Application settings
-      - SCAN2TARGET_DATA_DIR=${SCAN2TARGET_DATA_DIR:-/data}
+      # ── Paths ────────────────────────────────────────────────────────
       - SCAN2TARGET_DATABASE_PATH=${SCAN2TARGET_DATABASE_PATH:-/data/db/scan2target.db}
       - SCAN2TARGET_LOG_DIR=${SCAN2TARGET_LOG_DIR:-/var/log/scan2target}
-      
-      # Scanner health monitoring
-      - SCAN2TARGET_HEALTH_CHECK_INTERVAL=${SCAN2TARGET_HEALTH_CHECK_INTERVAL:-60}
-      - SCAN2TARGET_SCANNER_CHECK_INTERVAL=${SCAN2TARGET_SCANNER_CHECK_INTERVAL:-30}
-      
-      # Security settings (CHANGE THESE!)
-      - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY:-changeme-generate-a-secure-key}
-      - SCAN2TARGET_REQUIRE_AUTH=${SCAN2TARGET_REQUIRE_AUTH:-true}
-      
-      # Optional: SMTP settings for email targets
-      # - SMTP_SERVER=${SMTP_SERVER:-}
-      # - SMTP_PORT=${SMTP_PORT:-587}
-      # - SMTP_USERNAME=${SMTP_USERNAME:-}
-      # - SMTP_PASSWORD=${SMTP_PASSWORD:-}
-    
-    # Host network mode is required for:
-    # - Scanner discovery via mDNS/Avahi
-    # - Network scanner access (eSCL/AirScan)
-    # - Direct USB scanner access
-    # Note: Application will be accessible on port 8000
+
+      # ── Security (non-secret) ────────────────────────────────────────
+      # All runtime settings (require_auth, log_level, intervals, cors_origins)
+      # are configurable via the Web UI — no restart needed.
+
+      # ── Secret: choose ONE method ─────────────────────────────────────
+      #
+      # Option A — Docker Secret (recommended for production):
+      #   Create:   mkdir secrets && openssl rand -base64 32 > secrets/scan2target_secret_key
+      #   Then uncomment the 'secrets' sections below.
+      #
+      # Option B — Environment variable:
+      #   - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY}
+      #
+      # Option C — Development (no secret set):
+      #   Auto-generates ~/.scan2target/encryption.key — fine for home use.
+
+    # secrets:
+    #   - scan2target_secret_key
+
+    # Host network required for mDNS scanner discovery.
     network_mode: host
-    
-    # Privileged mode may be needed for USB scanner access
-    # privileged: true
-    
+
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -61,3 +52,10 @@ volumes:
     driver: local
   scan2target-logs:
     driver: local
+
+# ── Docker Secrets (Option A) ────────────────────────────────────────────────
+# Uncomment both this block AND the 'secrets:' block inside the service.
+#
+# secrets:
+#   scan2target_secret_key:
+#     file: ./secrets/scan2target_secret_key
