@@ -40,7 +40,7 @@ def _setup_logging() -> None:
 
 def get_version() -> str:
     try:
-        return (Path(__file__).parent.parent.parent / "VERSION").read_text().strip()
+        return (Path(__file__).parent.parent / "VERSION").read_text().strip()
     except Exception:
         return "2.0.0"
 
@@ -136,7 +136,7 @@ def create_app() -> FastAPI:
         return {"version": get_version()}
 
     # Serve SvelteKit static output
-    static_dir = Path(__file__).parent.parent.parent / "frontend" / "build"
+    static_dir = Path(__file__).parent.parent / "frontend" / "build"
     if static_dir.exists():
         app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="frontend")
 
