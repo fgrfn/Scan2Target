@@ -99,3 +99,11 @@ class UserRepository:
             cursor.execute("SELECT COUNT(*) as count FROM users WHERE username = ?", (username,))
             row = cursor.fetchone()
             return row['count'] > 0
+
+    def update_password_hash(self, user_id: int, password_hash: str) -> None:
+        """Replace the stored password hash (used when upgrading from legacy format)."""
+        with self.db.get_connection() as conn:
+            conn.cursor().execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (password_hash, user_id),
+            )

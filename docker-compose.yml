@@ -6,51 +6,60 @@ services:
     image: scan2target:latest
     container_name: scan2target
     restart: unless-stopped
-    
+
     volumes:
-      # Persistent data storage
       - scan2target-data:/data
-      # Persistent log files
       - scan2target-logs:/var/log/scan2target
-      # Scanner device access (if using USB scanner)
+      # USB scanner access (uncomment if needed):
       # - /dev/bus/usb:/dev/bus/usb
-    
+
     # devices:
-      # Grant access to USB devices for scanners
-      # - /dev/bus/usb
-    
+    #   - /dev/bus/usb
+
     environment:
-      # Application settings
+      # ── Paths ────────────────────────────────────────────────────────
       - SCAN2TARGET_DATA_DIR=${SCAN2TARGET_DATA_DIR:-/data}
       - SCAN2TARGET_DATABASE_PATH=${SCAN2TARGET_DATABASE_PATH:-/data/db/scan2target.db}
       - SCAN2TARGET_LOG_DIR=${SCAN2TARGET_LOG_DIR:-/var/log/scan2target}
-      
-      # Scanner health monitoring
+      - SCAN2TARGET_LOG_LEVEL=${SCAN2TARGET_LOG_LEVEL:-INFO}
+
+      # ── Scanner timing ───────────────────────────────────────────────
       - SCAN2TARGET_HEALTH_CHECK_INTERVAL=${SCAN2TARGET_HEALTH_CHECK_INTERVAL:-60}
       - SCAN2TARGET_SCANNER_CHECK_INTERVAL=${SCAN2TARGET_SCANNER_CHECK_INTERVAL:-30}
-      
-      # Security settings (CHANGE THESE!)
-      - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY:-changeme-generate-a-secure-key}
+
+      # ── Security (non-secret) ────────────────────────────────────────
       - SCAN2TARGET_REQUIRE_AUTH=${SCAN2TARGET_REQUIRE_AUTH:-true}
-      
-      # Optional: SMTP settings for email targets
-      # - SMTP_SERVER=${SMTP_SERVER:-}
-      # - SMTP_PORT=${SMTP_PORT:-587}
-      # - SMTP_USERNAME=${SMTP_USERNAME:-}
-      # - SMTP_PASSWORD=${SMTP_PASSWORD:-}
-    
-    # Host network mode is required for:
-    # - Scanner discovery via mDNS/Avahi
-    # - Network scanner access (eSCL/AirScan)
-    # - Direct USB scanner access
-    # Note: Application will be accessible on port 8000
+      # SCAN2TARGET_CORS_ORIGINS can be set to restrict CORS, e.g.:
+      # - SCAN2TARGET_CORS_ORIGINS=["https://scanner.home"]
+
+      # ── Secret injection (choose ONE method) ─────────────────────────
+      #
+      # Option A — Docker Secret (recommended):
+      #   See the 'secrets' section below. Name the secret file
+      #   "scan2target_secret_key". No env var needed.
+      #
+      # Option B — Environment variable:
+      #   Uncomment the line below and set it in your shell or a secrets
+      #   manager (Vault, 1Password, AWS Secrets Manager, …).
+      #   Generate a key with:  openssl rand -base64 32
+      # - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY}
+
+    # ── Docker Secrets (Option A — recommended) ───────────────────────────
+    # Uncomment to enable. Create the secret file once:
+    #   mkdir -p secrets
+    #   openssl rand -base64 32 > secrets/scan2target_secret_key
+    #   chmod 600 secrets/scan2target_secret_key
+    #
+    # secrets:
+    #   - scan2target_secret_key
+
+    # Host network is required for mDNS/Avahi scanner discovery.
     network_mode: host
-    
-    # Privileged mode may be needed for USB scanner access
-    # privileged: true
-    
+
+    # privileged: true  # only needed for USB scanners on some systems
+
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -61,3 +70,10 @@ volumes:
     driver: local
   scan2target-logs:
     driver: local
+
+# ── Docker Secrets definition (Option A) ────────────────────────────────────
+# Uncomment both the 'secrets' block here AND the one inside the service above.
+#
+# secrets:
+#   scan2target_secret_key:
+#     file: ./secrets/scan2target_secret_key

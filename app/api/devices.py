@@ -4,8 +4,8 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import time
-import os
 
+from core.config.settings import get_settings
 from core.devices.repository import DeviceRepository, DeviceRecord
 from core.scanning.manager import ScannerManager
 from core.scanning.health import get_health_monitor
@@ -14,13 +14,10 @@ from core.database import get_db
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Cache for scanner status (configurable via environment variable)
-# Default: check every 30 seconds
-# Configure via: SCAN2TARGET_SCANNER_CHECK_INTERVAL=60 (for 60 seconds)
 _scanner_cache = {
     'devices': [],
     'last_update': 0,
-    'cache_duration': int(os.getenv('SCAN2TARGET_SCANNER_CHECK_INTERVAL', '30'))  # seconds
+    'cache_duration': get_settings().scanner_check_interval,
 }
 
 

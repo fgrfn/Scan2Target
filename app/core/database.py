@@ -1,5 +1,4 @@
 """SQLite database setup and session management."""
-import os
 import sqlite3
 from pathlib import Path
 from contextlib import contextmanager
@@ -139,10 +138,9 @@ _db_instance = None
 
 
 def get_db() -> Database:
-    """Get or create the global database instance."""
+    """Return the global Database instance (created on first call)."""
     global _db_instance
     if _db_instance is None:
-        # Use environment variable or default path
-        db_path = os.getenv("SCAN2TARGET_DATABASE_PATH") or os.getenv("SCAN2TARGET_DB_PATH", "scan2target.db")
-        _db_instance = Database(db_path)
+        from core.config.settings import get_settings
+        _db_instance = Database(get_settings().database_path)
     return _db_instance
