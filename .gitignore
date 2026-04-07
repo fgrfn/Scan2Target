@@ -1,52 +1,24 @@
+# Secrets
+secrets/*
+!secrets/.gitkeep
+
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-*.pyc
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Virtual Environment
+*.egg-info/
 .venv/
-venv/
-ENV/
-env/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs
-*.log
-logs/
-
-# OS
-.DS_Store
-Thumbs.db
+*.egg
 
 # Node
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+frontend/build/
+frontend/.svelte-kit/
 
-# Build
-dist/
-build/
-*.egg-info/
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Environment variables
+# Data / runtime
+*.db
+*.log
+/data/
 .env
 
+# Dev keys
+~/.scan2target/

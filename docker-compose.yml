@@ -10,56 +10,38 @@ services:
     volumes:
       - scan2target-data:/data
       - scan2target-logs:/var/log/scan2target
-      # USB scanner access (uncomment if needed):
+      # USB scanners (uncomment if needed):
       # - /dev/bus/usb:/dev/bus/usb
-
-    # devices:
-    #   - /dev/bus/usb
 
     environment:
       # ── Paths ────────────────────────────────────────────────────────
-      - SCAN2TARGET_DATA_DIR=${SCAN2TARGET_DATA_DIR:-/data}
       - SCAN2TARGET_DATABASE_PATH=${SCAN2TARGET_DATABASE_PATH:-/data/db/scan2target.db}
       - SCAN2TARGET_LOG_DIR=${SCAN2TARGET_LOG_DIR:-/var/log/scan2target}
-      - SCAN2TARGET_LOG_LEVEL=${SCAN2TARGET_LOG_LEVEL:-INFO}
-
-      # ── Scanner timing ───────────────────────────────────────────────
-      - SCAN2TARGET_HEALTH_CHECK_INTERVAL=${SCAN2TARGET_HEALTH_CHECK_INTERVAL:-60}
-      - SCAN2TARGET_SCANNER_CHECK_INTERVAL=${SCAN2TARGET_SCANNER_CHECK_INTERVAL:-30}
 
       # ── Security (non-secret) ────────────────────────────────────────
-      - SCAN2TARGET_REQUIRE_AUTH=${SCAN2TARGET_REQUIRE_AUTH:-true}
-      # SCAN2TARGET_CORS_ORIGINS can be set to restrict CORS, e.g.:
-      # - SCAN2TARGET_CORS_ORIGINS=["https://scanner.home"]
+      # All runtime settings (require_auth, log_level, intervals, cors_origins)
+      # are configurable via the Web UI — no restart needed.
 
-      # ── Secret injection (choose ONE method) ─────────────────────────
+      # ── Secret: choose ONE method ─────────────────────────────────────
       #
-      # Option A — Docker Secret (recommended):
-      #   See the 'secrets' section below. Name the secret file
-      #   "scan2target_secret_key". No env var needed.
+      # Option A — Docker Secret (recommended for production):
+      #   Create:   mkdir secrets && openssl rand -base64 32 > secrets/scan2target_secret_key
+      #   Then uncomment the 'secrets' sections below.
       #
       # Option B — Environment variable:
-      #   Uncomment the line below and set it in your shell or a secrets
-      #   manager (Vault, 1Password, AWS Secrets Manager, …).
-      #   Generate a key with:  openssl rand -base64 32
-      # - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY}
+      #   - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY}
+      #
+      # Option C — Development (no secret set):
+      #   Auto-generates ~/.scan2target/encryption.key — fine for home use.
 
-    # ── Docker Secrets (Option A — recommended) ───────────────────────────
-    # Uncomment to enable. Create the secret file once:
-    #   mkdir -p secrets
-    #   openssl rand -base64 32 > secrets/scan2target_secret_key
-    #   chmod 600 secrets/scan2target_secret_key
-    #
     # secrets:
     #   - scan2target_secret_key
 
-    # Host network is required for mDNS/Avahi scanner discovery.
+    # Host network required for mDNS scanner discovery.
     network_mode: host
 
-    # privileged: true  # only needed for USB scanners on some systems
-
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -71,8 +53,8 @@ volumes:
   scan2target-logs:
     driver: local
 
-# ── Docker Secrets definition (Option A) ────────────────────────────────────
-# Uncomment both the 'secrets' block here AND the one inside the service above.
+# ── Docker Secrets (Option A) ────────────────────────────────────────────────
+# Uncomment both this block AND the 'secrets:' block inside the service.
 #
 # secrets:
 #   scan2target_secret_key:
