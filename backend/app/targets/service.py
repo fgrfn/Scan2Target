@@ -14,6 +14,7 @@ from app.targets.providers.sftp import SFTPProvider
 from app.targets.providers.email import EmailProvider
 from app.targets.providers.paperless import PaperlessProvider
 from app.targets.providers.webhook import WebhookProvider
+from app.targets.providers.local import LocalFolderProvider
 from app.targets.providers.cloud import (
     GoogleDriveProvider, DropboxProvider, OneDriveProvider, NextcloudProvider
 )
@@ -24,6 +25,7 @@ PROVIDERS: dict[str, type[BaseProvider]] = {
     "email":        EmailProvider,
     "paperless":    PaperlessProvider,
     "webhook":      WebhookProvider,
+    "local":        LocalFolderProvider,
     "google_drive": GoogleDriveProvider,
     "dropbox":      DropboxProvider,
     "onedrive":     OneDriveProvider,

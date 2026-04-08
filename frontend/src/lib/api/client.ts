@@ -14,9 +14,12 @@ export class ApiError extends Error {
   }
 }
 
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 export async function apiFetch<T = unknown>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -28,10 +31,27 @@ export async function apiFetch<T = unknown>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const resp = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers
-  });
+  // Abort after `timeoutMs` so the UI never hangs on an unresponsive backend
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  // Merge with any caller-supplied signal (best-effort — AbortSignal.any not available everywhere)
+  const signal = options.signal ?? controller.signal;
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${BASE}${path}`, {
+      ...options,
+      headers,
+      signal
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new ApiError(0, `Request timed out (${timeoutMs / 1000}s)`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!resp.ok) {
     let message = `HTTP ${resp.status}`;

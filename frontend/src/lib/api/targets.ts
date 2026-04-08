@@ -6,6 +6,7 @@ export type TargetType =
   | 'email'
   | 'paperless'
   | 'webhook'
+  | 'local'
   | 'google_drive'
   | 'dropbox'
   | 'onedrive'
@@ -59,4 +60,16 @@ export function testTarget(id: string): Promise<TestResult> {
 
 export function setTargetFavorite(id: string, isFavorite: boolean): Promise<void> {
   return apiPost<void>(`/targets/${id}/favorite`, { is_favorite: isFavorite });
+}
+
+export interface BrowsePathResult {
+  root: string;
+  current: string;
+  parent: string | null;
+  items: { name: string; path: string }[];
+}
+
+export function browseLocalPath(path?: string): Promise<BrowsePathResult> {
+  const params = path ? `?path=${encodeURIComponent(path)}` : '';
+  return apiGet<BrowsePathResult>(`/targets/browse-path${params}`);
 }

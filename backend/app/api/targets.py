@@ -1,10 +1,58 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth.dependencies import get_current_user
 import app.targets.service as svc
 from app.targets.schemas import TargetIn, TargetOut
 
 router = APIRouter()
 _auth = Depends(get_current_user)
+
+
+@router.get("/browse-path")
+def browse_path(path: str = Query(default=""), _=_auth):
+    """List subdirectories for the local-folder path browser.
+
+    Access is restricted to the configured data_dir (''/data'' by default)
+    to prevent arbitrary filesystem traversal.
+    """
+    from pathlib import Path as _Path
+    from app.config import get_settings
+
+    data_dir = _Path(get_settings().data_dir).resolve()
+
+    # Default to data_dir when no path supplied
+    requested = _Path(path).resolve() if path else data_dir
+
+    # Security: must stay within data_dir
+    if not (requested == data_dir or requested.is_relative_to(data_dir)):
+        raise HTTPException(status_code=403, detail="Path is outside the allowed data directory")
+
+    if not requested.exists():
+        # If the path doesn't exist yet, show parent so user can see context
+        requested = data_dir
+
+    if not requested.is_dir():
+        raise HTTPException(status_code=400, detail="Not a directory")
+
+    parent = None
+    if requested != data_dir and requested.parent.is_relative_to(data_dir):
+        parent = str(requested.parent)
+    elif requested != data_dir:
+        parent = str(data_dir)
+
+    try:
+        items = sorted(
+            [{"name": item.name, "path": str(item)} for item in requested.iterdir() if item.is_dir()],
+            key=lambda x: x["name"].lower(),
+        )
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied reading directory")
+
+    return {
+        "root": str(data_dir),
+        "current": str(requested),
+        "parent": parent,
+        "items": items,
+    }
 
 
 @router.get("", response_model=list[TargetOut])

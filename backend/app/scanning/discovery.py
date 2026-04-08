@@ -91,9 +91,17 @@ def check_scanner_online(uri: str, timeout: int = 5) -> bool:
     m = _re.search(r'(https?://[^\s]+)', uri)
     if m:
         base = m.group(1).rstrip('/')
+        # Some eSCL scanners return 400/204/other non-200 codes but are still reachable
         try:
-            r = _req.get(f"{base}/ScannerCapabilities", timeout=timeout)
-            return r.status_code == 200
+            r = _req.get(f"{base}/ScannerCapabilities", timeout=timeout,
+                         allow_redirects=True)
+            return r.status_code < 400
+        except Exception:
+            pass
+        # Fallback: check if the base URL itself responds
+        try:
+            r = _req.get(base, timeout=timeout, allow_redirects=True)
+            return r.status_code < 500
         except Exception:
             return False
     # Fallback: check if URI appears in scanimage device list

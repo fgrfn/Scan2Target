@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Target, TargetIn, TargetType } from '$lib/api/targets';
+  import { browseLocalPath, type BrowsePathResult } from '$lib/api/targets';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import Modal from '$lib/components/ui/Modal.svelte';
 
   interface Props {
     target?: Target | null;
@@ -16,6 +18,7 @@
     { value: 'email', label: 'Email (SMTP)' },
     { value: 'paperless', label: 'Paperless-ngx' },
     { value: 'webhook', label: 'Webhook' },
+    { value: 'local', label: 'Local Folder (server)' },
     { value: 'google_drive', label: 'Google Drive' },
     { value: 'dropbox', label: 'Dropbox' },
     { value: 'onedrive', label: 'OneDrive' },
@@ -72,6 +75,13 @@
   let nc_password = $state('');
   let nc_path = $state('/');
 
+  // Local folder
+  let local_path = $state('');
+  let local_subfolder_per_day = $state(false);
+  let showBrowse = $state(false);
+  let browseData = $state<BrowsePathResult | null>(null);
+  let browseLoading = $state(false);
+
   // When target prop changes (e.g., switching from edit one target to another), re-populate
   $effect(() => {
     const t = target;
@@ -113,6 +123,9 @@
     nc_username = (t?.config?.username as string) ?? '';
     nc_password = '';
     nc_path = (t?.config?.path as string) ?? '/';
+
+    local_path = (t?.config?.path as string) ?? '';
+    local_subfolder_per_day = Boolean(t?.config?.subfolder_per_day ?? false);
   });
 
   function buildPayload(): TargetIn {
@@ -146,6 +159,9 @@
       case 'nextcloud':
         config = { webdav_url: nc_webdav_url, path: nc_path, username: nc_username, ...(nc_password ? { password: nc_password } : {}) };
         break;
+      case 'local':
+        config = { path: local_path, subfolder_per_day: local_subfolder_per_day };
+        break;
     }
 
     return { name, type, config };
@@ -159,6 +175,23 @@
     } finally {
       saving = false;
     }
+  }
+
+  async function openBrowse() {
+    showBrowse = true;
+    await loadBrowse(local_path || undefined);
+  }
+
+  async function loadBrowse(path?: string) {
+    browseLoading = true;
+    try { browseData = await browseLocalPath(path); }
+    catch { browseData = null; }
+    finally { browseLoading = false; }
+  }
+
+  function selectBrowsePath() {
+    if (browseData) local_path = browseData.current;
+    showBrowse = false;
   }
 </script>
 
@@ -343,6 +376,28 @@
     </div>
   {/if}
 
+  <!-- Local Folder -->
+  {#if type === 'local'}
+    <div class="form-group">
+      <label class="form-label" for="lf-path">Folder Path <span style="font-weight:400;color:var(--c-text-3);">(on server)</span></label>
+      <div style="display:flex;gap:6px;">
+        <input id="lf-path" class="form-control" type="text" bind:value={local_path}
+          placeholder="/data/scans" required style="flex:1;" />
+        <button type="button" class="btn btn-secondary" onclick={openBrowse} style="white-space:nowrap;flex-shrink:0;">Browse…</button>
+      </div>
+      <p class="form-hint">Path on the Scan2Target server/container. Defaults to inside <code>/data</code>.</p>
+    </div>
+    <div class="form-group">
+      <div class="toggle-wrap">
+        <label class="toggle" for="lf-day">
+          <input id="lf-day" type="checkbox" bind:checked={local_subfolder_per_day} />
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="form-label" style="margin-bottom:0">Create dated subfolder (YYYY-MM-DD)</span>
+      </div>
+    </div>
+  {/if}
+
   <!-- Nextcloud -->
   {#if type === 'nextcloud'}
     <div class="form-group">
@@ -377,6 +432,57 @@
     </button>
   </div>
 </form>
+
+<!-- Directory Browser Modal -->
+<Modal open={showBrowse} title="Choose Folder" onClose={() => (showBrowse = false)}>
+  <div style="display:flex;flex-direction:column;gap:10px;min-height:180px;">
+    {#if browseLoading}
+      <div style="display:flex;align-items:center;gap:8px;padding:16px 0;color:var(--c-text-2);">
+        <Spinner /><span>Loading…</span>
+      </div>
+    {:else if !browseData}
+      <p style="color:var(--c-error);font-size:0.875rem;">Could not load directory listing.</p>
+    {:else}
+      <!-- Breadcrumb / current path -->
+      <div style="font-size:0.75rem;font-family:var(--font-mono);color:var(--c-text-2);padding:6px 8px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:5px;word-break:break-all;">
+        {browseData.current}
+      </div>
+
+      <!-- Up button -->
+      {#if browseData.parent}
+        <button type="button" class="btn btn-secondary btn-sm" style="align-self:flex-start;"
+                onclick={() => loadBrowse(browseData!.parent!)}>
+          ↑ Up
+        </button>
+      {/if}
+
+      <!-- Directory listing -->
+      {#if !browseData.items.length}
+        <p style="font-size:0.8125rem;color:var(--c-text-3);">No subdirectories</p>
+      {:else}
+        <div style="display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;">
+          {#each browseData.items as item}
+            <button type="button"
+                    style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:5px;background:var(--c-surface-2);border:1px solid var(--c-border);color:var(--c-text);font-size:0.875rem;cursor:pointer;text-align:left;width:100%;"
+                    onclick={() => loadBrowse(item.path)}>
+              <span style="color:var(--c-text-3);">📁</span>
+              {item.name}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    {/if}
+  </div>
+
+  {#if browseData}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;padding-top:12px;border-top:1px solid var(--c-border);">
+      <button type="button" class="btn btn-secondary" onclick={() => (showBrowse = false)}>Cancel</button>
+      <button type="button" class="btn btn-primary" onclick={selectBrowsePath}>
+        Select "{browseData.current.split('/').at(-1) || '/'}"
+      </button>
+    </div>
+  {/if}
+</Modal>
 
 <style>
   .form-actions {

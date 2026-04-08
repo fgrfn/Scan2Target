@@ -130,7 +130,15 @@
 
 <Modal open={showDiscoverModal} title="Discovered Scanners" onClose={()=>(showDiscoverModal=false)} wide>
   {#if !nd.length}
-    <div class="empty-state" style="padding:24px;"><Search size={28} style="color:var(--c-surface-3);" /><p>No new scanners found.</p></div>
+    <div class="empty-state" style="padding:24px;">
+      <Search size={28} style="color:var(--c-surface-3);" />
+      <p>No new scanners found.</p>
+      <p style="font-size:0.75rem;color:var(--c-text-3);margin-top:6px;max-width:320px;text-align:center;">
+        Auto-discovery uses mDNS/Avahi and requires
+        <code style="font-size:0.7rem;">--network host</code> in Docker.
+        If your scanner is reachable by IP, use <strong>Add Scanner</strong> instead.
+      </p>
+    </div>
   {:else}
     <p style="font-size:0.8125rem;color:var(--c-text-2);margin-bottom:12px;">{nd.length} found</p>
     <div style="display:flex;flex-direction:column;gap:8px;">

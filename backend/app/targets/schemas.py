@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from pydantic import BaseModel
 
-TARGET_TYPES = ["smb", "sftp", "email", "paperless", "webhook",
+TARGET_TYPES = ["smb", "sftp", "email", "paperless", "webhook", "local",
                 "google_drive", "dropbox", "onedrive", "nextcloud"]
 
 

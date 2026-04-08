@@ -27,15 +27,18 @@
   let appVersion    = $state('');
 
   onMount(async () => {
-    try { const cfg = await getAuthConfig(); requireAuth = cfg.require_auth; } catch { /* keep default */ }
-    try { const v = await apiFetch<{ version: string }>('/version', { method: 'GET' }); appVersion = v.version; } catch { /* ignore */ }
-    if (auth.token) {
-      try { const u = await getMe(); auth.setUser(u); wsStore.start(); }
-      catch { auth.logout(); }
-    } else if (!requireAuth) {
-      wsStore.start();
+    try {
+      try { const cfg = await getAuthConfig(); requireAuth = cfg.require_auth; } catch { /* keep default */ }
+      try { const v = await apiFetch<{ version: string }>('/version', { method: 'GET' }); appVersion = v.version; } catch { /* ignore */ }
+      if (auth.token) {
+        try { const u = await getMe(); auth.setUser(u); wsStore.start(); }
+        catch { auth.logout(); }
+      } else if (!requireAuth) {
+        wsStore.start();
+      }
+    } finally {
+      bootstrapped = true;
     }
-    bootstrapped = true;
   });
 
   async function handleLogin(e: SubmitEvent) {
@@ -128,7 +131,12 @@
         </form>
       </div>
 
-      <p style="text-align:center;font-size:0.75rem;color:var(--c-text-3);margin-top:16px;">Scan2Target</p>
+      <p style="text-align:center;font-size:0.75rem;color:var(--c-text-3);margin-top:16px;">
+        <a href="https://github.com/fgrfn/Scan2Target" target="_blank" rel="noopener"
+           style="color:var(--c-text-3);text-decoration:none;">
+          Scan2Target on GitHub
+        </a>
+      </p>
     </div>
   </div>
 
@@ -163,9 +171,9 @@
             {wsStore.status === 'connected' ? 'Live' : wsStore.status === 'connecting' ? 'Connecting…' : 'Offline'}
           </span>
           {#if appVersion}
-            <span style="font-size:0.7rem;color:var(--c-text-3);margin-left:auto;">
-              <a href="https://github.com/fgrfn/Scan2Target/releases" target="_blank" rel="noopener"
-                 style="color:var(--c-text-3);text-decoration:none;" title="View releases">
+            <span style="font-size:0.7rem;margin-left:auto;">
+              <a href="https://github.com/fgrfn/Scan2Target" target="_blank" rel="noopener"
+                 style="color:var(--c-accent);text-decoration:none;opacity:0.85;" title="View on GitHub">
                 v{appVersion}
               </a>
             </span>

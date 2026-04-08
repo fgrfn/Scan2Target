@@ -28,10 +28,14 @@ def list_devices(device_type: str | None = None, _=_auth):
 
 
 @router.post("", response_model=DeviceOut, status_code=201)
-def add_device(req: AddDeviceRequest, _=_auth):
+async def add_device(req: AddDeviceRequest, _=_auth):
     if svc.get_device_by_uri(req.uri):
         raise HTTPException(status_code=409, detail="Scanner with this URI already exists")
-    return DeviceOut(**svc.add_device(req.model_dump()))
+    device = svc.add_device(req.model_dump())
+    # Immediately check online status so the UI shows correct state right away
+    monitor = get_health_monitor()
+    online = await monitor.check_now(device["uri"])
+    return DeviceOut(**device, online=online)
 
 
 @router.delete("/{device_id}")
