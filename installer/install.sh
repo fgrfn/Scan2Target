@@ -15,6 +15,17 @@ require_root() {
     fi
 }
 
+# Run a command as RUN_USER.  Works whether sudo is installed or not.
+run_as_user() {
+    if [[ "$(id -un)" == "${RUN_USER}" ]]; then
+        "$@"
+    elif command -v sudo &>/dev/null; then
+        sudo -u "${RUN_USER}" "$@"
+    else
+        su -s /bin/bash "${RUN_USER}" -c "cd $(pwd) && $(printf '%q ' "$@")"
+    fi
+}
+
 install_packages() {
     echo "[+] Installing system dependencies via apt..."
     apt-get update -y
@@ -40,8 +51,8 @@ setup_webui() {
     local FRONTEND_DIR="${APP_DIR}/frontend"
     if [[ -d "${FRONTEND_DIR}" && -f "${FRONTEND_DIR}/package.json" ]]; then
         cd "${FRONTEND_DIR}"
-        sudo -u "${RUN_USER}" npm ci
-        sudo -u "${RUN_USER}" npm run build
+        run_as_user npm ci
+        run_as_user npm run build
         cd "${APP_DIR}"
         echo "[✓] Web UI built → frontend/build/"
     else
