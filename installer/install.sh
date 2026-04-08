@@ -88,11 +88,6 @@ Restart=on-failure
 RestartSec=5
 StartLimitBurst=3
 StartLimitInterval=300
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/opt/scan2target/data /var/log/scan2target /tmp/scan2target
 
 StandardOutput=journal
 StandardError=journal
