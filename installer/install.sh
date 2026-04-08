@@ -97,7 +97,7 @@ Environment="SCAN2TARGET_DATA_DIR=${APP_DIR}/data"
 Environment="SCAN2TARGET_LOG_DIR=/var/log/scan2target"
 # Set your encryption key:
 # Environment="SCAN2TARGET_SECRET_KEY=$(openssl rand -base64 32)"
-ExecStart=${VENV_DIR}/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+ExecStart=${VENV_DIR}/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info
 Restart=on-failure
 RestartSec=5
 StartLimitBurst=3
