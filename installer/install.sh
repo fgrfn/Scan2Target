@@ -29,11 +29,19 @@ run_as_user() {
 install_packages() {
     echo "[+] Installing system dependencies via apt..."
     apt-get update -y
+    # curl is needed first for the NodeSource setup script
+    apt-get install -y curl
+    # NodeSource provides Node.js with npm bundled. The Debian-packaged nodejs
+    # does not ship npm and conflicts with it, so we add NodeSource if npm is absent.
+    if ! command -v npm &>/dev/null; then
+        echo "[+] Setting up NodeSource Node.js 20.x repository..."
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    fi
     apt-get install -y \
         python3 python3-venv python3-pip \
         avahi-daemon sane-utils sane-airscan \
         smbclient ssh sshpass imagemagick \
-        nodejs curl
+        nodejs
     systemctl enable avahi-daemon
     systemctl start avahi-daemon
 }
