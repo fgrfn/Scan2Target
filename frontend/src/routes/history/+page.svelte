@@ -8,9 +8,9 @@
   import { CheckCircle2, XCircle, Loader2, RotateCcw, X, Trash2, History, Clock } from 'lucide-svelte';
 
   let jobs = $state<Job[]>([]); let loading = $state(true); let clearing = $state(false);
-  let cancellingIds = $state<Set<number>>(new Set());
-  let retryingIds   = $state<Set<number>>(new Set());
-  let deletingIds   = $state<Set<number>>(new Set());
+  let cancellingIds = $state<Set<string>>(new Set());
+  let retryingIds   = $state<Set<string>>(new Set());
+  let deletingIds   = $state<Set<string>>(new Set());
 
   onMount(()=>load());
 
@@ -24,11 +24,11 @@
 
   async function handleClear(){ if(!confirm('Clear all history?'))return; clearing=true; try{await clearHistory();jobs=[];showToast('Cleared','info');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{clearing=false;} }
 
-  async function handleCancel(id:number){ cancellingIds=new Set([...cancellingIds,id]); try{await cancelHistoryJob(id);jobs=jobs.map(j=>j.id===id?{...j,status:'cancelled' as Job['status']}:j);showToast('Cancelled','info');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{cancellingIds.delete(id);cancellingIds=new Set(cancellingIds);} }
+  async function handleCancel(id:string){ cancellingIds=new Set([...cancellingIds,id]); try{await cancelHistoryJob(id);jobs=jobs.map(j=>j.id===id?{...j,status:'cancelled' as Job['status']}:j);showToast('Cancelled','info');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{cancellingIds.delete(id);cancellingIds=new Set(cancellingIds);} }
 
-  async function handleRetry(id:number){ retryingIds=new Set([...retryingIds,id]); try{const u=await retryUpload(id);jobs=jobs.map(j=>j.id===id?u:j);showToast('Retry started','success');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{retryingIds.delete(id);retryingIds=new Set(retryingIds);} }
+  async function handleRetry(id:string){ retryingIds=new Set([...retryingIds,id]); try{const u=await retryUpload(id);jobs=jobs.map(j=>j.id===id?u:j);showToast('Retry started','success');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{retryingIds.delete(id);retryingIds=new Set(retryingIds);} }
 
-  async function handleDelete(id:number){ deletingIds=new Set([...deletingIds,id]); try{await deleteHistoryItem(id);jobs=jobs.filter(j=>j.id!==id);showToast('Deleted','info');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{deletingIds.delete(id);deletingIds=new Set(deletingIds);} }
+  async function handleDelete(id:string){ deletingIds=new Set([...deletingIds,id]); try{await deleteHistoryItem(id);jobs=jobs.filter(j=>j.id!==id);showToast('Deleted','info');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{deletingIds.delete(id);deletingIds=new Set(deletingIds);} }
 
   function sc(s:string){ return s==='completed'?'badge-success':s==='failed'?'badge-error':s==='running'?'badge-info':'badge-muted'; }
 
@@ -76,11 +76,11 @@
                   </div>
                 </td>
                 <td style="font-family:var(--font-mono);font-size:0.75rem;color:var(--c-text-3);">#{job.id}</td>
-                <td style="font-size:0.8125rem;">{job.device_name??job.device_id}</td>
-                <td style="font-size:0.8125rem;">{job.target_name??job.target_id}</td>
-                <td style="font-size:0.75rem;color:var(--c-text-2);">{job.profile_id}</td>
+                <td style="font-size:0.8125rem;">{job.device_id ?? '—'}</td>
+                <td style="font-size:0.8125rem;">{job.target_id ?? '—'}</td>
+                <td style="font-size:0.75rem;color:var(--c-text-2);">{job.job_type}</td>
                 <td style="font-size:0.75rem;color:var(--c-text-2);white-space:nowrap;">{fmtDate(job.created_at)}</td>
-                <td style="font-size:0.75rem;color:var(--c-text-2);white-space:nowrap;">{fmtDate(job.completed_at)}</td>
+                <td style="font-size:0.75rem;color:var(--c-text-2);white-space:nowrap;">{fmtDate(job.updated_at)}</td>
                 <td>
                   <div style="display:flex;gap:2px;">
                     {#if job.status==='running'||job.status==='queued'}

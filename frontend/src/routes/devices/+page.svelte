@@ -11,31 +11,31 @@
   let loading = $state(true); let discovering = $state(false);
   let showDiscoverModal = $state(false); let showAddModal = $state(false);
   let addUri = $state(''); let addName = $state(''); let addModel = $state(''); let addManufacturer = $state(''); let addLoading = $state(false);
-  let checkingIds = $state<Set<number>>(new Set()); let removingIds = $state<Set<number>>(new Set()); let favoriteIds = $state<Set<number>>(new Set());
+  let checkingIds = $state<Set<string>>(new Set()); let removingIds = $state<Set<string>>(new Set()); let favoriteIds = $state<Set<string>>(new Set());
 
   const sd = $derived([...devices].sort((a,b)=>Number(b.is_favorite)-Number(a.is_favorite)));
   const nd = $derived(discovered.filter(d=>!devices.some(x=>x.uri===d.uri)));
 
   onMount(()=>loadDevices());
 
-  $effect(()=>{ const u=wsStore.lastScannerUpdate; if(!u) return; devices=devices.map(d=>d.uri===u.uri?{...d,is_online:u.online,name:u.name||d.name}:d); });
+  $effect(()=>{ const u=wsStore.lastScannerUpdate; if(!u) return; devices=devices.map(d=>d.uri===u.uri?{...d,online:u.online,name:u.name||d.name}:d); });
 
   async function loadDevices() { loading=true; try{devices=await listDevices();}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{loading=false;} }
 
   async function handleDiscover() { discovering=true; try{discovered=await discoverDevices();showDiscoverModal=true;}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{discovering=false;} }
 
   async function handleAddDiscovered(d: DiscoveredDevice) {
-    try{const c=await addDevice({uri:d.uri,name:d.name,model:d.model??undefined,manufacturer:d.manufacturer??undefined});devices=[...devices,c];discovered=discovered.filter(x=>x.uri!==d.uri);showToast(`Added ${c.name}`,'success');if(!discovered.filter(x=>!devices.some(y=>y.uri===x.uri)).length)showDiscoverModal=false;}
+    try{const c=await addDevice({uri:d.uri,name:d.name,model:d.model??undefined,make:d.make??undefined});devices=[...devices,c];discovered=discovered.filter(x=>x.uri!==d.uri);showToast(`Added ${c.name}`,'success');if(!discovered.filter(x=>!devices.some(y=>y.uri===x.uri)).length)showDiscoverModal=false;}
     catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}
   }
 
   async function handleAddManual(e: SubmitEvent) {
     e.preventDefault();addLoading=true;
-    try{const c=await addDevice({uri:addUri,name:addName,model:addModel||undefined,manufacturer:addManufacturer||undefined});devices=[...devices,c];showAddModal=false;addUri='';addName='';addModel='';addManufacturer='';showToast(`Added ${c.name}`,'success');}
+    try{const c=await addDevice({uri:addUri,name:addName,model:addModel||undefined,make:addManufacturer||undefined});devices=[...devices,c];showAddModal=false;addUri='';addName='';addModel='';addManufacturer='';showToast(`Added ${c.name}`,'success');}
     catch(ex:unknown){showToast(ex instanceof Error?ex.message:'Failed','error');}finally{addLoading=false;}
   }
 
-  async function handleRemove(id: number) {
+  async function handleRemove(id: string) {
     if(!confirm('Remove this scanner?'))return;
     removingIds=new Set([...removingIds,id]);
     try{await removeDevice(id);devices=devices.filter(d=>d.id!==id);showToast('Removed','info');}
@@ -52,7 +52,7 @@
 
   async function handleCheck(d: Device) {
     checkingIds=new Set([...checkingIds,d.id]);
-    try{const r=await checkDeviceOnline(d.id);devices=devices.map(x=>x.id===d.id?{...x,is_online:r.online,last_checked:new Date().toISOString()}:x);showToast(`${d.name}: ${r.online?'Online':'Offline'}`,r.online?'success':'info');}
+    try{const r=await checkDeviceOnline(d.id);devices=devices.map(x=>x.id===d.id?{...x,online:r.online,last_seen:new Date().toISOString()}:x);showToast(`${d.name}: ${r.online?'Online':'Offline'}`,r.online?'success':'info');}
     catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}
     finally{checkingIds.delete(d.id);checkingIds=new Set(checkingIds);}
   }
@@ -90,11 +90,11 @@
           <!-- Header -->
           <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:14px 14px 0;">
             <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-              <span class="{d.is_online===true?'dot-online':d.is_online===false?'dot-offline':'dot-unknown'}"></span>
+              <span class="{d.online===true?'dot-online':d.online===false?'dot-offline':'dot-unknown'}"></span>
               <div style="min-width:0;">
                 <p style="font-size:0.875rem;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{d.name}</p>
-                {#if d.manufacturer||d.model}
-                  <p style="font-size:0.75rem;color:var(--c-text-2);">{[d.manufacturer,d.model].filter(Boolean).join(' ')}</p>
+                {#if d.make||d.model}
+                  <p style="font-size:0.75rem;color:var(--c-text-2);">{[d.make,d.model].filter(Boolean).join(' ')}</p>
                 {/if}
               </div>
               {#if d.is_favorite}<Star size={12} style="color:#fbbf24;flex-shrink:0;" fill="currentColor" />{/if}
@@ -119,7 +119,7 @@
             </div>
             <div style="display:flex;align-items:center;gap:5px;">
               <Clock size={10} style="color:var(--c-text-3);" />
-              <span style="font-size:0.75rem;color:var(--c-text-3);">{fmtDate(d.last_checked)}</span>
+              <span style="font-size:0.75rem;color:var(--c-text-3);">{fmtDate(d.last_seen)}</span>
             </div>
           </div>
         </div>

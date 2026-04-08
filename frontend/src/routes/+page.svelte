@@ -13,8 +13,8 @@
   let loading = $state(true); let scanning = $state(false);
   let previewing = $state(false); let previewImage = $state<string | null>(null);
   let activeJob = $state<Job | null>(null);
-  let selectedDeviceId  = $state<number | null>(null);
-  let selectedTargetId  = $state<number | null>(null);
+  let selectedDeviceId  = $state<string | null>(null);
+  let selectedTargetId  = $state<string | null>(null);
   let selectedProfileId = $state<string>('');
   let filenamePrefix    = $state('scan');
   let webhookUrl        = $state('');

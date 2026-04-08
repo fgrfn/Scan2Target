@@ -78,27 +78,27 @@
     name = t?.name ?? '';
     type = t?.type ?? 'smb';
 
-    smb_connection = t?.connection ?? '';
-    smb_username = t?.username ?? '';
+    smb_connection = (t?.config?.connection as string) ?? '';
+    smb_username = (t?.config?.username as string) ?? '';
     smb_password = '';
 
     sftp_host = (t?.config?.host as string) ?? '';
-    sftp_port = String((t?.config?.port as number) ?? '22');
-    sftp_username = t?.username ?? '';
+    sftp_port = String((t?.config?.port as number) ?? 22);
+    sftp_username = (t?.config?.username as string) ?? '';
     sftp_password = '';
     sftp_path = (t?.config?.path as string) ?? '/';
 
     email_smtp_host = (t?.config?.smtp_host as string) ?? '';
-    email_smtp_port = String((t?.config?.smtp_port as number) ?? '587');
-    email_username = t?.username ?? '';
+    email_smtp_port = String((t?.config?.smtp_port as number) ?? 587);
+    email_username = (t?.config?.username as string) ?? '';
     email_password = '';
     email_use_tls = Boolean(t?.config?.use_tls ?? true);
     email_to = (t?.config?.to as string) ?? '';
 
-    paperless_connection = t?.connection ?? '';
+    paperless_connection = (t?.config?.connection as string) ?? '';
     paperless_api_token = (t?.config?.api_token as string) ?? '';
 
-    webhook_connection = t?.connection ?? '';
+    webhook_connection = (t?.config?.connection as string) ?? '';
 
     gdrive_access_token = (t?.config?.access_token as string) ?? '';
     gdrive_folder_id = (t?.config?.folder_id as string) ?? '';
@@ -110,59 +110,45 @@
     onedrive_path = (t?.config?.path as string) ?? '/';
 
     nc_webdav_url = (t?.config?.webdav_url as string) ?? '';
-    nc_username = t?.username ?? '';
+    nc_username = (t?.config?.username as string) ?? '';
     nc_password = '';
     nc_path = (t?.config?.path as string) ?? '/';
   });
 
   function buildPayload(): TargetIn {
-    const base: TargetIn = { name, type, config: {} };
+    let config: Record<string, unknown> = {};
 
     switch (type) {
       case 'smb':
-        base.connection = smb_connection;
-        base.username = smb_username;
-        base.password = smb_password || undefined;
+        config = { connection: smb_connection, username: smb_username, ...(smb_password ? { password: smb_password } : {}) };
         break;
       case 'sftp':
-        base.config = { host: sftp_host, port: Number(sftp_port), path: sftp_path };
-        base.username = sftp_username;
-        base.password = sftp_password || undefined;
+        config = { host: sftp_host, port: Number(sftp_port), path: sftp_path, username: sftp_username, ...(sftp_password ? { password: sftp_password } : {}) };
         break;
       case 'email':
-        base.config = {
-          smtp_host: email_smtp_host,
-          smtp_port: Number(email_smtp_port),
-          use_tls: email_use_tls,
-          to: email_to
-        };
-        base.username = email_username;
-        base.password = email_password || undefined;
+        config = { smtp_host: email_smtp_host, smtp_port: Number(email_smtp_port), use_tls: email_use_tls, to: email_to, username: email_username, ...(email_password ? { password: email_password } : {}) };
         break;
       case 'paperless':
-        base.connection = paperless_connection;
-        base.config = { api_token: paperless_api_token };
+        config = { connection: paperless_connection, api_token: paperless_api_token };
         break;
       case 'webhook':
-        base.connection = webhook_connection;
+        config = { connection: webhook_connection };
         break;
       case 'google_drive':
-        base.config = { access_token: gdrive_access_token, folder_id: gdrive_folder_id };
+        config = { access_token: gdrive_access_token, folder_id: gdrive_folder_id };
         break;
       case 'dropbox':
-        base.config = { access_token: dropbox_access_token, path: dropbox_path };
+        config = { access_token: dropbox_access_token, path: dropbox_path };
         break;
       case 'onedrive':
-        base.config = { access_token: onedrive_access_token, path: onedrive_path };
+        config = { access_token: onedrive_access_token, path: onedrive_path };
         break;
       case 'nextcloud':
-        base.config = { webdav_url: nc_webdav_url, path: nc_path };
-        base.username = nc_username;
-        base.password = nc_password || undefined;
+        config = { webdav_url: nc_webdav_url, path: nc_path, username: nc_username, ...(nc_password ? { password: nc_password } : {}) };
         break;
     }
 
-    return base;
+    return { name, type, config };
   }
 
   async function handleSubmit(e: SubmitEvent) {

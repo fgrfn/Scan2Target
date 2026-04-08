@@ -43,4 +43,4 @@ def disk_usage(_=_admin):
             stats["images"] += size
         else:
             stats["other"] += size
-    return {"total_bytes": total, "total_mb": round(total / 1024 / 1024, 2), "breakdown": stats}
+    return {"total_bytes": total, "used_bytes": total, "total_mb": round(total / 1024 / 1024, 2), "breakdown": stats}

@@ -35,10 +35,14 @@ def timeline(days: int = 30, _=_auth):
 def by_scanner(_=_auth):
     with get_db().connection() as conn:
         rows = conn.execute("""
-            SELECT device_id as scanner, COUNT(*) as total_scans,
-                   ROUND(100.0*SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END)/COUNT(*),1) as success_rate
-            FROM jobs WHERE device_id IS NOT NULL
-            GROUP BY device_id ORDER BY total_scans DESC
+            SELECT j.device_id,
+                   COALESCE(d.name, j.device_id) as device_name,
+                   COUNT(*) as total,
+                   SUM(CASE WHEN j.status='completed' THEN 1 ELSE 0 END) as successful
+            FROM jobs j
+            LEFT JOIN devices d ON j.device_id = d.id
+            WHERE j.device_id IS NOT NULL
+            GROUP BY j.device_id ORDER BY total DESC
         """).fetchall()
     return [dict(r) for r in rows]
 
@@ -47,10 +51,15 @@ def by_scanner(_=_auth):
 def by_target(_=_auth):
     with get_db().connection() as conn:
         rows = conn.execute("""
-            SELECT target_id as target, COUNT(*) as total_deliveries,
-                   ROUND(100.0*SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END)/COUNT(*),1) as success_rate
-            FROM jobs WHERE target_id IS NOT NULL
-            GROUP BY target_id ORDER BY total_deliveries DESC
+            SELECT j.target_id,
+                   COALESCE(t.name, j.target_id) as target_name,
+                   COALESCE(t.type, '') as type,
+                   COUNT(*) as total,
+                   SUM(CASE WHEN j.status='completed' THEN 1 ELSE 0 END) as successful
+            FROM jobs j
+            LEFT JOIN targets t ON j.target_id = t.id
+            WHERE j.target_id IS NOT NULL
+            GROUP BY j.target_id ORDER BY total DESC
         """).fetchall()
     return [dict(r) for r in rows]
 

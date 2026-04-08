@@ -15,14 +15,14 @@ export interface TimelineEntry {
 }
 
 export interface ScannerStat {
-  device_id: number;
+  device_id: string;
   device_name: string;
   total: number;
   successful: number;
 }
 
 export interface TargetStat {
-  target_id: number;
+  target_id: string;
   target_name: string;
   type: string;
   total: number;

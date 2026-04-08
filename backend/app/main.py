@@ -110,7 +110,7 @@ def create_app() -> FastAPI:
     cors = _get_setting("cors_origins", settings.cors_origins)
 
     app = FastAPI(title="Scan2Target", version=get_version(),
-                  lifespan=lifespan, redirect_slashes=False)
+                  lifespan=lifespan)
 
     app.add_middleware(CORSMiddleware, allow_origins=cors,
                        allow_credentials=True, allow_methods=["*"], allow_headers=["*"])

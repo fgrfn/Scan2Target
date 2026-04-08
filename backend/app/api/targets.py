@@ -44,9 +44,9 @@ def delete_target(target_id: str, _=_auth):
 def test_target(target_id: str, _=_auth):
     try:
         svc.test_target(target_id)
-        return {"target_id": target_id, "status": "ok", "message": "Connection successful"}
+        return {"success": True, "message": "Connection successful"}
     except Exception as e:
-        return {"target_id": target_id, "status": "error", "message": str(e)}
+        return {"success": False, "message": str(e)}
 
 
 @router.post("/{target_id}/favorite")

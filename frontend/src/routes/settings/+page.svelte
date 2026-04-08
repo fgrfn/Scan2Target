@@ -31,10 +31,9 @@
     await save('cors_origins',p);
   }
 
-  async function handleCleanup(){ if(!confirm('Run cleanup? Temporary scan files will be deleted.'))return; cleaningUp=true; try{const r=await runCleanup();showToast(`Done: ${r.deleted_files} files, ${fmtB(r.freed_bytes)} freed`,'success');await loadDisk();}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{cleaningUp=false;} }
+  async function handleCleanup(){ if(!confirm('Run cleanup? Temporary scan files will be deleted.'))return; cleaningUp=true; try{const r=await runCleanup();showToast(`Done: ${r.deleted_files + r.deleted_thumbnails} files deleted`,'success');await loadDisk();}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{cleaningUp=false;} }
 
   function fmtB(b:number){ if(b<1024)return`${b} B`; if(b<1048576)return`${(b/1024).toFixed(1)} KB`; if(b<1073741824)return`${(b/1048576).toFixed(1)} MB`; return`${(b/1073741824).toFixed(2)} GB`; }
-  function diskPct(u:DiskUsage){ return u.total_bytes===0?0:(u.used_bytes/u.total_bytes)*100; }
   function diskBarColor(p:number){ return p>85?'var(--c-err)':p>60?'var(--c-warn)':'var(--c-accent)'; }
 </script>
 

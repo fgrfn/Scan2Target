@@ -9,9 +9,9 @@
 
   let targets = $state<Target[]>([]); let loading = $state(true);
   let showFormModal = $state(false); let editTarget = $state<Target|null>(null);
-  let testingIds  = $state<Set<number>>(new Set()); let deletingIds  = $state<Set<number>>(new Set());
-  let favoriteIds = $state<Set<number>>(new Set());
-  let testResults = $state<Map<number,{success:boolean;message:string}>>(new Map());
+  let testingIds  = $state<Set<string>>(new Set()); let deletingIds  = $state<Set<string>>(new Set());
+  let favoriteIds = $state<Set<string>>(new Set());
+  let testResults = $state<Map<string,{success:boolean;message:string}>>(new Map());
   const st = $derived([...targets].sort((a,b)=>Number(b.is_favorite)-Number(a.is_favorite)));
 
   onMount(()=>load());
@@ -90,11 +90,11 @@
               </div>
             </div>
 
-            {#if t.connection}
-              <p style="font-size:0.75rem;font-family:var(--font-mono);color:var(--c-text-3);background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:4px;padding:5px 8px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{t.connection}</p>
+            {#if (t.config?.connection as string) || (t.config?.host as string)}
+              <p style="font-size:0.75rem;font-family:var(--font-mono);color:var(--c-text-3);background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:4px;padding:5px 8px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{(t.config?.connection as string) || (t.config?.host as string)}</p>
             {/if}
-            {#if t.username}
-              <p style="font-size:0.75rem;color:var(--c-text-2);">👤 {t.username}</p>
+            {#if t.config?.username}
+              <p style="font-size:0.75rem;color:var(--c-text-2);">👤 {t.config.username as string}</p>
             {/if}
 
             {#if testResults.has(t.id)}

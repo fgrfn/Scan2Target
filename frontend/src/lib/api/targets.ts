@@ -12,25 +12,24 @@ export type TargetType =
   | 'nextcloud';
 
 export interface Target {
-  id: number;
+  id: string;
   name: string;
   type: TargetType;
-  connection: string | null;
-  username: string | null;
-  is_favorite: boolean;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
   config: Record<string, unknown>;
+  enabled: boolean;
+  description: string | null;
+  is_favorite: boolean;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface TargetIn {
   name: string;
   type: TargetType;
-  connection?: string;
-  username?: string;
-  password?: string;
-  config?: Record<string, unknown>;
+  config: Record<string, unknown>;
+  enabled?: boolean;
+  description?: string;
+  is_favorite?: boolean;
 }
 
 export interface TestResult {
@@ -46,18 +45,18 @@ export function createTarget(req: TargetIn): Promise<Target> {
   return apiPost<Target>('/targets', req);
 }
 
-export function updateTarget(id: number, req: TargetIn): Promise<Target> {
+export function updateTarget(id: string, req: TargetIn): Promise<Target> {
   return apiPut<Target>(`/targets/${id}`, req);
 }
 
-export function deleteTarget(id: number): Promise<void> {
+export function deleteTarget(id: string): Promise<void> {
   return apiDelete<void>(`/targets/${id}`);
 }
 
-export function testTarget(id: number): Promise<TestResult> {
+export function testTarget(id: string): Promise<TestResult> {
   return apiPost<TestResult>(`/targets/${id}/test`);
 }
 
-export function setTargetFavorite(id: number, isFavorite: boolean): Promise<void> {
+export function setTargetFavorite(id: string, isFavorite: boolean): Promise<void> {
   return apiPost<void>(`/targets/${id}/favorite`, { is_favorite: isFavorite });
 }
