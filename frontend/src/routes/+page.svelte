@@ -5,156 +5,107 @@
   import { listDevices, type Device } from '$lib/api/devices';
   import { listTargets, type Target } from '$lib/api/targets';
   import {
-    getProfiles,
-    startScan,
-    listJobs,
-    cancelJob,
-    previewScan,
-    startBatch,
-    type ScanProfile,
-    type Job
+    getProfiles, startScan, listJobs, cancelJob, previewScan, startBatch,
+    type ScanProfile, type Job
   } from '$lib/api/scan';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import { ScanLine, Eye, Upload, Plus, X, CheckCircle2, XCircle, Loader2,
+           Clock, Layers, ChevronRight } from 'lucide-svelte';
 
-  // Data
-  let devices = $state<Device[]>([]);
-  let targets = $state<Target[]>([]);
-  let profiles = $state<ScanProfile[]>([]);
-  let recentJobs = $state<Job[]>([]);
-
-  // Form state
-  let selectedDeviceId = $state<number | null>(null);
-  let selectedTargetId = $state<number | null>(null);
-  let selectedProfileId = $state<string>('');
-  let filenamePrefix = $state('scan');
-  let webhookUrl = $state('');
-
-  // UI state
-  let loading = $state(true);
-  let scanning = $state(false);
-  let previewing = $state(false);
+  let devices      = $state<Device[]>([]);
+  let targets      = $state<Target[]>([]);
+  let profiles     = $state<ScanProfile[]>([]);
+  let recentJobs   = $state<Job[]>([]);
+  let loading      = $state(true);
+  let scanning     = $state(false);
+  let previewing   = $state(false);
   let previewImage = $state<string | null>(null);
-  let activeJob = $state<Job | null>(null);
+  let activeJob    = $state<Job | null>(null);
 
-  // Batch mode
-  let batchMode = $state(false);
-  let batchPages = $state<string[]>([]); // page file paths from scan
-  let batchPagePreviews = $state<string[]>([]); // base64 previews
-  let batchScanning = $state(false);
-  let batchFinishing = $state(false);
+  let selectedDeviceId  = $state<number | null>(null);
+  let selectedTargetId  = $state<number | null>(null);
+  let selectedProfileId = $state<string>('');
+  let filenamePrefix    = $state('scan');
+  let webhookUrl        = $state('');
+  let batchMode         = $state(false);
+  let batchPages        = $state<string[]>([]);
+  let batchPagePreviews = $state<string[]>([]);
+  let batchScanning     = $state(false);
+  let batchFinishing    = $state(false);
 
-  // Sorted lists: favorites first
-  const sortedDevices = $derived(
-    [...devices].sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite))
-  );
-  const sortedTargets = $derived(
-    [...targets].sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite))
-  );
+  const sortedDevices = $derived([...devices].sort((a,b) => Number(b.is_favorite)-Number(a.is_favorite)));
+  const sortedTargets = $derived([...targets].sort((a,b) => Number(b.is_favorite)-Number(a.is_favorite)));
 
   onMount(async () => {
     try {
-      const [d, t, p, j] = await Promise.all([
-        listDevices(),
-        listTargets(),
-        getProfiles(),
-        listJobs()
-      ]);
-      devices = d;
-      targets = t;
-      profiles = p;
-      recentJobs = j.slice(0, 5);
-
-      if (sortedDevices.length) selectedDeviceId = sortedDevices[0].id;
-      if (sortedTargets.length) selectedTargetId = sortedTargets[0].id;
-      if (p.length) selectedProfileId = p[0].id;
+      const [d, t, p, j] = await Promise.all([listDevices(), listTargets(), getProfiles(), listJobs()]);
+      devices = d; targets = t; profiles = p;
+      recentJobs = j.slice(0, 6);
+      if (sortedDevices.length)  selectedDeviceId  = sortedDevices[0].id;
+      if (sortedTargets.length)  selectedTargetId  = sortedTargets[0].id;
+      if (p.length)              selectedProfileId = p[0].id;
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to load data', 'error');
-    } finally {
-      loading = false;
-    }
+    } finally { loading = false; }
   });
 
-  // React to WebSocket job updates
   $effect(() => {
     const upd = wsStore.lastJobUpdate;
     if (!upd) return;
-    if (activeJob && upd.id === activeJob.id) {
-      activeJob = upd;
-    }
-    // Update recent jobs list
-    recentJobs = recentJobs.map((j) => (j.id === upd.id ? upd : j));
+    if (activeJob && upd.id === activeJob.id) activeJob = upd;
+    recentJobs = recentJobs.map(j => j.id === upd.id ? upd : j);
   });
 
   async function handleScan() {
     if (!selectedDeviceId || !selectedTargetId || !selectedProfileId) {
-      showToast('Please select a device, target and profile', 'error');
-      return;
+      showToast('Select a device, target and profile', 'error'); return;
     }
-    scanning = true;
-    previewImage = null;
-    activeJob = null;
+    scanning = true; previewImage = null; activeJob = null;
     try {
       const job = await startScan({
-        device_id: selectedDeviceId,
-        profile_id: selectedProfileId,
-        target_id: selectedTargetId,
-        filename_prefix: filenamePrefix,
+        device_id: selectedDeviceId, profile_id: selectedProfileId,
+        target_id: selectedTargetId, filename_prefix: filenamePrefix,
         webhook_url: webhookUrl || undefined
       });
       activeJob = job;
-      recentJobs = [job, ...recentJobs].slice(0, 5);
-      showToast('Scan job started', 'success');
+      recentJobs = [job, ...recentJobs].slice(0, 6);
+      showToast('Scan started', 'success');
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to start scan', 'error');
-    } finally {
-      scanning = false;
-    }
+      showToast(err instanceof Error ? err.message : 'Scan failed', 'error');
+    } finally { scanning = false; }
   }
 
   async function handlePreview() {
     if (!selectedDeviceId || !selectedProfileId) {
-      showToast('Please select a device and profile', 'error');
-      return;
+      showToast('Select a device and profile', 'error'); return;
     }
-    previewing = true;
-    previewImage = null;
+    previewing = true; previewImage = null;
     try {
       const resp = await previewScan(selectedDeviceId, selectedProfileId);
       previewImage = resp.image;
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Preview failed', 'error');
-    } finally {
-      previewing = false;
-    }
+    } finally { previewing = false; }
   }
 
   async function handleCancelJob(id: number) {
-    try {
-      await cancelJob(id);
-      showToast('Job cancelled', 'info');
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Cancel failed', 'error');
-    }
+    try { await cancelJob(id); showToast('Job cancelled', 'info'); }
+    catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Cancel failed', 'error'); }
   }
 
-  // Batch mode
   async function addBatchPage() {
     if (!selectedDeviceId || !selectedProfileId) {
-      showToast('Please select a device and profile', 'error');
-      return;
+      showToast('Select a device and profile', 'error'); return;
     }
     batchScanning = true;
     try {
       const resp = await previewScan(selectedDeviceId, selectedProfileId);
-      // Store preview image as a stand-in for the page path
       batchPagePreviews = [...batchPagePreviews, resp.image];
       batchPages = [...batchPages, `page_${batchPages.length + 1}`];
       showToast(`Page ${batchPages.length} scanned`, 'success');
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Scan failed', 'error');
-    } finally {
-      batchScanning = false;
-    }
+    } finally { batchScanning = false; }
   }
 
   function removeBatchPage(index: number) {
@@ -164,321 +115,287 @@
 
   async function finishBatch() {
     if (!selectedDeviceId || !selectedTargetId || !selectedProfileId) {
-      showToast('Please select a device, target and profile', 'error');
-      return;
+      showToast('Select device, target and profile', 'error'); return;
     }
-    if (batchPages.length === 0) {
-      showToast('Scan at least one page first', 'error');
-      return;
-    }
+    if (batchPages.length === 0) { showToast('Scan at least one page first', 'error'); return; }
     batchFinishing = true;
     try {
       const job = await startBatch({
-        device_id: selectedDeviceId,
-        profile_id: selectedProfileId,
-        target_id: selectedTargetId,
-        filename_prefix: filenamePrefix,
+        device_id: selectedDeviceId, profile_id: selectedProfileId,
+        target_id: selectedTargetId, filename_prefix: filenamePrefix,
         page_paths: batchPages
       });
       activeJob = job;
-      recentJobs = [job, ...recentJobs].slice(0, 5);
-      batchPages = [];
-      batchPagePreviews = [];
-      batchMode = false;
-      showToast('Batch job started', 'success');
+      recentJobs = [job, ...recentJobs].slice(0, 6);
+      batchPages = []; batchPagePreviews = []; batchMode = false;
+      showToast('Batch upload started', 'success');
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Batch failed', 'error');
-    } finally {
-      batchFinishing = false;
-    }
+    } finally { batchFinishing = false; }
   }
 
-  function statusBadgeClass(status: string) {
-    switch (status) {
-      case 'completed': return 'badge-success';
-      case 'failed': return 'badge-error';
-      case 'running': return 'badge-info';
-      case 'queued': return 'badge-muted';
-      case 'cancelled': return 'badge-muted';
-      default: return 'badge-muted';
-    }
+  function statusClass(s: string) {
+    return s === 'completed' ? 'badge-success'
+         : s === 'failed'    ? 'badge-error'
+         : s === 'running'   ? 'badge-info'
+         : 'badge-muted';
   }
 
-  function formatTime(ts: string | null) {
+  function statusDotClass(s: string) {
+    return s === 'completed' ? 'dot-online'
+         : s === 'failed'    ? 'bg-red-500 inline-block rounded-full w-2 h-2'
+         : s === 'running'   ? 'dot-pulse'
+         : 'dot-unknown';
+  }
+
+  function fmtTime(ts: string | null) {
     if (!ts) return '—';
-    return new Date(ts).toLocaleString();
+    const d = new Date(ts);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (diff < 60)  return 'just now';
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return d.toLocaleDateString();
   }
 </script>
 
-<div class="page-header">
-  <h1 class="page-title">🖨 Scan</h1>
-  <p class="page-subtitle">Scan a document and deliver it to a configured target</p>
-</div>
+<div class="page-wrap">
 
-<div class="page-body">
   {#if loading}
-    <div class="flex items-center gap-3">
-      <Spinner />
-      <span class="text-muted">Loading…</span>
+    <div class="flex items-center gap-3 text-zinc-500 py-12">
+      <Spinner /><span>Loading…</span>
     </div>
   {:else}
-    <div class="scan-layout">
-      <!-- Main scan form -->
+    <div class="grid gap-5" style="grid-template-columns: 1fr; max-width: 680px;">
+
+      <!-- ── Scan form card ── -->
       <div class="card">
-        <h2 class="card-title">📄 New Scan</h2>
-
-        <div class="form-group">
-          <label class="form-label" for="device-select">Scanner</label>
-          <select id="device-select" class="form-control" bind:value={selectedDeviceId}>
-            {#if devices.length === 0}
-              <option value={null} disabled>No scanners configured</option>
-            {:else}
-              {#each sortedDevices as d}
-                <option value={d.id}>
-                  {d.is_favorite ? '★ ' : ''}{d.name}
-                  {d.is_online === false ? ' (offline)' : ''}
-                </option>
-              {/each}
-            {/if}
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="target-select">Target</label>
-          <select id="target-select" class="form-control" bind:value={selectedTargetId}>
-            {#if targets.length === 0}
-              <option value={null} disabled>No targets configured</option>
-            {:else}
-              {#each sortedTargets as t}
-                <option value={t.id}>
-                  {t.is_favorite ? '★ ' : ''}{t.name} ({t.type})
-                </option>
-              {/each}
-            {/if}
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="profile-select">Scan Profile</label>
-          <select id="profile-select" class="form-control" bind:value={selectedProfileId}>
-            {#each profiles as p}
-              <option value={p.id}>{p.name}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="filename-input">Filename Prefix</label>
-          <input
-            id="filename-input"
-            class="form-control"
-            type="text"
-            bind:value={filenamePrefix}
-            placeholder="scan"
-          />
-          <p class="form-hint">A timestamp will be appended automatically.</p>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="webhook-input">Webhook URL (optional)</label>
-          <input
-            id="webhook-input"
-            class="form-control"
-            type="url"
-            bind:value={webhookUrl}
-            placeholder="https://…"
-          />
-        </div>
-
-        <!-- Batch mode toggle -->
-        <div class="form-group">
-          <div class="toggle-wrap">
-            <label class="toggle" for="batch-toggle">
-              <input id="batch-toggle" type="checkbox" bind:checked={batchMode} />
+        <!-- Header -->
+        <div class="card-header">
+          <span class="card-title flex items-center gap-2">
+            <ScanLine size={15} class="text-indigo-400" />
+            New Scan
+          </span>
+          <!-- Batch toggle -->
+          <label class="flex items-center gap-2 cursor-pointer">
+            <span class="text-xs text-zinc-500">Batch</span>
+            <div class="toggle" title="Batch / multi-page mode">
+              <input type="checkbox" bind:checked={batchMode} />
               <span class="toggle-slider"></span>
-            </label>
-            <span class="form-label" style="margin-bottom:0">Batch / Multi-page mode</span>
-          </div>
+            </div>
+          </label>
         </div>
 
-        {#if !batchMode}
-          <!-- Single scan -->
-          <div class="btn-row">
-            <button
-              class="btn btn-primary btn-lg"
-              onclick={handleScan}
-              disabled={scanning || !selectedDeviceId || !selectedTargetId}
-            >
-              {#if scanning}<Spinner size="sm" />{/if}
-              Scan & Upload
-            </button>
-            <button
-              class="btn btn-secondary"
-              onclick={handlePreview}
-              disabled={previewing || !selectedDeviceId}
-            >
-              {#if previewing}<Spinner size="sm" />{/if}
-              Preview
-            </button>
+        <div class="card-body flex flex-col gap-4">
+          <!-- 2-col selectors -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="dev-sel">Scanner</label>
+              <select id="dev-sel" class="form-control" bind:value={selectedDeviceId}>
+                {#if devices.length === 0}
+                  <option value={null} disabled>No scanners</option>
+                {:else}
+                  {#each sortedDevices as d}
+                    <option value={d.id}>{d.is_favorite ? '★ ' : ''}{d.name}{d.is_online === false ? ' (offline)' : ''}</option>
+                  {/each}
+                {/if}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="tgt-sel">Target</label>
+              <select id="tgt-sel" class="form-control" bind:value={selectedTargetId}>
+                {#if targets.length === 0}
+                  <option value={null} disabled>No targets</option>
+                {:else}
+                  {#each sortedTargets as t}
+                    <option value={t.id}>{t.is_favorite ? '★ ' : ''}{t.name} ({t.type})</option>
+                  {/each}
+                {/if}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="prof-sel">Profile</label>
+              <select id="prof-sel" class="form-control" bind:value={selectedProfileId}>
+                {#each profiles as p}
+                  <option value={p.id}>{p.name}</option>
+                {/each}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="fname">Filename Prefix</label>
+              <input id="fname" class="form-control" type="text"
+                     bind:value={filenamePrefix} placeholder="scan" />
+            </div>
           </div>
 
-          {#if previewImage}
-            <div class="preview-wrap" style="margin-top:16px">
-              <img src="data:image/jpeg;base64,{previewImage}" alt="Scan preview" />
-            </div>
-          {/if}
-        {:else}
-          <!-- Batch mode -->
-          <div class="batch-section">
-            <div class="batch-actions">
-              <button
-                class="btn btn-secondary"
-                onclick={addBatchPage}
-                disabled={batchScanning || !selectedDeviceId}
-              >
-                {#if batchScanning}<Spinner size="sm" />{/if}
-                + Scan Page
+          <!-- Webhook (optional, collapsed) -->
+          <div class="form-group">
+            <label class="form-label" for="webhook">Webhook URL <span class="normal-case text-zinc-600">(optional)</span></label>
+            <input id="webhook" class="form-control" type="url"
+                   bind:value={webhookUrl} placeholder="https://…" />
+          </div>
+
+          <!-- ── Single mode actions ── -->
+          {#if !batchMode}
+            <div class="flex gap-3 flex-wrap pt-1">
+              <button class="btn-scan flex-1" onclick={handleScan}
+                      disabled={scanning || !selectedDeviceId || !selectedTargetId}>
+                {#if scanning}
+                  <Loader2 size={18} class="animate-spin" />
+                {:else}
+                  <Upload size={18} />
+                {/if}
+                Scan & Upload
               </button>
-              <span class="text-muted" style="font-size:0.85rem">
-                {batchPages.length} page{batchPages.length !== 1 ? 's' : ''} scanned
-              </span>
+              <button class="btn btn-secondary" onclick={handlePreview}
+                      disabled={previewing || !selectedDeviceId}>
+                {#if previewing}<Loader2 size={15} class="animate-spin" />{:else}<Eye size={15} />{/if}
+                Preview
+              </button>
             </div>
 
-            {#if batchPagePreviews.length > 0}
-              <div class="thumb-strip">
-                {#each batchPagePreviews as preview, i}
-                  <div class="thumb-item">
-                    <img src="data:image/jpeg;base64,{preview}" alt="Page {i + 1}" />
-                    <button class="thumb-remove" onclick={() => removeBatchPage(i)} aria-label="Remove page {i + 1}">
-                      ✕
-                    </button>
-                  </div>
-                {/each}
+            {#if previewImage}
+              <div class="preview-wrap mt-1">
+                <img src="data:image/jpeg;base64,{previewImage}" alt="Scan preview" />
               </div>
             {/if}
 
-            <button
-              class="btn btn-primary btn-lg"
-              style="margin-top:14px"
-              onclick={finishBatch}
-              disabled={batchFinishing || batchPages.length === 0 || !selectedTargetId}
-            >
-              {#if batchFinishing}<Spinner size="sm" />{/if}
-              Finish Batch & Upload
-            </button>
-          </div>
-        {/if}
+          <!-- ── Batch mode ── -->
+          {:else}
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-3 flex-wrap">
+                <button class="btn btn-secondary" onclick={addBatchPage}
+                        disabled={batchScanning || !selectedDeviceId}>
+                  {#if batchScanning}<Loader2 size={15} class="animate-spin" />{:else}<Plus size={15} />{/if}
+                  Scan Page
+                </button>
+                <span class="text-sm text-zinc-500 flex items-center gap-1.5">
+                  <Layers size={13} />
+                  {batchPages.length} page{batchPages.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {#if batchPagePreviews.length > 0}
+                <div class="thumb-strip">
+                  {#each batchPagePreviews as preview, i}
+                    <div class="thumb-item">
+                      <img src="data:image/jpeg;base64,{preview}" alt="Page {i+1}" />
+                      <button class="thumb-remove" onclick={() => removeBatchPage(i)}
+                              aria-label="Remove page {i+1}">
+                        <X size={10} />
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+
+              <button class="btn-scan" onclick={finishBatch}
+                      disabled={batchFinishing || batchPages.length === 0 || !selectedTargetId}>
+                {#if batchFinishing}<Loader2 size={18} class="animate-spin" />{:else}<Upload size={18} />{/if}
+                Finish Batch & Upload
+              </button>
+            </div>
+          {/if}
+        </div>
       </div>
 
-      <!-- Active job status -->
+      <!-- ── Active job card ── -->
       {#if activeJob}
-        <div class="card">
-          <h2 class="card-title">⏳ Active Job</h2>
-          <div class="job-status-block">
-            <div class="flex items-center gap-3">
-              <span class="badge {statusBadgeClass(activeJob.status)}">{activeJob.status}</span>
-              <span class="text-muted" style="font-size:0.85rem">Job #{activeJob.id}</span>
-            </div>
+        <div class="card overflow-hidden">
+          <div class="card-header">
+            <span class="card-title flex items-center gap-2">
+              {#if activeJob.status === 'running'}
+                <span class="dot-pulse"></span>
+              {:else if activeJob.status === 'completed'}
+                <CheckCircle2 size={14} class="text-emerald-400" />
+              {:else if activeJob.status === 'failed'}
+                <XCircle size={14} class="text-red-400" />
+              {/if}
+              Job #{activeJob.id}
+            </span>
+            <span class="badge {statusClass(activeJob.status)}">{activeJob.status}</span>
+          </div>
+          <div class="card-body">
             {#if activeJob.status === 'running'}
-              <div class="flex items-center gap-2" style="margin-top:8px">
-                <Spinner size="sm" />
-                <span class="text-muted" style="font-size:0.85rem">Scanning…</span>
+              <div class="flex items-center gap-2 text-sm text-zinc-400">
+                <Loader2 size={14} class="animate-spin text-indigo-400" />
+                Scanning…
+              </div>
+              <!-- Animated progress bar -->
+              <div class="progress-track mt-3">
+                <div class="progress-fill" style="width: 60%; animation: progressPulse 2s ease-in-out infinite;"></div>
               </div>
             {/if}
             {#if activeJob.error}
-              <p class="text-error" style="margin-top:8px;font-size:0.85rem">{activeJob.error}</p>
+              <p class="text-sm text-red-400 mt-1">{activeJob.error}</p>
             {/if}
             {#if activeJob.status === 'running' || activeJob.status === 'queued'}
-              <button
-                class="btn btn-danger btn-sm"
-                style="margin-top:10px"
-                onclick={() => handleCancelJob(activeJob!.id)}
-              >
-                Cancel
+              <button class="btn btn-danger btn-sm mt-3" onclick={() => handleCancelJob(activeJob!.id)}>
+                <X size={12} /> Cancel
               </button>
             {/if}
           </div>
         </div>
       {/if}
 
-      <!-- Recent jobs -->
+      <!-- ── Recent jobs ── -->
       <div class="card">
-        <h2 class="card-title">🕐 Recent Jobs</h2>
+        <div class="card-header">
+          <span class="card-title flex items-center gap-2">
+            <Clock size={14} class="text-zinc-500" />
+            Recent Jobs
+          </span>
+          <a href="/history" class="text-xs text-zinc-500 hover:text-zinc-300 flex items-center gap-1 transition-colors" style="text-decoration:none">
+            View all <ChevronRight size={12} />
+          </a>
+        </div>
+
         {#if recentJobs.length === 0}
           <div class="empty-state">
-            <div class="empty-icon">📭</div>
-            <p>No jobs yet. Start a scan above!</p>
+            <ScanLine size={32} class="text-zinc-800" />
+            <p>No jobs yet — start a scan above.</p>
           </div>
         {:else}
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Status</th>
-                  <th>Profile</th>
-                  <th>Created</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each recentJobs as job}
-                  <tr>
-                    <td class="font-mono" style="font-size:0.8rem">#{job.id}</td>
-                    <td><span class="badge {statusBadgeClass(job.status)}">{job.status}</span></td>
-                    <td style="font-size:0.8rem;color:var(--color-text-muted)">{job.profile_id}</td>
-                    <td style="font-size:0.8rem;color:var(--color-text-muted)">{formatTime(job.created_at)}</td>
-                    <td>
-                      {#if job.status === 'running' || job.status === 'queued'}
-                        <button class="btn btn-danger btn-sm" onclick={() => handleCancelJob(job.id)}>
-                          Cancel
-                        </button>
-                      {/if}
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
+          <div class="flex flex-col divide-y divide-zinc-800/60">
+            {#each recentJobs as job}
+              <div class="flex items-center gap-3 px-5 py-3">
+                <span class="{statusDotClass(job.status)} flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-zinc-200 truncate">
+                    {job.filename_prefix ?? 'scan'}_{job.id}
+                  </p>
+                  <p class="text-xs text-zinc-600">{job.profile_id}</p>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  <span class="badge {statusClass(job.status)}">{job.status}</span>
+                  <span class="text-xs text-zinc-600">{fmtTime(job.created_at)}</span>
+                  {#if job.status === 'running' || job.status === 'queued'}
+                    <button class="btn btn-ghost btn-icon btn-sm text-zinc-600 hover:text-red-400"
+                            onclick={() => handleCancelJob(job.id)}>
+                      <X size={12} />
+                    </button>
+                  {/if}
+                </div>
+              </div>
+            {/each}
           </div>
         {/if}
       </div>
+
     </div>
   {/if}
 </div>
 
 <style>
-  .scan-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    max-width: 680px;
+  @keyframes progressPulse {
+    0%   { width: 20%; }
+    50%  { width: 80%; }
+    100% { width: 20%; }
   }
-
-  .btn-row {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
-    margin-top: 4px;
-  }
-
-  .batch-section {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .batch-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .job-status-block {
-    padding: 12px;
-    background: var(--color-bg);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--color-border);
-  }
+  :global(.animate-spin) { animation: spin 0.75s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>

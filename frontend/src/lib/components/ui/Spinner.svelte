@@ -5,8 +5,7 @@
 
   let { size = 'md' }: Props = $props();
 
-  const sizes = { sm: '16px', md: '24px', lg: '36px' };
-  const px = $derived(sizes[size]);
+  const px = $derived(size === 'sm' ? '16px' : size === 'lg' ? '36px' : '24px');
 </script>
 
 <span
@@ -19,14 +18,12 @@
 <style>
   .spinner {
     display: inline-block;
-    border: 2px solid var(--color-border);
-    border-top-color: var(--color-primary);
+    border: 2px solid rgba(255,255,255,0.08);
+    border-top-color: #6366f1;
     border-radius: 50%;
-    animation: spin 0.7s linear infinite;
+    animation: spin 0.65s linear infinite;
     flex-shrink: 0;
   }
 
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>

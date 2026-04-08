@@ -9,22 +9,21 @@
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import '../app.css';
 
-  interface Props {
-    children: Snippet;
-  }
+  // Lucide icons
+  import {
+    ScanLine, Printer, Crosshair, Clock, BarChart3, Settings2,
+    LogOut, Wifi, WifiOff, Loader2, User, Eye, EyeOff
+  } from 'lucide-svelte';
+
+  interface Props { children: Snippet; }
   let { children }: Props = $props();
 
-  // Login form state
   let loginUsername = $state('');
   let loginPassword = $state('');
-  let loginLoading = $state(false);
-  let loginError = $state('');
-
-  // Sidebar open on mobile
-  let sidebarOpen = $state(false);
-
-  // Bootstrap: check existing token
-  let bootstrapped = $state(false);
+  let loginLoading  = $state(false);
+  let loginError    = $state('');
+  let showPass      = $state(false);
+  let bootstrapped  = $state(false);
 
   onMount(async () => {
     if (auth.token) {
@@ -32,9 +31,7 @@
         const user = await getMe();
         auth.setUser(user);
         wsStore.start();
-      } catch {
-        auth.logout();
-      }
+      } catch { auth.logout(); }
     }
     bootstrapped = true;
   });
@@ -57,26 +54,18 @@
   }
 
   async function handleLogout() {
-    try {
-      wsStore.disconnect();
-      auth.logout();
-    } catch {
-      auth.logout();
-    }
-    showToast('Logged out', 'info');
-  }
-
-  function closeSidebar() {
-    sidebarOpen = false;
+    wsStore.disconnect();
+    auth.logout();
+    showToast('Signed out', 'info');
   }
 
   const navLinks = [
-    { href: '/', label: 'Scan', icon: '🖨' },
-    { href: '/devices', label: 'Devices', icon: '📡' },
-    { href: '/targets', label: 'Targets', icon: '🎯' },
-    { href: '/history', label: 'History', icon: '📋' },
-    { href: '/stats', label: 'Stats', icon: '📊' },
-    { href: '/settings', label: 'Settings', icon: '⚙' }
+    { href: '/',         label: 'Scan',     Icon: ScanLine  },
+    { href: '/devices',  label: 'Devices',  Icon: Printer   },
+    { href: '/targets',  label: 'Targets',  Icon: Crosshair },
+    { href: '/history',  label: 'History',  Icon: Clock     },
+    { href: '/stats',    label: 'Stats',    Icon: BarChart3 },
+    { href: '/settings', label: 'Settings', Icon: Settings2 },
   ];
 
   function isActive(href: string): boolean {
@@ -85,210 +74,179 @@
     return path.startsWith(href);
   }
 
-  const wsStatusLabel = $derived(
-    wsStore.status === 'connected'
-      ? 'Connected'
-      : wsStore.status === 'connecting'
-      ? 'Connecting…'
-      : 'Disconnected'
-  );
+  const wsStatus = $derived(wsStore.status);
 </script>
 
 {#if !bootstrapped}
-  <div class="boot-loader">
+  <!-- Boot loader -->
+  <div class="flex items-center justify-center min-h-dvh bg-zinc-950">
     <Spinner size="lg" />
   </div>
+
 {:else if !auth.isAuthenticated}
-  <!-- Login screen -->
-  <div class="login-page">
-    <div class="login-card">
-      <div class="login-logo">
-        <span class="logo-icon">🖨</span>
-        <span class="logo-text">Scan<span class="text-primary">2</span>Target</span>
+  <!-- ── Login ─────────────────────────────────────────── -->
+  <div class="min-h-dvh bg-zinc-950 flex items-center justify-center p-4"
+       style="background: radial-gradient(ellipse at top, rgba(99,102,241,0.08) 0%, transparent 60%), #09090b;">
+    <div class="w-full max-w-sm">
+
+      <!-- Logo -->
+      <div class="flex flex-col items-center mb-8 gap-2">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-1"
+             style="background: linear-gradient(135deg, #6366f1, #8b5cf6); box-shadow: 0 4px 20px rgba(99,102,241,0.35);">
+          <ScanLine size={24} color="white" />
+        </div>
+        <h1 class="text-2xl font-bold text-zinc-50 tracking-tight">Scan<span class="text-indigo-400">2</span>Target</h1>
+        <p class="text-sm text-zinc-500">Self-hosted scanner delivery hub</p>
       </div>
-      <p class="login-sub">Self-hosted scanner-to-cloud delivery hub</p>
 
-      {#if loginError}
-        <div class="login-error">{loginError}</div>
-      {/if}
+      <!-- Card -->
+      <div class="card p-6 shadow-2xl shadow-black/40">
+        {#if loginError}
+          <div class="mb-4 px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2" role="alert">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            {loginError}
+          </div>
+        {/if}
 
-      <form onsubmit={handleLogin}>
-        <div class="form-group">
-          <label class="form-label" for="login-user">Username</label>
-          <input
-            id="login-user"
-            class="form-control"
-            type="text"
-            bind:value={loginUsername}
-            required
-            autocomplete="username"
-            placeholder="admin"
-          />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="login-pass">Password</label>
-          <input
-            id="login-pass"
-            class="form-control"
-            type="password"
-            bind:value={loginPassword}
-            required
-            autocomplete="current-password"
-          />
-        </div>
-        <button type="submit" class="btn btn-primary w-full btn-lg" disabled={loginLoading}>
-          {#if loginLoading}<Spinner size="sm" />{/if}
-          Sign In
-        </button>
-      </form>
+        <form onsubmit={handleLogin} class="flex flex-col gap-4">
+          <div class="form-group">
+            <label class="form-label" for="l-user">Username</label>
+            <input id="l-user" class="form-control" type="text"
+                   bind:value={loginUsername} required autocomplete="username"
+                   placeholder="admin" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="l-pass">Password</label>
+            <div class="relative">
+              <input id="l-pass" class="form-control pr-10"
+                     type={showPass ? 'text' : 'password'}
+                     bind:value={loginPassword} required
+                     autocomplete="current-password" />
+              <button type="button"
+                      class="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                      onclick={() => (showPass = !showPass)} tabindex="-1">
+                {#if showPass}<EyeOff size={16} />{:else}<Eye size={16} />{/if}
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-full justify-center mt-1" style="padding:10px;"
+                  disabled={loginLoading}>
+            {#if loginLoading}
+              <Loader2 size={16} class="animate-spin" />
+            {/if}
+            Sign In
+          </button>
+        </form>
+      </div>
+
+      <p class="text-center text-xs text-zinc-700 mt-6">Scan2Target v2.0</p>
     </div>
   </div>
+
 {:else}
-  <!-- App shell -->
-  <div class="app-shell">
-    <!-- Mobile header -->
-    <header class="mobile-header">
-      <button class="hamburger" onclick={() => (sidebarOpen = !sidebarOpen)} aria-label="Menu">
-        ☰
-      </button>
-      <span class="mobile-logo">Scan<span class="text-primary">2</span>Target</span>
-      <div style="width:32px"></div>
-    </header>
+  <!-- ── App shell ──────────────────────────────────────── -->
+  <div class="shell">
 
-    <!-- Overlay -->
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
-    <div class="overlay" class:open={sidebarOpen} role="presentation" onclick={closeSidebar}></div>
+    <!-- ── Desktop sidebar ──── -->
+    <nav class="sidebar" aria-label="Main navigation">
+      <!-- Brand -->
+      <div class="sidebar-brand">
+        <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+          <ScanLine size={15} color="white" />
+        </div>
+        <span class="font-bold text-zinc-50 tracking-tight">Scan<span class="text-indigo-400">2</span>Target</span>
+      </div>
 
-    <!-- Sidebar -->
-    <nav class="sidebar" class:open={sidebarOpen} aria-label="Main navigation">
-      <a href="/" class="sidebar-logo" onclick={closeSidebar}>
-        <span class="logo-icon">🖨</span>
-        <span>Scan<span>2</span>Target</span>
-      </a>
-
+      <!-- Nav links -->
       <div class="sidebar-nav">
-        {#each navLinks as link}
-          <a
-            href={link.href}
-            class="nav-link"
-            class:active={isActive(link.href)}
-            onclick={closeSidebar}
-          >
-            <span class="nav-icon">{link.icon}</span>
-            {link.label}
+        {#each navLinks as { href, label, Icon }}
+          <a {href} class="nav-link" class:active={isActive(href)}>
+            <Icon size={17} />
+            {label}
           </a>
         {/each}
       </div>
 
-      <!-- WS status -->
-      <div class="ws-indicator">
-        <span class="ws-dot {wsStore.status}"></span>
-        {wsStatusLabel}
-      </div>
-
+      <!-- Footer -->
       <div class="sidebar-footer">
+        <!-- WS status -->
+        <div class="flex items-center gap-2 px-1">
+          <span class="ws-dot {wsStatus}"></span>
+          <span class="text-xs text-zinc-600">
+            {wsStatus === 'connected' ? 'Live' : wsStatus === 'connecting' ? 'Connecting…' : 'Offline'}
+          </span>
+        </div>
+
         {#if auth.user}
-          <div class="user-info">
-            <span class="user-name">👤 {auth.user.username}</span>
-            {#if auth.user.is_admin}
-              <span class="badge badge-primary" style="font-size:0.65rem;margin-left:4px">admin</span>
-            {/if}
+          <!-- User row -->
+          <div class="flex items-center justify-between gap-2 mt-1">
+            <div class="flex items-center gap-2 min-w-0">
+              <div class="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                <User size={14} class="text-zinc-400" />
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-zinc-300 truncate">{auth.user.username}</p>
+                {#if auth.user.is_admin}
+                  <p class="text-zinc-600" style="font-size:0.625rem;">Admin</p>
+                {/if}
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-icon btn-sm flex-shrink-0" onclick={handleLogout} title="Sign out">
+              <LogOut size={14} />
+            </button>
           </div>
-          <button class="btn btn-ghost btn-sm" style="margin-top:8px;width:100%;" onclick={handleLogout}>
-            Sign Out
-          </button>
         {/if}
       </div>
     </nav>
 
-    <!-- Main content -->
+    <!-- ── Mobile header ──── -->
+    <header class="mobile-header">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-lg flex items-center justify-center"
+             style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+          <ScanLine size={14} color="white" />
+        </div>
+        <span class="font-bold text-zinc-50">Scan<span class="text-indigo-400">2</span>Target</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <!-- WS indicator -->
+        {#if wsStatus === 'connected'}
+          <Wifi size={16} class="text-emerald-500" />
+        {:else}
+          <WifiOff size={16} class="text-zinc-600" />
+        {/if}
+        <button class="btn btn-ghost btn-icon btn-sm" onclick={handleLogout} title="Sign out">
+          <LogOut size={16} />
+        </button>
+      </div>
+    </header>
+
+    <!-- ── Main content ──── -->
     <main class="main-content">
       {@render children()}
     </main>
+
+    <!-- ── Mobile bottom nav ──── -->
+    <nav class="bottom-nav" aria-label="Mobile navigation">
+      <div class="bottom-nav-inner">
+        {#each navLinks as { href, label, Icon }}
+          <a {href} class="bn-link" class:active={isActive(href)}>
+            <Icon size={20} strokeWidth={isActive(href) ? 2.5 : 1.75} />
+            <span>{label}</span>
+          </a>
+        {/each}
+      </div>
+    </nav>
+
   </div>
 {/if}
 
 <Toast />
 
 <style>
-  .boot-loader {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-  }
-
-  /* Login page */
-  .login-page {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    background: var(--color-bg);
-  }
-
-  .login-card {
-    width: 100%;
-    max-width: 380px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    padding: 32px 28px;
-    box-shadow: var(--shadow-lg);
-  }
-
-  .login-logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 6px;
-  }
-
-  .logo-icon {
-    font-size: 1.8rem;
-  }
-
-  .logo-text {
-    font-size: 1.4rem;
-    font-weight: 700;
-  }
-
-  .login-sub {
-    color: var(--color-text-muted);
-    font-size: 0.85rem;
-    margin-bottom: 24px;
-  }
-
-  .login-error {
-    background: var(--color-error-dim);
-    border: 1px solid var(--color-error);
-    color: var(--color-error);
-    border-radius: var(--radius-md);
-    padding: 10px 14px;
-    font-size: 0.875rem;
-    margin-bottom: 16px;
-  }
-
-  .mobile-logo {
-    font-weight: 700;
-    font-size: 1rem;
-  }
-
-  .user-info {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  .user-name {
-    font-size: 0.8rem;
-    color: var(--color-text-muted);
-  }
-
-  .sidebar-logo span {
-    color: var(--color-primary);
-  }
+  :global(.animate-spin) { animation: spin 0.75s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
