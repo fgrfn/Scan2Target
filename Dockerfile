@@ -24,7 +24,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     imagemagick \
     libsane1 \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && find /etc/ImageMagick* -name policy.xml \
+       -exec sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/g;
+                     s/rights="none" pattern="TIFF"/rights="read|write" pattern="TIFF"/g;
+                     s/rights="none" pattern="PS"/rights="read|write" pattern="PS"/g' {} + 2>/dev/null || true
 
 WORKDIR /app
 

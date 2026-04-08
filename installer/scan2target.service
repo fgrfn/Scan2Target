@@ -6,8 +6,8 @@ Wants=avahi-daemon.service
 
 [Service]
 Type=simple
-User=pi
-Group=pi
+User=scan2target
+Group=scan2target
 WorkingDirectory=/opt/scan2target/backend
 
 Environment="VIRTUAL_ENV=/opt/scan2target/.venv"
@@ -35,11 +35,9 @@ RestartSec=5
 StartLimitBurst=3
 StartLimitInterval=300
 
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/opt/scan2target/data /var/log/scan2target /tmp/scan2target
+# NOTE: PrivateTmp / ProtectSystem / ProtectHome are intentionally omitted.
+# These require kernel namespace support which is unavailable in LXC containers
+# and some VMs. They can be re-added on bare-metal systems that support them.
 
 StandardOutput=journal
 StandardError=journal

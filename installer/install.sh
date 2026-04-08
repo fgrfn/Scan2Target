@@ -60,6 +60,12 @@ setup_webui() {
     fi
 }
 
+create_dirs() {
+    echo "[+] Creating data directories..."
+    mkdir -p "${APP_DIR}/data/db" /var/log/scan2target /tmp/scan2target
+    chown -R "${RUN_USER}:${RUN_USER}" "${APP_DIR}/data" /var/log/scan2target
+}
+
 create_service() {
     echo "[+] Writing systemd unit to ${SERVICE_FILE}..."
     cat > "${SERVICE_FILE}" <<SERVICE
@@ -78,8 +84,8 @@ Environment="VIRTUAL_ENV=${VENV_DIR}"
 Environment="PATH=${VENV_DIR}/bin:/usr/bin:/bin"
 Environment="PYTHONUNBUFFERED=1"
 Environment="PYTHONPATH=${APP_DIR}/backend"
-Environment="SCAN2TARGET_DATABASE_PATH=/opt/scan2target/data/db/scan2target.db"
-Environment="SCAN2TARGET_DATA_DIR=/opt/scan2target/data"
+Environment="SCAN2TARGET_DATABASE_PATH=${APP_DIR}/data/db/scan2target.db"
+Environment="SCAN2TARGET_DATA_DIR=${APP_DIR}/data"
 Environment="SCAN2TARGET_LOG_DIR=/var/log/scan2target"
 # Set your encryption key:
 # Environment="SCAN2TARGET_SECRET_KEY=$(openssl rand -base64 32)"
@@ -134,6 +140,7 @@ main() {
     install_packages
     setup_venv
     setup_webui
+    create_dirs
     create_service
     enable_service
     print_info

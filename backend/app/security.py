@@ -33,7 +33,9 @@ class SecureStorage:
             return base64.urlsafe_b64encode(kdf.derive(raw.encode()))
 
         # Development fallback — auto-generate and persist.
-        key_file = Path.home() / ".scan2target" / "encryption.key"
+        # Use the configured data_dir so the key survives container restarts.
+        from app.config import get_settings as _gs
+        key_file = Path(_gs().data_dir) / ".scan2target" / "encryption.key"
         if key_file.exists():
             return key_file.read_bytes()
 
