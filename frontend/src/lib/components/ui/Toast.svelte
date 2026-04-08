@@ -5,19 +5,15 @@
 
 <div class="toast-container" aria-live="polite" aria-atomic="false">
   {#each toastStore.toasts as toast (toast.id)}
-    <div class="toast toast-{toast.type}" role="alert" style="animation: slideFromRight 0.2s ease;">
-      <div class="toast-icon-wrap toast-icon-{toast.type}">
-        {#if toast.type === 'success'}
-          <CheckCircle2 size={14} />
-        {:else if toast.type === 'error'}
-          <XCircle size={14} />
-        {:else}
-          <Info size={14} />
-        {/if}
-      </div>
-      <span class="toast-message">{toast.message}</span>
+    <div class="toast toast-{toast.type}" role="alert">
+      <span class="toast-icon toast-icon-{toast.type}">
+        {#if toast.type === 'success'}<CheckCircle2 size={13} />
+        {:else if toast.type === 'error'}<XCircle size={13} />
+        {:else}<Info size={13} />{/if}
+      </span>
+      <span class="toast-msg">{toast.message}</span>
       <button class="toast-close" onclick={() => toastStore.dismiss(toast.id)} aria-label="Dismiss">
-        <X size={13} />
+        <X size={12} />
       </button>
     </div>
   {/each}
@@ -25,71 +21,50 @@
 
 <style>
   .toast-container {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
+    position: fixed; bottom: 20px; right: 20px;
     z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-width: 360px;
-    width: calc(100vw - 48px);
+    display: flex; flex-direction: column; gap: 6px;
+    max-width: 340px; width: calc(100vw - 40px);
     pointer-events: none;
   }
 
   .toast {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 11px 12px;
-    border-radius: 10px;
-    border: 1px solid transparent;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    font-size: 0.875rem;
-    background: #1a1a22;
-    color: #e4e4f0;
+    display: flex; align-items: center; gap: 9px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--c-border-em);
+    background: var(--c-surface-2);
+    color: var(--c-text);
+    font-size: 0.8125rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     pointer-events: auto;
+    animation: slideFromRight 0.18s ease;
   }
 
-  .toast-success { border-color: rgba(74,222,128,0.25); background: rgba(20,30,20,0.95); }
-  .toast-error   { border-color: rgba(248,113,113,0.25); background: rgba(30,16,16,0.95); }
-  .toast-info    { border-color: rgba(96,165,250,0.25);  background: rgba(16,20,32,0.95); }
+  .toast-success { border-color: rgba(34,197,94,0.25);   background: #0d1a0d; }
+  .toast-error   { border-color: rgba(239,68,68,0.25);   background: #1a0d0d; }
+  .toast-info    { border-color: rgba(59,130,246,0.25);  background: #0d111a; }
 
-  .toast-icon-wrap {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+  .toast-icon         { display: flex; align-items: center; flex-shrink: 0; }
   .toast-icon-success { color: #4ade80; }
   .toast-icon-error   { color: #f87171; }
   .toast-icon-info    { color: #60a5fa; }
 
-  .toast-message {
-    flex: 1;
-    line-height: 1.4;
-    font-size: 0.875rem;
-  }
-
+  .toast-msg   { flex: 1; line-height: 1.4; }
   .toast-close {
-    flex-shrink: 0;
-    background: none;
-    border: none;
-    color: #52525b;
-    cursor: pointer;
-    padding: 2px;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
+    flex-shrink: 0; background: none; border: none;
+    color: var(--c-text-3); cursor: pointer;
+    display: flex; align-items: center; padding: 2px;
+    border-radius: 3px;
   }
-  .toast-close:hover { color: #a1a1aa; }
+  .toast-close:hover { color: var(--c-text-2); }
+
+  @keyframes slideFromRight {
+    from { opacity: 0; transform: translateX(12px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
 
   @media (max-width: 768px) {
-    .toast-container {
-      bottom: 72px; /* above bottom nav */
-      right: 12px;
-      left: 12px;
-      width: auto;
-    }
+    .toast-container { bottom: 68px; right: 12px; left: 12px; width: auto; }
   }
 </style>
