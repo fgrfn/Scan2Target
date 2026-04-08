@@ -32,7 +32,8 @@ services:
       #   - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY}
       #
       # Option C — Development (no secret set):
-      #   Auto-generates ~/.scan2target/encryption.key — fine for home use.
+      #   Auto-generates /data/.scan2target/encryption.key (inside the volume).
+      #   Survives container restarts as long as the scan2target-data volume exists.
 
     # secrets:
     #   - scan2target_secret_key

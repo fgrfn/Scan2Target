@@ -1,14 +1,26 @@
 #!/bin/bash
 set -e
 
-# Start Avahi daemon for mDNS scanner discovery
+# ── Data directories ──────────────────────────────────────────────────────────
+mkdir -p /data/db /var/log/scan2target /tmp/scan2target
+
+# ── Avahi (mDNS scanner discovery) ───────────────────────────────────────────
+# Avahi requires host networking (network_mode: host) and a writable /run.
+# It will silently do nothing if unavailable — scanner discovery falls back
+# to manual configuration.
 if command -v avahi-daemon &>/dev/null; then
     mkdir -p /var/run/avahi-daemon
-    avahi-daemon --no-rlimits --daemonize 2>/dev/null || true
+    if avahi-daemon --no-rlimits --daemonize 2>/dev/null; then
+        echo "[entrypoint] avahi-daemon started — mDNS discovery enabled"
+    else
+        echo "[entrypoint] avahi-daemon failed to start (OK in bridge-network mode — use manual scanner IPs)"
+    fi
 fi
 
-# Ensure data directories exist
-mkdir -p /data/db /var/log/scan2target /tmp/scan2target
+# ── Optional tool availability warnings ──────────────────────────────────────
+for cmd in scanimage airscan-discover convert smbclient sftp; do
+    command -v "$cmd" &>/dev/null || echo "[entrypoint] WARN: $cmd not found — related features disabled"
+done
 
 cd /app
 
