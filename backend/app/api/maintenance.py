@@ -17,9 +17,12 @@ def cleanup(_=_admin):
     for f in tmp.rglob("*"):
         if not f.is_file():
             continue
-        age_days = (now - f.stat().st_mtime) / 86400
+        age_hours = (now - f.stat().st_mtime) / 3600
+        age_days = age_hours / 24
         if f.suffix in (".jpg", ".jpeg") and "_thumb" in f.name and age_days > 7:
             f.unlink(); deleted_thumbs += 1
+        elif f.name.startswith("batch_") and f.suffix == ".tiff" and age_hours > 2:
+            f.unlink(); deleted_files += 1
         elif f.suffix in (".pdf", ".jpeg", ".jpg") and age_days > 30:
             f.unlink(); deleted_files += 1
     return {"deleted_thumbnails": deleted_thumbs, "deleted_files": deleted_files}

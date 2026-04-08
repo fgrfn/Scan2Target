@@ -1,12 +1,13 @@
-# GitHub Container Registry (GHCR) Setup
+# GitHub Container Registry
 
-## Overview
+See the [README](../README.md) for Docker pull/run instructions.
 
-Docker images for Scan2Target are automatically built and published to the GitHub Container Registry (GHCR) at `ghcr.io/fgrfn/scan2target`.
+Images are published automatically on every push to `main` via `.github/workflows/docker-build.yml`:
+```
+ghcr.io/fgrfn/scan2target:latest
+ghcr.io/fgrfn/scan2target:v2.x.x
+```
 
-## Automated Publishing
-
-The repository uses GitHub Actions to automatically build and publish Docker images:
 
 ### Workflow: `.github/workflows/docker-build.yml`
 

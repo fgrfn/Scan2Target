@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { auth } from '$lib/stores/auth.svelte';
   import { showToast } from '$lib/stores/toast.svelte';
   import { getSettings, updateSetting, type AppSettings } from '$lib/api/settings';
   import { runCleanup, getDiskUsage, type DiskUsage } from '$lib/api/maintenance';
@@ -8,17 +7,17 @@
   import { Shield, Terminal, Timer, Globe, HardDrive, RefreshCw, Trash2, Loader2, Lock, Save } from 'lucide-svelte';
 
   let loading = $state(true); let savingKey = $state<string|null>(null);
+  let accessDenied = $state(false);
   let requireAuth = $state(false); let logLevel = $state('INFO');
   let healthCheckInterval = $state(30); let scannerCheckInterval = $state(60); let commandTimeout = $state(120);
   let corsOrigins = $state('[]');
   let diskUsage = $state<DiskUsage|null>(null); let loadingDisk = $state(false); let cleaningUp = $state(false);
 
   const LOG_LEVELS = ['DEBUG','INFO','WARNING','ERROR','CRITICAL'];
-  const isAdmin = $derived(auth.user?.is_admin??false);
 
   onMount(()=>Promise.all([loadSettings(),loadDisk()]));
 
-  async function loadSettings(){ loading=true; try{ const s=await getSettings(); requireAuth=s.require_auth;logLevel=s.log_level;healthCheckInterval=s.health_check_interval;scannerCheckInterval=s.scanner_check_interval;commandTimeout=s.command_timeout;corsOrigins=JSON.stringify(s.cors_origins,null,2); }catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{loading=false;} }
+  async function loadSettings(){ loading=true; accessDenied=false; try{ const s=await getSettings(); requireAuth=s.require_auth;logLevel=s.log_level;healthCheckInterval=s.health_check_interval;scannerCheckInterval=s.scanner_check_interval;commandTimeout=s.command_timeout;corsOrigins=JSON.stringify(s.cors_origins,null,2); }catch(e:unknown){ import('$lib/api/client').then(({ApiError})=>{ if(e instanceof ApiError&&(e.status===401||e.status===403))accessDenied=true; else showToast(e instanceof Error?e.message:'Failed','error'); }); }finally{loading=false;} }
 
   async function loadDisk(){ loadingDisk=true; try{diskUsage=await getDiskUsage();}catch{} finally{loadingDisk=false;} }
 
@@ -43,7 +42,7 @@
     <p class="page-sub">Application configuration and maintenance</p>
   </div>
 
-  {#if !isAdmin}
+  {#if accessDenied}
     <div class="card"><div class="empty-state"><Lock size={28} style="color:var(--c-surface-3);" /><p>Settings are only accessible to administrators.</p></div></div>
   {:else if loading}
     <div style="display:flex;align-items:center;gap:10px;color:var(--c-text-2);padding:48px 0;"><Spinner /><span>Loading…</span></div>

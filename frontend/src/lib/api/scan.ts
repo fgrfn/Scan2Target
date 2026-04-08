@@ -38,9 +38,10 @@ export interface BatchRequest {
   page_paths: string[];
 }
 
-export interface PreviewResponse {
+export interface BatchPageResponse {
   status: string;
-  image: string; // base64
+  image: string;   // base64 preview
+  file_path: string; // server-side TIFF path for combine_batch
 }
 
 export function getProfiles(): Promise<ScanProfile[]> {
@@ -65,6 +66,13 @@ export function cancelJob(id: string): Promise<void> {
 
 export function previewScan(deviceId: string, profileId: string): Promise<PreviewResponse> {
   return apiPost<PreviewResponse>('/scan/preview', {
+    device_id: deviceId,
+    profile_id: profileId
+  });
+}
+
+export function scanBatchPage(deviceId: string, profileId: string): Promise<BatchPageResponse> {
+  return apiPost<BatchPageResponse>('/scan/batch-page', {
     device_id: deviceId,
     profile_id: profileId
   });

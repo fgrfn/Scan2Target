@@ -1,6 +1,175 @@
 <div align="center">
 
-<img src="logo.png" alt="Scan2Target Logo" width="300"/>
+[![Version](https://img.shields.io/github/v/release/fgrfn/Scan2Target?label=version)](https://github.com/fgrfn/Scan2Target/releases)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/fgrfn/Scan2Target/pkgs/container/scan2target)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+# Scan2Target
+
+Web-based scan server. Control network/USB scanners and route documents to SMB, email, cloud storage, Paperless-ngx, or webhooks.
+
+</div>
+
+---
+
+## Quick Start
+
+### Docker (recommended)
+
+```bash
+docker compose up -d
+```
+
+Access at `http://YOUR_SERVER_IP:8000` — no login required by default (enable in Settings → Authentication).
+
+### Pre-built image
+
+```bash
+docker run -d \
+  --name scan2target \
+  --network host \
+  -v scan2target-data:/data \
+  ghcr.io/fgrfn/scan2target:latest
+```
+
+> **`--network host` is required** for mDNS scanner discovery (Avahi/eSCL). Without it, scanners can still be added manually by IP.
+
+---
+
+## Configuration
+
+All runtime settings (auth, log level, intervals) are adjustable in the **Settings** page — no restart needed.
+
+| Environment variable | Default | Description |
+|---|---|---|
+| `SCAN2TARGET_DATABASE_PATH` | `/data/db/scan2target.db` | SQLite DB path |
+| `SCAN2TARGET_DATA_DIR` | `/data` | Persistent data root |
+| `SCAN2TARGET_LOG_DIR` | `/var/log/scan2target` | Log directory |
+| `SCAN2TARGET_JWT_SECRET` | auto-generated | Signing secret for JWT tokens |
+
+The JWT secret is auto-persisted to `/data/.scan2target/secret.key` if not provided via env. It survives container restarts as long as the volume exists.
+
+**Docker Secret (production):**
+```bash
+mkdir secrets && openssl rand -base64 32 > secrets/scan2target_secret_key
+# then uncomment the secrets block in docker-compose.yml
+```
+
+---
+
+## Scanner Setup
+
+### Auto-discovery
+Click **Discover** in the Devices page. Requires `--network host`.
+
+### Manual add
+Use the `airscan:escl:` URI format:
+```
+airscan:escl:HP_ENVY_6400:http://192.168.1.10:8080/eSCL
+```
+
+---
+
+## Targets
+
+| Type | Notes |
+|---|---|
+| **SMB / CIFS** | `//server/share` — Windows/Samba shares |
+| **SFTP** | SSH file transfer |
+| **Email** | SMTP with attachments |
+| **Paperless-ngx** | POST to REST API |
+| **Webhook** | Custom HTTP endpoint |
+| **Google Drive** | OAuth2 |
+| **Dropbox** | OAuth2 |
+| **OneDrive** | OAuth2 |
+| **Nextcloud** | WebDAV |
+
+---
+
+## Scan Profiles
+
+| ID | DPI | Color | Format | Source |
+|---|---|---|---|---|
+| `doc_200_gray_pdf` | 200 | Gray | PDF | Flatbed |
+| `doc_200_gray_adf` | 200 | Gray | PDF | ADF |
+| `color_300_pdf` | 300 | Color | PDF | Flatbed |
+| `gray_150_pdf` | 150 | Gray | PDF | Flatbed |
+| `photo_600_jpeg` | 600 | Color | JPEG | Flatbed |
+
+---
+
+## Home Assistant Integration
+
+Mark a scanner and a target as **Favorite**, then:
+
+```yaml
+rest_command:
+  scan_document:
+    url: "http://YOUR_SERVER_IP:8000/api/v1/homeassistant/scan"
+    method: POST
+    content_type: "application/json"
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "doc_200_gray_pdf"}'
+```
+
+Full example config: [`examples/homeassistant_config.yaml`](examples/homeassistant_config.yaml)  
+Detailed guide: [`docs/homeassistant.md`](docs/homeassistant.md)
+
+---
+
+## API
+
+Swagger UI: `http://YOUR_SERVER_IP:8000/docs`
+
+Key endpoints:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/v1/scan/start` | POST | Start a scan job |
+| `/api/v1/scan/preview` | POST | Low-res preview image |
+| `/api/v1/scan/batch-page` | POST | Scan one page for batch assembly |
+| `/api/v1/scan/batch` | POST | Combine batch pages and deliver |
+| `/api/v1/devices/discover` | GET | Auto-discover scanners |
+| `/api/v1/homeassistant/scan` | POST | HA trigger |
+| `/api/v1/homeassistant/status` | GET | HA status sensor |
+| `/api/v1/ws` | WS | Real-time job + scanner updates |
+
+---
+
+## Service Management
+
+```bash
+# Docker
+docker compose up -d
+docker compose logs -f
+docker compose down
+
+# systemd (native install)
+sudo systemctl status scan2target
+sudo journalctl -u scan2target -f
+```
+
+---
+
+## Logs
+
+```bash
+docker logs -f scan2target
+# or persistent file log:
+docker exec scan2target tail -f /var/log/scan2target/app.log
+```
+
+---
+
+## Unraid
+
+See [`docs/unraid-setup.md`](docs/unraid-setup.md).
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
 
 [![Version](https://img.shields.io/github/v/release/fgrfn/Scan2Target?label=version)](https://github.com/fgrfn/Scan2Target/releases)
 [![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](https://github.com/fgrfn/Scan2Target/pkgs/container/scan2target)

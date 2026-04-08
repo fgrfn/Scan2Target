@@ -68,7 +68,7 @@ def create_target(data: dict) -> dict:
         conn.execute(
             "INSERT INTO targets (id, type, name, config, enabled, description, is_favorite) "
             "VALUES (?,?,?,?,?,?,?)",
-            (target_id, data["type"], data["name"], json.dumps(enc),
+            (target_id, data["type"].lower(), data["name"], json.dumps(enc),
              1 if data.get("enabled", True) else 0,
              data.get("description"), 1 if data.get("is_favorite") else 0),
         )
@@ -81,7 +81,7 @@ def update_target(target_id: str, data: dict) -> dict | None:
         conn.execute(
             "UPDATE targets SET type=?, name=?, config=?, enabled=?, description=?, is_favorite=?, "
             "updated_at=strftime('%Y-%m-%dT%H:%M:%S','now') WHERE id=?",
-            (data["type"], data["name"], json.dumps(enc),
+            (data["type"].lower(), data["name"], json.dumps(enc),
              1 if data.get("enabled", True) else 0,
              data.get("description"), 1 if data.get("is_favorite") else 0, target_id),
         )
@@ -106,7 +106,7 @@ def test_target(target_id: str) -> None:
     if not tgt:
         raise ValueError(f"Target {target_id!r} not found")
     cfg = _raw_config(target_id)
-    provider = PROVIDERS.get(tgt["type"])
+    provider = PROVIDERS.get(tgt["type"].lower())
     if not provider:
         raise ValueError(f"Unknown target type: {tgt['type']!r}")
     provider().test(cfg)
@@ -114,7 +114,7 @@ def test_target(target_id: str) -> None:
 
 def test_config(target_type: str, config: dict) -> None:
     """Test a config dict before saving."""
-    provider = PROVIDERS.get(target_type)
+    provider = PROVIDERS.get(target_type.lower())
     if not provider:
         raise ValueError(f"Unknown target type: {target_type!r}")
     provider().test(config)
@@ -126,7 +126,10 @@ def deliver(target_id: str, file_path: Path, filename: str) -> None:
     if not tgt:
         raise ValueError(f"Target {target_id!r} not found")
     cfg = _raw_config(target_id)
-    PROVIDERS[tgt["type"]]().deliver(cfg, file_path, filename)
+    provider = PROVIDERS.get(tgt["type"].lower())
+    if not provider:
+        raise ValueError(f"Unknown target type: {tgt['type']!r}")
+    provider().deliver(cfg, file_path, filename)
 
 
 def get_favorite_target() -> dict | None:

@@ -4,7 +4,7 @@
   import { showToast } from '$lib/stores/toast.svelte';
   import { listDevices, type Device } from '$lib/api/devices';
   import { listTargets, type Target } from '$lib/api/targets';
-  import { getProfiles, startScan, listJobs, cancelJob, previewScan, startBatch, getJob, type ScanProfile, type Job } from '$lib/api/scan';
+  import { getProfiles, startScan, listJobs, cancelJob, previewScan, startBatch, getJob, scanBatchPage, type ScanProfile, type Job } from '$lib/api/scan';
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import { ScanLine, Upload, Eye, Plus, X, CheckCircle2, XCircle, Loader2, Clock, Layers, ChevronRight } from 'lucide-svelte';
 
@@ -72,9 +72,9 @@
     if(!selectedDeviceId||!selectedProfileId){ showToast('Select device & profile','error'); return; }
     batchScanning=true;
     try {
-      const r=await previewScan(selectedDeviceId,selectedProfileId);
+      const r=await scanBatchPage(selectedDeviceId,selectedProfileId);
       batchPagePreviews=[...batchPagePreviews,r.image];
-      batchPages=[...batchPages,`page_${batchPages.length+1}`];
+      batchPages=[...batchPages,r.file_path];  // real server-side path
       showToast(`Page ${batchPages.length} scanned`,'success');
     } catch(err: unknown){ showToast(err instanceof Error ? err.message : 'Failed','error'); }
     finally { batchScanning=false; }
@@ -159,8 +159,9 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="wh">Webhook <span style="text-transform:none;font-weight:400;color:var(--c-text-3);">(optional)</span></label>
+            <label class="form-label" for="wh">Completion Webhook <span style="text-transform:none;font-weight:400;color:var(--c-text-3);">(optional)</span></label>
             <input id="wh" class="form-control" type="url" bind:value={webhookUrl} placeholder="https://…" />
+            <span class="form-hint">Called with POST {job_id, status} when the job finishes — useful for Home Assistant automations.</span>
           </div>
 
           {#if !batchMode}

@@ -42,8 +42,12 @@ def _scan_page(uri: str, profile: dict, out_path: Path) -> None:
     ]
     if profile.get("source") == "ADF":
         cmd.append("--source=ADF")
-    subprocess.run(cmd, capture_output=True, text=True,
-                   timeout=120, check=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:
+        stderr = r.stderr.strip() or r.stdout.strip()
+        if stderr:
+            logger.error("scanimage stderr: %s", stderr)
+        raise subprocess.CalledProcessError(r.returncode, cmd, r.stdout, r.stderr)
 
 
 def _convert_to_pdf(tiff_paths: list[Path], out_pdf: Path) -> None:
@@ -138,10 +142,16 @@ async def scan_and_deliver(job_id: str, uri: str, profile_id: str, target_id: st
             await ws.broadcast_job(job)
 
     except Exception as exc:
-        logger.error("Job %s failed: %s", job_id, exc, exc_info=True)
+        if isinstance(exc, subprocess.CalledProcessError) and exc.stderr:
+            stderr = exc.stderr.strip()
+            fail_msg = f"Scan failed: {stderr}"
+            logger.error("Job %s failed: %s", job_id, fail_msg)
+        else:
+            fail_msg = str(exc)
+            logger.error("Job %s failed: %s", job_id, exc, exc_info=True)
         for t in tiff_paths:
             t.unlink(missing_ok=True)
-        job = jobs.update_status(job_id, "failed", str(exc))
+        job = jobs.update_status(job_id, "failed", fail_msg)
         if job:
             await ws.broadcast_job(job)
 
@@ -176,6 +186,26 @@ async def scan_preview(uri: str, profile_id: str) -> str:
         return base64.b64encode(data).decode()
     finally:
         tiff.unlink(missing_ok=True)
+
+
+async def scan_and_save_page(uri: str, profile_id: str) -> tuple[str, Path]:
+    """Scan a single page at full profile resolution, persist the TIFF, return (preview_b64, tiff_path).
+
+    Used by batch mode: the caller collects tiff_paths and later calls combine_batch().
+    """
+    import uuid
+    profile = get_profile(profile_id) or {"dpi": 200, "color_mode": "Gray", "format": "pdf", "source": "Flatbed"}
+    tmp = _temp_dir()
+    tiff = tmp / f"batch_{uuid.uuid4().hex[:8]}.tiff"
+    await asyncio.to_thread(_scan_page, uri, profile, tiff)
+    # Create a low-res JPEG preview without deleting the TIFF
+    thumb = tiff.with_suffix(".jpg")
+    await asyncio.to_thread(_make_thumbnail, tiff, thumb)
+    try:
+        data = thumb.read_bytes()
+    finally:
+        thumb.unlink(missing_ok=True)
+    return base64.b64encode(data).decode(), tiff
 
 
 async def combine_batch(job_id: str, target_id: str, filename_prefix: str,

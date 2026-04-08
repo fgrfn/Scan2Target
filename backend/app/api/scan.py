@@ -7,7 +7,7 @@ from app.scanning.discovery import SCAN_PROFILES
 import app.jobs.service as jobs_svc
 from app.jobs.schemas import BatchRequest, ScanJobResponse, ScanRequest, JobOut
 from app.jobs.worker import get_worker
-from app.scanning.service import combine_batch, scan_and_deliver, scan_preview
+from app.scanning.service import combine_batch, scan_and_deliver, scan_preview, scan_and_save_page
 import app.devices.service as dev_svc
 
 router = APIRouter()
@@ -71,8 +71,28 @@ async def preview(body: dict, _=_auth):
         image_b64 = await scan_preview(dev["uri"], profile_id)
         return {"status": "ok", "image": image_b64}
     except Exception as e:
-        logger.error("Preview failed for device %s: %s", device_id, e, exc_info=True)
-        raise HTTPException(status_code=500, detail="Preview failed")
+        import subprocess as _sp
+        msg = e.stderr.strip() if isinstance(e, _sp.CalledProcessError) and e.stderr else str(e)
+        logger.error("Preview failed for device %s: %s", device_id, msg)
+        raise HTTPException(status_code=500, detail=f"Preview failed: {msg}")
+
+
+@router.post("/batch-page")
+async def scan_batch_page(body: dict, _=_auth):
+    """Scan a single page for batch mode. Returns preview image + server-side file path."""
+    device_id = body.get("device_id")
+    profile_id = body.get("profile_id", "doc_200_gray_pdf")
+    dev = dev_svc.get_device(device_id)
+    if not dev:
+        raise HTTPException(status_code=404, detail="Device not found")
+    try:
+        image_b64, file_path = await scan_and_save_page(dev["uri"], profile_id)
+        return {"status": "ok", "image": image_b64, "file_path": str(file_path)}
+    except Exception as e:
+        import subprocess as _sp
+        msg = e.stderr.strip() if isinstance(e, _sp.CalledProcessError) and e.stderr else str(e)
+        logger.error("Batch page scan failed for device %s: %s", device_id, msg)
+        raise HTTPException(status_code=500, detail=f"Scan failed: {msg}")
 
 
 @router.post("/batch", response_model=ScanJobResponse)

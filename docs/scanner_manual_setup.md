@@ -1,12 +1,18 @@
-# Scanner manuell hinzufügen
+# Manual Scanner Setup
 
-Wenn Ihr Scanner nicht automatisch gefunden wird, können Sie ihn manuell über die API hinzufügen.
+If auto-discovery (Discover button) doesn't find your scanner, add it manually in the **Devices** page using the URI format:
 
-## Methode 1: eSCL/AirScan Scanner (empfohlen für Netzwerk-Scanner)
+```
+airscan:escl:ScannerName:http://IP:PORT/eSCL
+```
 
-Die meisten modernen Netzwerk-Scanner unterstützen eSCL (Apple AirScan). 
+Example for HP ENVY at 10.10.30.146:8080:
+```
+airscan:escl:HP_ENVY_6400:http://10.10.30.146:8080/eSCL
+```
 
-### Scanner-URL finden:
+> The scanner's eSCL port is usually 80, 443, 8080, or 8443. Check your scanner's web interface or run `nmap -p 80,443,8080,8443 <IP>` to find it.
+
 
 ```bash
 # Im Docker-Container ausführen:

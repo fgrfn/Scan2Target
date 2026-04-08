@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
-from app.auth.dependencies import require_admin
+from app.auth.dependencies import require_admin_or_open
 from app.app_settings import service as svc
 from app.app_settings.schemas import SettingUpdate, SettingsOut
 
 router = APIRouter()
-_admin = Depends(require_admin)
+_admin = Depends(require_admin_or_open)
 
 
 @router.get("", response_model=SettingsOut)

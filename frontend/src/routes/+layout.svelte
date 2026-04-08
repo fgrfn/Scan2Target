@@ -5,6 +5,7 @@
   import { wsStore } from '$lib/stores/ws.svelte';
   import { showToast } from '$lib/stores/toast.svelte';
   import { login as apiLogin, getMe, getAuthConfig } from '$lib/api/auth';
+  import { apiFetch } from '$lib/api/client';
   import Toast from '$lib/components/ui/Toast.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import {
@@ -23,12 +24,16 @@
   let showPass      = $state(false);
   let bootstrapped  = $state(false);
   let requireAuth   = $state(true);
+  let appVersion    = $state('');
 
   onMount(async () => {
     try { const cfg = await getAuthConfig(); requireAuth = cfg.require_auth; } catch { /* keep default */ }
+    try { const v = await apiFetch<{ version: string }>('/version', { method: 'GET' }); appVersion = v.version; } catch { /* ignore */ }
     if (auth.token) {
       try { const u = await getMe(); auth.setUser(u); wsStore.start(); }
       catch { auth.logout(); }
+    } else if (!requireAuth) {
+      wsStore.start();
     }
     bootstrapped = true;
   });
@@ -157,6 +162,14 @@
           <span style="font-size:0.75rem;color:var(--c-text-3);">
             {wsStore.status === 'connected' ? 'Live' : wsStore.status === 'connecting' ? 'Connecting…' : 'Offline'}
           </span>
+          {#if appVersion}
+            <span style="font-size:0.7rem;color:var(--c-text-3);margin-left:auto;">
+              <a href="https://github.com/fgrfn/Scan2Target/releases" target="_blank" rel="noopener"
+                 style="color:var(--c-text-3);text-decoration:none;" title="View releases">
+                v{appVersion}
+              </a>
+            </span>
+          {/if}
         </div>
         {#if auth.user}
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">

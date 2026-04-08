@@ -76,7 +76,7 @@
   $effect(() => {
     const t = target;
     name = t?.name ?? '';
-    type = t?.type ?? 'smb';
+    type = (t?.type?.toLowerCase() ?? 'smb') as TargetType;
 
     smb_connection = (t?.config?.connection as string) ?? '';
     smb_username = (t?.config?.username as string) ?? '';

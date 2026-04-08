@@ -154,8 +154,8 @@
   <form onsubmit={handleAddManual} style="display:flex;flex-direction:column;gap:14px;">
     <div class="form-group">
       <label class="form-label" for="au">Scanner URI</label>
-      <input id="au" class="form-control" type="text" bind:value={addUri} placeholder="escl://192.168.1.100:443/eSCL" required />
-      <span class="form-hint">SANE URI or eSCL URL.</span>
+      <input id="au" class="form-control" type="text" bind:value={addUri} placeholder="airscan:escl:HP_ENVY:http://192.168.1.10:80/eSCL" required />
+      <span class="form-hint">eSCL/AirScan: <code>airscan:escl:Name:http://IP:PORT/eSCL</code> — or use <strong>Discover</strong> to find scanners automatically.</span>
     </div>
     <div class="form-group">
       <label class="form-label" for="an">Display Name</label>

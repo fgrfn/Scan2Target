@@ -79,9 +79,26 @@ def discover_all() -> list[dict]:
 
 
 def check_scanner_online(uri: str, timeout: int = 5) -> bool:
-    """Quick reachability check — tries scanimage --test."""
+    """Quick reachability check.
+
+    For eSCL/airscan URIs (contain an http:// URL) we GET /ScannerCapabilities —
+    this is fast, auth-free, and reliable without needing scanimage.
+    For other URI types (USB, etc.) we fall back to scanimage -L.
+    """
+    import re as _re
+    import requests as _req
+
+    m = _re.search(r'(https?://[^\s]+)', uri)
+    if m:
+        base = m.group(1).rstrip('/')
+        try:
+            r = _req.get(f"{base}/ScannerCapabilities", timeout=timeout)
+            return r.status_code == 200
+        except Exception:
+            return False
+    # Fallback: check if URI appears in scanimage device list
     try:
-        r = _run(["scanimage", "--test", f"--device-name={uri}"], timeout)
-        return r.returncode == 0
+        r = _run(["scanimage", "-L"], timeout)
+        return uri in r.stdout
     except Exception:
         return False

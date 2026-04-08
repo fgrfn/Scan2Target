@@ -37,3 +37,16 @@ async def require_admin(user: dict | None = Depends(get_current_user)) -> dict:
     if not user["is_admin"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
     return user
+
+
+async def require_admin_or_open(user: dict | None = Depends(get_current_user)) -> dict | None:
+    """Allow full access when auth is disabled; require admin when auth is enabled."""
+    if not _require_auth():
+        return user  # open access — user may be None
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Not authenticated",
+                            headers={"WWW-Authenticate": "Bearer"})
+    if not user["is_admin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+    return user

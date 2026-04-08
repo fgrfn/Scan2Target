@@ -1,12 +1,20 @@
-# Versionierung und Releases
+# Versioning
 
-## Übersicht
+Scan2Target uses [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`
 
-Scan2Target verwendet [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`
+## Automatic Version Bumping
 
-- **MAJOR**: Breaking Changes (Inkompatible API-Änderungen)
-- **MINOR**: Neue Features (rückwärtskompatibel)
-- **PATCH**: Bugfixes (rückwärtskompatibel)
+Every push to `main` triggers `.github/workflows/release.yml`, which:
+1. Reads the current `VERSION` file
+2. Detects bump type from commit message prefix:
+   - `break:` / `breaking:` → major
+   - `feat:` / `feature:` → minor
+   - anything else → patch
+3. Updates `VERSION`, creates a git tag `vX.Y.Z`, and creates a GitHub Release
+4. The Docker build workflow then publishes a new image tagged with the version
+
+Changes to `VERSION`, `docs/**`, and `*.md` files do not trigger a version bump.
+
 
 Die aktuelle Version wird in der Datei `VERSION` im Root-Verzeichnis gespeichert.
 

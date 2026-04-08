@@ -49,11 +49,11 @@ class HealthMonitor:
             online = await asyncio.to_thread(check_scanner_online, uri)
             self._status[uri] = {"online": online, "last_check": datetime.now(timezone.utc).isoformat()}
 
-            if online:
-                await asyncio.to_thread(touch_last_seen, _uri_to_id(uri))
+            dev = await asyncio.to_thread(get_device_by_uri, uri)
+            if online and dev:
+                await asyncio.to_thread(touch_last_seen, dev["id"])
 
             if prev != online:
-                dev = await asyncio.to_thread(get_device_by_uri, uri)
                 name = dev["name"] if dev else uri
                 logger.info("Scanner %r → %s", name, "ONLINE" if online else "OFFLINE")
                 await ws.broadcast_scanner(uri, online, name)
@@ -68,11 +68,6 @@ class HealthMonitor:
         online = await asyncio.to_thread(check_scanner_online, uri)
         self._status[uri] = {"online": online, "last_check": datetime.now(timezone.utc).isoformat()}
         return online
-
-
-def _uri_to_id(uri: str) -> str:
-    import re
-    return re.sub(r"[^a-z0-9_]", "_", uri.lower())[:64]
 
 
 _monitor: HealthMonitor | None = None
