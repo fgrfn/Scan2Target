@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     jwt_expiration: int = 3600  # seconds
 
     # ── Runtime defaults (also stored/overridden in DB via Web UI) ────────
-    require_auth: bool = True
+    require_auth: bool = False
     log_level: str = "INFO"
     health_check_interval: int = 60   # seconds
     scanner_check_interval: int = 30  # seconds
