@@ -1,5 +1,8 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from app.auth.dependencies import get_current_user
+
+logger = logging.getLogger(__name__)
 from app.scanning.discovery import SCAN_PROFILES
 import app.jobs.service as jobs_svc
 from app.jobs.schemas import BatchRequest, ScanJobResponse, ScanRequest, JobOut
@@ -21,6 +24,9 @@ async def start_scan(req: ScanRequest, _=_auth):
     dev = dev_svc.get_device(req.device_id)
     if not dev:
         raise HTTPException(status_code=404, detail="Device not found")
+    valid_ids = {p["id"] for p in SCAN_PROFILES}
+    if req.profile_id not in valid_ids:
+        raise HTTPException(status_code=400, detail=f"Unknown profile: {req.profile_id}")
     job = jobs_svc.create_job(req.device_id, req.target_id)
     await get_worker().submit(
         job["id"],
@@ -65,7 +71,8 @@ async def preview(body: dict, _=_auth):
         image_b64 = await scan_preview(dev["uri"], profile_id)
         return {"status": "ok", "image": image_b64}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Preview failed for device %s: %s", device_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Preview failed")
 
 
 @router.post("/batch", response_model=ScanJobResponse)

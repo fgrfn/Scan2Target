@@ -59,7 +59,7 @@
     <div class="card"><div class="empty-state"><History size={32} style="color:var(--c-surface-3);" /><p>No history yet.</p></div></div>
   {:else}
     <!-- Desktop table -->
-    <div class="card" style="display:none;" class:show-desktop={true}>
+    <div class="card show-desktop">
       <div class="table-wrap">
         <table>
           <thead><tr><th>Status</th><th>#</th><th>Device</th><th>Target</th><th>Profile</th><th>Created</th><th>Completed</th><th></th></tr></thead>
