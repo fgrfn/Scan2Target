@@ -11,7 +11,7 @@ _bearer = HTTPBearer(auto_error=False)
 
 def _require_auth() -> bool:
     from app.app_settings.service import get_setting
-    return get_setting("require_auth", True)
+    return get_setting("require_auth", False)
 
 
 async def get_current_user(

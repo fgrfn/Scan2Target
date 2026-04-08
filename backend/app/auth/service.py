@@ -11,6 +11,7 @@ import hmac
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 import bcrypt as _bcrypt
@@ -107,7 +108,22 @@ def _secret() -> str:
     if _jwt_secret is None:
         from app.config import get_settings
         s = get_settings()
-        _jwt_secret = s.jwt_secret or secrets.token_urlsafe(32)
+        if s.jwt_secret:
+            _jwt_secret = s.jwt_secret
+        else:
+            # Persist auto-generated key so tokens survive restarts
+            key_file = Path(s.data_dir) / ".scan2target" / "secret.key"
+            try:
+                key_file.parent.mkdir(parents=True, exist_ok=True)
+                if key_file.exists():
+                    _jwt_secret = key_file.read_text().strip()
+                else:
+                    _jwt_secret = secrets.token_urlsafe(32)
+                    key_file.write_text(_jwt_secret)
+                    key_file.chmod(0o600)
+            except OSError:
+                # Fallback to in-memory key (no persistence)
+                _jwt_secret = secrets.token_urlsafe(32)
     return _jwt_secret
 
 

@@ -7,12 +7,12 @@ router = APIRouter()
 _auth = Depends(get_current_user)
 
 
-@router.get("/", response_model=list[TargetOut])
+@router.get("", response_model=list[TargetOut])
 def list_targets(_=_auth):
     return svc.list_targets()
 
 
-@router.post("/", response_model=TargetOut, status_code=201)
+@router.post("", response_model=TargetOut, status_code=201)
 def create_target(body: TargetIn, _=_auth):
     try:
         svc.test_config(body.type, body.config)

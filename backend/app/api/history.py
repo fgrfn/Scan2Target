@@ -8,12 +8,12 @@ router = APIRouter()
 _auth = Depends(get_current_user)
 
 
-@router.get("/", response_model=list[JobOut])
+@router.get("", response_model=list[JobOut])
 def history(_=_auth):
     return svc.list_jobs(limit=500)
 
 
-@router.delete("/")
+@router.delete("")
 def clear_history(_=_auth):
     count = svc.clear_completed()
     return {"status": "cleared", "deleted_count": count}

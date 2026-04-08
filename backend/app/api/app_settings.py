@@ -7,7 +7,7 @@ router = APIRouter()
 _admin = Depends(require_admin)
 
 
-@router.get("/", response_model=SettingsOut)
+@router.get("", response_model=SettingsOut)
 def get_settings(_=_admin):
     return SettingsOut(**svc.get_all())
 

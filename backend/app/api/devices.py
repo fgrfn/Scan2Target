@@ -16,7 +16,7 @@ def discover(_=_auth):
     return [DiscoveredDevice(**d, already_added=(d["uri"] in existing_uris)) for d in found]
 
 
-@router.get("/", response_model=list[DeviceOut])
+@router.get("", response_model=list[DeviceOut])
 def list_devices(device_type: str | None = None, _=_auth):
     monitor = get_health_monitor()
     devices = svc.list_devices(device_type)
@@ -27,7 +27,7 @@ def list_devices(device_type: str | None = None, _=_auth):
     return result
 
 
-@router.post("/", response_model=DeviceOut, status_code=201)
+@router.post("", response_model=DeviceOut, status_code=201)
 def add_device(req: AddDeviceRequest, _=_auth):
     if svc.get_device_by_uri(req.uri):
         raise HTTPException(status_code=409, detail="Scanner with this URI already exists")
