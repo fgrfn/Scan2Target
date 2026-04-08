@@ -15,12 +15,15 @@ from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_SECRETS_DIR = "/run/secrets"
+_secrets_dir_opt = _SECRETS_DIR if Path(_SECRETS_DIR).is_dir() else None
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="SCAN2TARGET_",
         env_file=None,           # no .env file — use env vars or Docker Secrets
-        secrets_dir="/run/secrets",
+        secrets_dir=_secrets_dir_opt,
         case_sensitive=False,
         extra="ignore",
     )
