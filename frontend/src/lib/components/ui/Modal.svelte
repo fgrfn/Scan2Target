@@ -12,36 +12,21 @@
 
   let { open, title, onClose, children, wide = false }: Props = $props();
 
-  function handleBackdrop(e: MouseEvent) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') onClose();
-  }
+  function handleBackdrop(e: MouseEvent) { if (e.target === e.currentTarget) onClose(); }
+  function handleKeydown(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
 </script>
 
 {#if open}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_interactive_supports_focus -->
-  <div
-    class="modal-backdrop"
-    role="dialog"
-    aria-modal="true"
-    aria-label={title}
-    tabindex="-1"
-    onclick={handleBackdrop}
-    onkeydown={handleKeydown}
-  >
-    <div class="modal-panel" class:modal-wide={wide} style="animation: scaleIn 0.18s cubic-bezier(0.34,1.56,0.64,1);">
-      <!-- Header -->
-      <div class="flex items-center justify-between px-5 py-4 border-b border-zinc-800/80 flex-shrink-0">
-        <h3 class="text-sm font-semibold text-zinc-100">{title}</h3>
-        <button class="btn btn-ghost btn-icon btn-sm text-zinc-500 hover:text-zinc-100"
-                onclick={onClose} aria-label="Close">
-          <X size={16} />
+  <div class="backdrop" role="dialog" aria-modal="true" aria-label={title}
+       tabindex="-1" onclick={handleBackdrop} onkeydown={handleKeydown}>
+    <div class="panel" class:wide style="animation: slideUp 0.15s ease;">
+      <div class="modal-header">
+        <span class="modal-title">{title}</span>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick={onClose} aria-label="Close">
+          <X size={15} />
         </button>
       </div>
-      <!-- Body -->
       <div class="modal-body">
         {@render children?.()}
       </div>
@@ -50,44 +35,49 @@
 {/if}
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
+  .backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.65);
     z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     padding: 20px;
-    animation: fadeIn 0.15s ease;
+    animation: fadeIn 0.12s ease;
   }
 
-  .modal-panel {
-    background: #111118;
-    border: 1px solid rgba(255,255,255,0.09);
-    border-radius: 14px;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
+  .panel {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border-em);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     width: 100%;
     max-width: 480px;
     max-height: calc(100dvh - 40px);
-    display: flex;
-    flex-direction: column;
+    display: flex; flex-direction: column;
   }
+  .wide { max-width: 660px; }
 
-  .modal-wide { max-width: 660px; }
-
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--c-border);
+    flex-shrink: 0;
+  }
+  .modal-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--c-text);
+  }
   .modal-body {
-    padding: 20px;
+    padding: 16px;
     overflow-y: auto;
     flex: 1;
   }
 
-  @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes scaleIn { from { opacity: 0; transform: scale(0.92) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  @keyframes fadeIn  { from { opacity: 0; }                           to { opacity: 1; } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0); } }
 
   @media (max-width: 520px) {
-    .modal-panel { max-width: 100%; border-radius: 14px 14px 0 0; margin-top: auto; }
-    .modal-backdrop { align-items: flex-end; padding: 0; }
+    .backdrop { align-items: flex-end; padding: 0; }
+    .panel    { max-width: 100%; border-radius: 8px 8px 0 0; margin-top: auto; }
   }
 </style>
