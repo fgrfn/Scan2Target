@@ -82,7 +82,8 @@ async def scan_and_deliver(job_id: str, uri: str, profile_id: str, target_id: st
 
     # Update to running
     job = jobs.update_status(job_id, "running")
-    await ws.broadcast_job(job)
+    if job:
+        await ws.broadcast_job(job)
 
     try:
         if profile["source"] == "ADF":
@@ -96,7 +97,8 @@ async def scan_and_deliver(job_id: str, uri: str, profile_id: str, target_id: st
                     if page == 1:
                         await asyncio.to_thread(_make_thumbnail, tiff, thumb_path)
                         job = jobs.update_status(job_id, "running", file_path=str(thumb_path))
-                        await ws.broadcast_job(job)
+                        if job:
+                            await ws.broadcast_job(job)
                 except subprocess.CalledProcessError as e:
                     err = (e.stderr or "").lower()
                     if any(m in err for m in _ADF_EMPTY):
@@ -108,7 +110,8 @@ async def scan_and_deliver(job_id: str, uri: str, profile_id: str, target_id: st
             tiff_paths.append(tiff)
             await asyncio.to_thread(_make_thumbnail, tiff, thumb_path)
             job = jobs.update_status(job_id, "running", file_path=str(thumb_path))
-            await ws.broadcast_job(job)
+            if job:
+                await ws.broadcast_job(job)
 
         if not tiff_paths:
             raise RuntimeError("No pages scanned")
@@ -131,14 +134,16 @@ async def scan_and_deliver(job_id: str, uri: str, profile_id: str, target_id: st
         out.unlink(missing_ok=True)
 
         job = jobs.update_status(job_id, "completed")
-        await ws.broadcast_job(job)
+        if job:
+            await ws.broadcast_job(job)
 
     except Exception as exc:
         logger.error("Job %s failed: %s", job_id, exc, exc_info=True)
         for t in tiff_paths:
             t.unlink(missing_ok=True)
         job = jobs.update_status(job_id, "failed", str(exc))
-        await ws.broadcast_job(job)
+        if job:
+            await ws.broadcast_job(job)
 
     finally:
         if webhook_url:
@@ -179,7 +184,8 @@ async def combine_batch(job_id: str, target_id: str, filename_prefix: str,
 
     ws = get_ws_manager()
     job = jobs.update_status(job_id, "running")
-    await ws.broadcast_job(job)
+    if job:
+        await ws.broadcast_job(job)
     tmp = _temp_dir()
     try:
         paths = [Path(p) for p in page_paths if Path(p).exists()]
@@ -191,7 +197,9 @@ async def combine_batch(job_id: str, target_id: str, filename_prefix: str,
         await asyncio.to_thread(deliver, target_id, out, filename)
         out.unlink(missing_ok=True)
         job = jobs.update_status(job_id, "completed")
-        await ws.broadcast_job(job)
+        if job:
+            await ws.broadcast_job(job)
     except Exception as exc:
         job = jobs.update_status(job_id, "failed", str(exc))
-        await ws.broadcast_job(job)
+        if job:
+            await ws.broadcast_job(job)

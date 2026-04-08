@@ -107,6 +107,7 @@ function createWsStore() {
 
   function start() {
     enabled = true;
+    clearTimers();
     connect();
   }
 

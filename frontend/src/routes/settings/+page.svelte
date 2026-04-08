@@ -24,7 +24,12 @@
 
   async function save(key:string,value:unknown){ savingKey=key; try{await updateSetting(key,value);showToast('Saved','success');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{savingKey=null;} }
 
-  async function saveCors(){ let p:unknown; try{p=JSON.parse(corsOrigins);}catch{showToast('Invalid JSON','error');return;} await save('cors_origins',p); }
+  async function saveCors(){
+    let p:unknown;
+    try{ p=JSON.parse(corsOrigins); }catch{ showToast('Invalid JSON','error'); return; }
+    if(!Array.isArray(p)||p.some(v=>typeof v!=='string')){ showToast('Must be a JSON array of strings','error'); return; }
+    await save('cors_origins',p);
+  }
 
   async function handleCleanup(){ if(!confirm('Run cleanup? Temporary scan files will be deleted.'))return; cleaningUp=true; try{const r=await runCleanup();showToast(`Done: ${r.deleted_files} files, ${fmtB(r.freed_bytes)} freed`,'success');await loadDisk();}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{cleaningUp=false;} }
 

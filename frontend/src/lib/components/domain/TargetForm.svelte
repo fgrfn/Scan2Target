@@ -399,6 +399,6 @@
     gap: 10px;
     padding-top: 8px;
     margin-top: 8px;
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--c-border);
   }
 </style>
