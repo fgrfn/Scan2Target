@@ -16,9 +16,24 @@ from app.api import auth, devices, scan, targets, history, stats, app_settings, 
 from app.config import get_settings
 
 
+def get_version() -> str:
+    try:
+        return (Path(__file__).parent.parent / "VERSION").read_text().strip()
+    except Exception:
+        return "2.0.0"
+
+
+def _get_setting(key, default):
+    """Read a setting from DB, falling back to default if table doesn't exist yet."""
+    try:
+        from app.app_settings.service import get_setting
+        return get_setting(key, default)
+    except Exception:
+        return default
+
+
 def _setup_logging() -> None:
-    from app.app_settings.service import get_setting
-    level_name = get_setting("log_level", get_settings().log_level)
+    level_name = _get_setting("log_level", get_settings().log_level)
     level = getattr(logging, level_name, logging.INFO)
     logging.basicConfig(
         level=level,
@@ -36,13 +51,6 @@ def _setup_logging() -> None:
         logging.getLogger().addHandler(fh)
     except OSError:
         pass
-
-
-def get_version() -> str:
-    try:
-        return (Path(__file__).parent.parent / "VERSION").read_text().strip()
-    except Exception:
-        return "2.0.0"
 
 
 @asynccontextmanager
@@ -93,14 +101,6 @@ async def lifespan(app: FastAPI):
     await get_worker().stop()
     await monitor.stop()
     logger.info("Scan2Target stopped")
-
-
-def _get_setting(key, default):
-    try:
-        from app.app_settings.service import get_setting
-        return get_setting(key, default)
-    except Exception:
-        return default
 
 
 def create_app() -> FastAPI:
