@@ -136,7 +136,11 @@ def create_app() -> FastAPI:
         return {"version": get_version()}
 
     # Serve SvelteKit static output
+    # Native install: <repo>/backend/app/main.py → 3 levels up → <repo>/frontend/build
+    # Docker:         /app/app/main.py → 2 levels up → /app/frontend/build
     static_dir = Path(__file__).parent.parent.parent / "frontend" / "build"
+    if not static_dir.exists():
+        static_dir = Path(__file__).parent.parent / "frontend" / "build"
     if static_dir.exists():
         app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="frontend")
 
