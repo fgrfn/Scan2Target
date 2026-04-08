@@ -4,7 +4,10 @@ from sqlalchemy import engine_from_config, pool
 
 config = context.config
 if config.config_file_name:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False preserves uvicorn/app loggers set up
+    # before migrations run; without this, all non-alembic loggers are
+    # silently disabled and startup errors become invisible.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = None
 
