@@ -7,7 +7,7 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -147,6 +147,15 @@ def create_app() -> FastAPI:
 
         @app.get("/{path:path}", include_in_schema=False)
         def spa_fallback(path: str):
+            # Serve actual file if it exists (JS, CSS, images, etc.)
+            # Resolve and check path stays within static_dir (prevent traversal)
+            try:
+                file_path = (static_dir / path).resolve()
+                if file_path.is_file() and static_dir.resolve() in file_path.parents:
+                    return FileResponse(str(file_path))
+            except (ValueError, OSError):
+                pass
+            # Otherwise return index.html for SPA client-side routing
             if index_html.exists():
                 return FileResponse(str(index_html))
             raise HTTPException(status_code=404)

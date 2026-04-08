@@ -125,7 +125,7 @@ def upgrade() -> None:
     # Default app settings
     op.execute("""
         INSERT OR IGNORE INTO app_settings (key, value) VALUES
-        ('require_auth',            'true'),
+        ('require_auth',            'false'),
         ('log_level',               '"INFO"'),
         ('health_check_interval',   '60'),
         ('scanner_check_interval',  '30'),

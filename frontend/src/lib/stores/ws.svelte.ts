@@ -35,9 +35,8 @@ function createWsStore() {
 
     status = 'connecting';
 
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const url = `${proto}://${location.host}/api/v1/ws${token ? `?token=${token}` : ''}`;
+    const url = `${proto}://${location.host}/api/v1/ws`;
 
     try {
       ws = new WebSocket(url);

@@ -162,16 +162,15 @@
         <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
           {#if diskUsage}
             <div>
-              <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.8125rem;">
-                <span style="color:var(--c-text-2);">Disk Usage</span>
-                <span style="color:var(--c-text);">{fmtB(diskUsage.used_bytes)} / {fmtB(diskUsage.total_bytes)}</span>
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:0.8125rem;">
+                <span style="color:var(--c-text-2);">Scan Files Usage</span>
+                <span style="color:var(--c-text);font-weight:500;">{fmtB(diskUsage.used_bytes)}</span>
               </div>
-              <div class="progress-track" style="height:5px;">
-                <div class="progress-fill" style="width:{diskPct(diskUsage).toFixed(1)}%;background:{diskBarColor(diskPct(diskUsage))};"></div>
-              </div>
-              <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:0.6875rem;color:var(--c-text-3);">
-                <span>Scan files: {fmtB(diskUsage.scan_dir_bytes)}</span>
-                <span>{diskPct(diskUsage).toFixed(1)}% used</span>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:0.75rem;color:var(--c-text-2);">
+                <span>PDFs: {fmtB(diskUsage.breakdown.pdfs)}</span>
+                <span>Images: {fmtB(diskUsage.breakdown.images)}</span>
+                <span>Thumbnails: {fmtB(diskUsage.breakdown.thumbnails)}</span>
+                <span>Other: {fmtB(diskUsage.breakdown.other)}</span>
               </div>
             </div>
           {:else if loadingDisk}

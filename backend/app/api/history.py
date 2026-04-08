@@ -43,12 +43,10 @@ async def retry_upload(job_id: str, _=_auth):
         raise HTTPException(status_code=404, detail="Job or file not found")
     from pathlib import Path
     from app.targets.service import deliver
-    from app.jobs.worker import get_worker
-    from app.scanning.service import scan_and_deliver
     import asyncio
     try:
         file_path = Path(j["file_path"])
-        deliver(j["target_id"], file_path, file_path.name)
+        await asyncio.to_thread(deliver, j["target_id"], file_path, file_path.name)
         svc.update_status(job_id, "completed", message=None)
         return {"status": "delivered"}
     except Exception as e:

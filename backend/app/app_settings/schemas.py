@@ -8,7 +8,7 @@ class SettingUpdate(BaseModel):
 
 
 class SettingsOut(BaseModel):
-    require_auth: bool = True
+    require_auth: bool = False
     log_level: str = "INFO"
     health_check_interval: int = 60
     scanner_check_interval: int = 30

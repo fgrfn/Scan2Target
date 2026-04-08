@@ -26,7 +26,7 @@
 
   async function handleCancel(id:string){ cancellingIds=new Set([...cancellingIds,id]); try{await cancelHistoryJob(id);jobs=jobs.map(j=>j.id===id?{...j,status:'cancelled' as Job['status']}:j);showToast('Cancelled','info');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{cancellingIds.delete(id);cancellingIds=new Set(cancellingIds);} }
 
-  async function handleRetry(id:string){ retryingIds=new Set([...retryingIds,id]); try{const u=await retryUpload(id);jobs=jobs.map(j=>j.id===id?u:j);showToast('Retry started','success');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{retryingIds.delete(id);retryingIds=new Set(retryingIds);} }
+  async function handleRetry(id:string){ retryingIds=new Set([...retryingIds,id]); try{await retryUpload(id);jobs=jobs.map(j=>j.id===id?{...j,status:'completed' as Job['status']}:j);showToast('Re-delivered','success');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{retryingIds.delete(id);retryingIds=new Set(retryingIds);} }
 
   async function handleDelete(id:string){ deletingIds=new Set([...deletingIds,id]); try{await deleteHistoryItem(id);jobs=jobs.filter(j=>j.id!==id);showToast('Deleted','info');}catch(e:unknown){showToast(e instanceof Error?e.message:'Failed','error');}finally{deletingIds.delete(id);deletingIds=new Set(deletingIds);} }
 

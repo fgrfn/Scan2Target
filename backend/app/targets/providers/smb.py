@@ -8,7 +8,7 @@ class SMBProvider(BaseProvider):
     def _cmd(self, config: dict, args: list[str]) -> list[str]:
         return ["smbclient", config["connection"],
                 "-U", f"{config['username']}%{config['password']}",
-                "--no-pass", "-c", " ".join(args)]
+                "-c", " ".join(args)]
 
     def test(self, config: dict) -> None:
         r = subprocess.run(self._cmd(config, ["ls"]),

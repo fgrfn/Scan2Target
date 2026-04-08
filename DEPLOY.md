@@ -1,43 +1,16 @@
-# Deployment - Änderungen anwenden
+# Deployment
 
-## Problem: Scanner wird nach Neustart nicht gefunden
+See [DOCKER_QUICKREF.md](DOCKER_QUICKREF.md) for Docker commands.
 
-**Ursache:** mDNS/Avahi-Discovery braucht Zeit (10-30 Sekunden), bis Scanner im Netzwerk erkannt werden.
+## Scanner Discovery After Restart
 
-**Lösung:** 
-1. Längere Delays beim Startup (3s, 8s, 15s, 25s)
-2. Schnelle Health-Checks (alle 15s) in den ersten 5 Minuten
-3. Danach normale Intervalle (60s)
+mDNS/Avahi needs ~15–30 seconds after container start before scanners appear.
+The health monitor runs faster checks (every 15 s) for the first 5 minutes,
+then falls back to the configured `health_check_interval` (default: 60 s).
 
-## Docker Container neu bauen und starten
+If a scanner shows as offline after restart, click **Check** on the Devices page
+or wait ~1 minute for the automatic check to pick it up.
 
-```bash
-# 1. Container stoppen
-docker-compose down
-
-# 2. Image neu bauen (mit den neuen Änderungen)
-docker-compose build --no-cache
-
-# 3. Container starten
-docker-compose up -d
-
-# 4. Logs verfolgen
-docker-compose logs -f
-```
-
-## Oder als Ein-Zeilen-Befehl
-
-```bash
-docker-compose down && docker-compose build --no-cache && docker-compose up -d && docker-compose logs -f
-```
-
-## Was passiert jetzt beim Start?
-
-### Startup-Sequenz (bis zu 51 Sekunden)
-
-```
-Start
-  ↓
 Versuch 1 (sofort + 3s Wartezeit)
   ↓
 Versuch 2 (nach 3s + 8s Wartezeit) 

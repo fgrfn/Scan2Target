@@ -9,14 +9,14 @@ export function clearHistory(): Promise<void> {
   return apiDelete<void>('/history');
 }
 
-export function deleteHistoryItem(id: number): Promise<void> {
+export function deleteHistoryItem(id: string): Promise<void> {
   return apiDelete<void>(`/history/${id}`);
 }
 
-export function cancelHistoryJob(id: number): Promise<void> {
+export function cancelHistoryJob(id: string): Promise<void> {
   return apiPost<void>(`/history/${id}/cancel`);
 }
 
-export function retryUpload(id: number): Promise<Job> {
-  return apiPost<Job>(`/history/${id}/retry-upload`);
+export function retryUpload(id: string): Promise<{ status: string }> {
+  return apiPost<{ status: string }>(`/history/${id}/retry-upload`);
 }

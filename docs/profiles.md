@@ -1,11 +1,17 @@
 # Scan Profiles
 
-This document lists all available scan profiles and their configuration.
+The following profiles are built into Scan2Target.
 
-## Available Profiles
+| ID | Name | DPI | Color | Format | Source |
+|----|------|-----|-------|--------|--------|
+| `doc_200_gray_pdf` | Document 200 DPI (Gray) | 200 | Gray | PDF | Flatbed |
+| `doc_200_gray_adf` | Document 200 DPI (ADF) | 200 | Gray | PDF | ADF |
+| `color_300_pdf` | Color 300 DPI | 300 | Color | PDF | Flatbed |
+| `gray_150_pdf` | Grayscale 150 DPI | 150 | Gray | PDF | Flatbed |
+| `photo_600_jpeg` | Photo 600 DPI | 600 | Color | JPEG | Flatbed |
 
-### 1. Document @200 DPI (Small)
-**Profile ID:** `document_200_pdf`
+Profiles are hardcoded in `backend/app/scanning/discovery.py` and displayed in the web UI scan dropdown.
+
 
 - **Resolution:** 200 DPI
 - **Color Mode:** Grayscale

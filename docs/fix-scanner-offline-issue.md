@@ -1,43 +1,16 @@
-# Fix: Scanner offline nach Container-Restart
+# Scanner Offline After Restart
 
-## Problem
+This document has been superseded. See [scanner-health-monitoring.md](scanner-health-monitoring.md) for the current implementation.
 
-Scanner wurden nach einem Docker-Container-Neustart als offline angezeigt, auch wenn sie verfügbar waren.
+## Quick Fix
 
-### Ursachen
+If a scanner shows as offline after a container restart:
 
-1. **Einmalige Prüfung beim Start**: Scanner-Discovery erfolgte nur einmal beim Startup
-2. **Timing-Problem**: Scanner war beim Start möglicherweise noch nicht bereit
-3. **Keine Wiederholung**: Bei Fehlschlag keine erneuten Versuche
-4. **Fehlende Logs**: Schwierig zu debuggen, was beim Start passierte
+1. Wait ~60 s — the health monitor runs automatically
+2. Click **Check** on the Devices page for an immediate check
+3. Run `docker compose logs -f` and look for health monitor output
+4. Use the debug script: `./scripts/debug-scanner.sh`
 
-## Lösung
-
-### 1. Robuste Scanner-Discovery beim Start
-
-**Datei:** [`app/api/devices.py`](../app/api/devices.py)
-
-- **Mehrfache Versuche**: Bis zu 3 Versuche mit Delays (0s, 2s, 5s)
-- **Intelligente Retry-Logik**: Nur wiederholen, wenn keine Scanner gefunden wurden
-- **Detailliertes Logging**: Jeder Versuch wird geloggt
-
-```python
-def init_scanner_cache():
-    max_attempts = 3
-    delays = [0, 2, 5]
-    
-    for attempt in range(max_attempts):
-        # Warten zwischen Versuchen
-        if attempt > 0:
-            time.sleep(delays[attempt])
-        
-        # Scanner suchen
-        devices = scanner_manager.list_devices()
-        
-        if devices:
-            # Erfolg!
-            return
-```
 
 ### 2. Automatisches Health-Monitoring
 

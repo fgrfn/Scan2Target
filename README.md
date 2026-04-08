@@ -81,13 +81,10 @@ Control scanners remotely and route documents to SMB shares, email, cloud storag
 git clone https://github.com/fgrfn/Scan2Target.git
 cd Scan2Target
 
-# 2. Encryption Key generieren
-echo "SCAN2TARGET_SECRET_KEY=$(openssl rand -base64 32)" > .env
-
-# 3. Mit Docker Compose starten
+# 2. Mit Docker Compose starten
 docker-compose up -d
 
-# 4. Logs anschauen
+# 3. Logs anschauen
 docker-compose logs -f
 ```
 
@@ -130,7 +127,6 @@ docker run -d \
   --name scan2target \
   --network host \
   -v scan2target-data:/data \
-  -e SCAN2TARGET_SECRET_KEY="your-secret-key" \
   ghcr.io/fgrfn/scan2target:latest
 ```
 
@@ -145,19 +141,13 @@ docker run -d \
 git clone https://github.com/fgrfn/Scan2Target.git
 cd Scan2Target
 
-# 2. Environment erstellen
-cat > .env << 'EOF'
-SCAN2TARGET_SECRET_KEY=$(openssl rand -base64 32)
-SCAN2TARGET_REQUIRE_AUTH=true
-EOF
-
-# 3. Services starten
+# 2. Services starten (kein .env nötig — Encryption Key wird automatisch generiert)
 docker compose up -d
 
-# 4. Logs ansehen
+# 3. Logs ansehen
 docker compose logs -f
 
-# 5. Services stoppen
+# 4. Services stoppen
 docker compose down
 ```
 
@@ -174,8 +164,6 @@ docker run -d \
   -v scan2target-data:/data \
   -v /dev/bus/usb:/dev/bus/usb \
   --device /dev/bus/usb \
-  -e SCAN2TARGET_SECRET_KEY="$(openssl rand -base64 32)" \
-  -e SCAN2TARGET_REQUIRE_AUTH=true \
   scan2target:latest
 ```
 
@@ -185,11 +173,11 @@ docker run -d \
 
 | Variable | Beschreibung | Standard |
 |----------|--------------|----------|
-| `SCAN2TARGET_SECRET_KEY` | Encryption Key für Credentials (required) | - |
-| `SCAN2TARGET_REQUIRE_AUTH` | Authentifizierung erzwingen | `true` |
+| `SCAN2TARGET_JWT_SECRET` | JWT Signing Secret (optional, auto-generated) | auto |
+| `SCAN2TARGET_REQUIRE_AUTH` | Authentifizierung erzwingen | `false` |
 | `SCAN2TARGET_DATA_DIR` | Datenverzeichnis | `/data` |
-| `SCAN2TARGET_DB_PATH` | Datenbankpfad | `/data/db/scan2target.db` |
-| `SCAN2TARGET_SCANNER_CHECK_INTERVAL` | Health-Check Intervall (Sekunden) | `30` |
+| `SCAN2TARGET_DATABASE_PATH` | Datenbankpfad | `/data/db/scan2target.db` |
+| `SCAN2TARGET_HEALTH_CHECK_INTERVAL` | Health-Check Intervall (Sekunden) | `60` |
 
 **Volumes:**
 - `/data` - Persistenter Speicher für DB und Scans (**REQUIRED**)
@@ -202,15 +190,16 @@ docker run -d \
 
 ### Security Setup (Production)
 
+The encryption key is auto-generated on first start and stored at `/data/.scan2target/encryption.key`. For the JWT secret you can optionally pin one:
+
 ```bash
-# Encryption Key generieren
-export SCAN2TARGET_SECRET_KEY=$(openssl rand -base64 32)
+# Optional: Pin JWT secret via environment variable
+export SCAN2TARGET_JWT_SECRET="$(openssl rand -base64 32)"
 
-# Für native Installation: Service-Datei anpassen
+# For native installation:
 sudo nano /etc/systemd/system/scan2target.service
-# Hinzufügen: Environment="SCAN2TARGET_SECRET_KEY=your-key-here"
+# Add: Environment="SCAN2TARGET_JWT_SECRET=your-secret"
 
-# Neustarten
 sudo systemctl daemon-reload
 sudo systemctl restart scan2target
 ```
@@ -252,10 +241,11 @@ sudo systemctl restart scan2target
 
 | Profil | Auflösung | Farbe | Verwendung | Dateigröße |
 |--------|-----------|-------|------------|------------|
-| **Document @200 DPI** | 200 DPI | Grau | Textdokumente | ~150 KB/Seite |
-| **Multi-Page (ADF)** | 200 DPI | Grau | Automatischer Einzug | Ein PDF |
-| **Color @300 DPI** | 300 DPI | Farbe | Standard-Qualität | ~400 KB/Seite |
-| **Photo @600 DPI** | 600 DPI | Farbe | Hohe Qualität | ~2 MB/Seite |
+| **Document 200 DPI** (`doc_200_gray_pdf`) | 200 DPI | Grau | Textdokumente, Flatbed | ~150 KB/Seite |
+| **Document 200 DPI ADF** (`doc_200_gray_adf`) | 200 DPI | Grau | Automatischer Einzug | Ein PDF |
+| **Color 300 DPI** (`color_300_pdf`) | 300 DPI | Farbe | Standard-Qualität | ~400 KB/Seite |
+| **Grayscale 150 DPI** (`gray_150_pdf`) | 150 DPI | Grau | Schnelle Scans | ~80 KB/Seite |
+| **Photo 600 DPI** (`photo_600_jpeg`) | 600 DPI | Farbe | Hohe Qualität | ~2 MB/Seite |
 
 ---
 
@@ -465,7 +455,7 @@ npm run dev
 - **[GitHub Container Registry](docs/github-container-registry.md)** - Pre-built Images & CI/CD
 - **[Scanner Health Monitoring](docs/scanner-health-monitoring.md)** - Auto-Recovery & Monitoring
 - **[Logging Guide](docs/logging.md)** - Umfassende Logging-Dokumentation
-- **[Scanner Offline Fix](docs/fix-scanner-offline-issue.md)** - Detaillierte Fix-Dokumentation
+- **[Scanner Offline Fix](docs/scanner-health-monitoring.md)** - Scanner-Monitoring Dokumentation
 
 ### API & Integration
 - **[API Documentation](http://YOUR_SERVER_IP/docs)** - Swagger/OpenAPI Docs

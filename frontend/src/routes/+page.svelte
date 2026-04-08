@@ -4,7 +4,7 @@
   import { showToast } from '$lib/stores/toast.svelte';
   import { listDevices, type Device } from '$lib/api/devices';
   import { listTargets, type Target } from '$lib/api/targets';
-  import { getProfiles, startScan, listJobs, cancelJob, previewScan, startBatch, type ScanProfile, type Job } from '$lib/api/scan';
+  import { getProfiles, startScan, listJobs, cancelJob, previewScan, startBatch, getJob, type ScanProfile, type Job } from '$lib/api/scan';
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import { ScanLine, Upload, Eye, Plus, X, CheckCircle2, XCircle, Loader2, Clock, Layers, ChevronRight } from 'lucide-svelte';
 
@@ -48,7 +48,8 @@
     if(!selectedDeviceId||!selectedTargetId||!selectedProfileId){ showToast('Select device, target & profile','error'); return; }
     scanning=true; previewImage=null; activeJob=null;
     try {
-      const job = await startScan({device_id:selectedDeviceId,profile_id:selectedProfileId,target_id:selectedTargetId,filename_prefix:filenamePrefix,webhook_url:webhookUrl||undefined});
+      const resp = await startScan({device_id:selectedDeviceId,profile_id:selectedProfileId,target_id:selectedTargetId,filename_prefix:filenamePrefix,webhook_url:webhookUrl||undefined});
+      const job = await getJob(resp.job_id);
       activeJob=job; recentJobs=[job,...recentJobs].slice(0,6); showToast('Scan started','success');
     } catch(err: unknown){ showToast(err instanceof Error ? err.message : 'Failed','error'); }
     finally { scanning=false; }
@@ -62,7 +63,7 @@
     finally { previewing=false; }
   }
 
-  async function handleCancel(id: number) {
+  async function handleCancel(id: string) {
     try { await cancelJob(id); showToast('Cancelled','info'); }
     catch(err: unknown){ showToast(err instanceof Error ? err.message : 'Failed','error'); }
   }
@@ -89,7 +90,8 @@
     if(!batchPages.length){ showToast('Scan at least one page','error'); return; }
     batchFinishing=true;
     try {
-      const job=await startBatch({device_id:selectedDeviceId,profile_id:selectedProfileId,target_id:selectedTargetId,filename_prefix:filenamePrefix,page_paths:batchPages});
+      const resp=await startBatch({device_id:selectedDeviceId,profile_id:selectedProfileId,target_id:selectedTargetId,filename_prefix:filenamePrefix,page_paths:batchPages});
+      const job=await getJob(resp.job_id);
       activeJob=job; recentJobs=[job,...recentJobs].slice(0,6);
       batchPages=[]; batchPagePreviews=[]; batchMode=false;
       showToast('Batch started','success');
@@ -134,7 +136,7 @@
               <label class="form-label" for="ds">Scanner</label>
               <select id="ds" class="form-control" bind:value={selectedDeviceId}>
                 {#if !devices.length}<option value={null} disabled>No scanners</option>
-                {:else}{#each sd as d}<option value={d.id}>{d.is_favorite?'★ ':''}{d.name}{d.is_online===false?' (offline)':''}</option>{/each}{/if}
+                {:else}{#each sd as d}<option value={d.id}>{d.is_favorite?'★ ':''}{d.name}{d.online===false?' (offline)':''}</option>{/each}{/if}
               </select>
             </div>
             <div class="form-group">
@@ -228,7 +230,7 @@
               </div>
               <div class="progress-track"><div class="progress-fill" style="width:60%;animation:progressPulse 2s ease-in-out infinite;"></div></div>
             {/if}
-            {#if activeJob.error}<p style="font-size:0.8125rem;color:var(--c-err);">{activeJob.error}</p>{/if}
+            {#if activeJob.message}<p style="font-size:0.8125rem;color:var(--c-err);">{activeJob.message}</p>{/if}
             {#if activeJob.status==='running'||activeJob.status==='queued'}
               <button class="btn btn-danger btn-sm" style="width:fit-content;" onclick={() => handleCancel(activeJob!.id)}>
                 <X size={12} />Cancel
