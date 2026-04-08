@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 import app.auth.service as svc
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
 from app.auth.schemas import LoginRequest, RegisterRequest, TokenResponse, UserOut
 
 router = APIRouter()
@@ -19,7 +19,7 @@ def login(req: LoginRequest):
 
 
 @router.post("/register", response_model=UserOut, status_code=201)
-def register(req: RegisterRequest):
+def register(req: RegisterRequest, _=Depends(require_admin)):
     if svc.user_exists(req.username):
         raise HTTPException(status_code=409, detail="Username already exists")
     user = svc.create_user(req.username, req.password, req.email, is_admin=False)

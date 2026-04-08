@@ -73,7 +73,7 @@ async def scan_and_deliver(job_id: str, uri: str, profile_id: str, target_id: st
     ws = get_ws_manager()
     profile = get_profile(profile_id)
     if not profile:
-        await jobs.update_status(job_id, "failed", f"Unknown profile: {profile_id}")
+        jobs.update_status(job_id, "failed", f"Unknown profile: {profile_id}")
         return
 
     tmp = _temp_dir()
@@ -147,7 +147,10 @@ async def scan_and_deliver(job_id: str, uri: str, profile_id: str, target_id: st
 
     finally:
         if webhook_url:
-            _notify_webhook(webhook_url, job_id, job.get("status", "unknown") if job else "unknown")
+            await asyncio.to_thread(
+                _notify_webhook, webhook_url, job_id,
+                job.get("status", "unknown") if job else "unknown"
+            )
 
 
 def _notify_webhook(url: str, job_id: str, status: str) -> None:

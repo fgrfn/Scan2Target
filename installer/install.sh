@@ -95,8 +95,7 @@ Environment="PYTHONPATH=${APP_DIR}/backend"
 Environment="SCAN2TARGET_DATABASE_PATH=${APP_DIR}/data/db/scan2target.db"
 Environment="SCAN2TARGET_DATA_DIR=${APP_DIR}/data"
 Environment="SCAN2TARGET_LOG_DIR=/var/log/scan2target"
-# Set your encryption key:
-# Environment="SCAN2TARGET_SECRET_KEY=$(openssl rand -base64 32)"
+# Encryption key is auto-generated on first start and stored in ${APP_DIR}/data/.scan2target/encryption.key
 ExecStart=${VENV_DIR}/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info
 Restart=on-failure
 RestartSec=5
@@ -134,8 +133,7 @@ print_info() {
     echo "✓ Health:      http://${IP}:8000/health"
     echo ""
     echo "Default credentials: admin / admin"
-    echo "⚠  Change the password and set SCAN2TARGET_SECRET_KEY in:"
-    echo "   ${SERVICE_FILE}"
+    echo "⚠  Change the default password (admin / admin) after first login."
     echo ""
     echo "Service management:"
     echo "  sudo systemctl start|stop|restart|status ${SERVICE_NAME}"

@@ -35,10 +35,6 @@ class Settings(BaseSettings):
     temp_dir: str = "/tmp/scan2target"
 
     # ── Security ──────────────────────────────────────────────────────────
-    # Set via env var or Docker Secret (file: /run/secrets/scan2target_secret_key).
-    # Auto-generates a file-based key in development when not set.
-    secret_key: str | None = None
-
     # JWT — auto-generated per process if not provided.
     jwt_secret: str | None = None
     jwt_expiration: int = 3600  # seconds

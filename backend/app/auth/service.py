@@ -13,19 +13,18 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import bcrypt as _bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.database import get_db
 
 logger = logging.getLogger(__name__)
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ── Password helpers ──────────────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
-    return _pwd.hash(password)
+    return _bcrypt.hashpw(password.encode("utf-8")[:72], _bcrypt.gensalt()).decode("utf-8")
 
 
 def _is_legacy(h: str) -> bool:
@@ -45,7 +44,7 @@ def _verify_legacy(password: str, h: str) -> bool:
 def verify_password(password: str, stored_hash: str) -> bool:
     if _is_legacy(stored_hash):
         return _verify_legacy(password, stored_hash)
-    return _pwd.verify(password, stored_hash)
+    return _bcrypt.checkpw(password.encode("utf-8")[:72], stored_hash.encode("utf-8"))
 
 
 # ── User DB helpers ───────────────────────────────────────────────────────────
