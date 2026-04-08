@@ -22,7 +22,7 @@ install_packages() {
         python3 python3-venv python3-pip \
         avahi-daemon sane-utils sane-airscan \
         smbclient ssh sshpass imagemagick \
-        nodejs npm curl
+        nodejs curl
     systemctl enable avahi-daemon
     systemctl start avahi-daemon
 }
