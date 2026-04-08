@@ -142,6 +142,15 @@ def create_app() -> FastAPI:
     if not static_dir.exists():
         static_dir = Path(__file__).parent.parent / "frontend" / "build"
     if static_dir.exists():
+        # SPA fallback: serve index.html for all non-API routes
+        index_html = static_dir / "index.html"
+
+        @app.get("/{path:path}", include_in_schema=False)
+        def spa_fallback(path: str):
+            if index_html.exists():
+                return FileResponse(str(index_html))
+            raise HTTPException(status_code=404)
+
         app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="frontend")
 
     return app
