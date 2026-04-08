@@ -3,113 +3,77 @@
   import { showToast } from '$lib/stores/toast.svelte';
   import { wsStore } from '$lib/stores/ws.svelte';
   import {
-    listDevices,
-    discoverDevices,
-    addDevice,
-    removeDevice,
-    setDeviceFavorite,
-    checkDeviceOnline,
-    type Device,
-    type DiscoveredDevice
+    listDevices, discoverDevices, addDevice, removeDevice,
+    setDeviceFavorite, checkDeviceOnline,
+    type Device, type DiscoveredDevice
   } from '$lib/api/devices';
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import { Printer, Plus, Search, RefreshCw, Trash2, Star, StarOff,
+           Wifi, WifiOff, Clock, Loader2 } from 'lucide-svelte';
 
-  let devices = $state<Device[]>([]);
-  let discovered = $state<DiscoveredDevice[]>([]);
-  let loading = $state(true);
-  let discovering = $state(false);
+  let devices           = $state<Device[]>([]);
+  let discovered        = $state<DiscoveredDevice[]>([]);
+  let loading           = $state(true);
+  let discovering       = $state(false);
   let showDiscoverModal = $state(false);
-  let showAddModal = $state(false);
+  let showAddModal      = $state(false);
 
-  // Add device form
-  let addUri = $state('');
-  let addName = $state('');
-  let addModel = $state('');
+  let addUri          = $state('');
+  let addName         = $state('');
+  let addModel        = $state('');
   let addManufacturer = $state('');
-  let addLoading = $state(false);
+  let addLoading      = $state(false);
 
-  // Per-device checking state
-  let checkingIds = $state<Set<number>>(new Set());
-  let removingIds = $state<Set<number>>(new Set());
-  let favoriteIds = $state<Set<number>>(new Set());
+  let checkingIds  = $state<Set<number>>(new Set());
+  let removingIds  = $state<Set<number>>(new Set());
+  let favoriteIds  = $state<Set<number>>(new Set());
 
-  onMount(async () => {
-    await loadDevices();
-  });
+  const sortedDevices = $derived([...devices].sort((a,b) => Number(b.is_favorite)-Number(a.is_favorite)));
+  const newDiscovered = $derived(discovered.filter(d => !devices.some(dev => dev.uri === d.uri)));
 
-  // React to scanner updates from WS
+  onMount(() => loadDevices());
+
   $effect(() => {
     const upd = wsStore.lastScannerUpdate;
     if (!upd) return;
-    devices = devices.map((d) =>
-      d.uri === upd.uri ? { ...d, is_online: upd.online, name: upd.name || d.name } : d
-    );
+    devices = devices.map(d => d.uri === upd.uri ? { ...d, is_online: upd.online, name: upd.name || d.name } : d);
   });
 
   async function loadDevices() {
     loading = true;
-    try {
-      devices = await listDevices();
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to load devices', 'error');
-    } finally {
-      loading = false;
-    }
+    try { devices = await listDevices(); }
+    catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed', 'error'); }
+    finally { loading = false; }
   }
 
   async function handleDiscover() {
     discovering = true;
-    try {
-      discovered = await discoverDevices();
-      showDiscoverModal = true;
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Discovery failed', 'error');
-    } finally {
-      discovering = false;
-    }
+    try { discovered = await discoverDevices(); showDiscoverModal = true; }
+    catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Discovery failed', 'error'); }
+    finally { discovering = false; }
   }
 
   async function handleAddDiscovered(d: DiscoveredDevice) {
     try {
-      const created = await addDevice({
-        uri: d.uri,
-        name: d.name,
-        model: d.model ?? undefined,
-        manufacturer: d.manufacturer ?? undefined
-      });
+      const created = await addDevice({ uri: d.uri, name: d.name, model: d.model ?? undefined, manufacturer: d.manufacturer ?? undefined });
       devices = [...devices, created];
-      // Remove from discovered list
-      discovered = discovered.filter((x) => x.uri !== d.uri);
+      discovered = discovered.filter(x => x.uri !== d.uri);
       showToast(`Added ${created.name}`, 'success');
       if (discovered.length === 0) showDiscoverModal = false;
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to add device', 'error');
-    }
+    } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed', 'error'); }
   }
 
   async function handleAddManual(e: SubmitEvent) {
-    e.preventDefault();
-    addLoading = true;
+    e.preventDefault(); addLoading = true;
     try {
-      const created = await addDevice({
-        uri: addUri,
-        name: addName,
-        model: addModel || undefined,
-        manufacturer: addManufacturer || undefined
-      });
+      const created = await addDevice({ uri: addUri, name: addName, model: addModel || undefined, manufacturer: addManufacturer || undefined });
       devices = [...devices, created];
       showAddModal = false;
-      addUri = '';
-      addName = '';
-      addModel = '';
-      addManufacturer = '';
+      addUri = ''; addName = ''; addModel = ''; addManufacturer = '';
       showToast(`Added ${created.name}`, 'success');
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to add device', 'error');
-    } finally {
-      addLoading = false;
-    }
+    } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed', 'error'); }
+    finally { addLoading = false; }
   }
 
   async function handleRemove(id: number) {
@@ -117,154 +81,128 @@
     removingIds = new Set([...removingIds, id]);
     try {
       await removeDevice(id);
-      devices = devices.filter((d) => d.id !== id);
-      showToast('Device removed', 'info');
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to remove', 'error');
-    } finally {
-      removingIds.delete(id);
-      removingIds = new Set(removingIds);
-    }
+      devices = devices.filter(d => d.id !== id);
+      showToast('Scanner removed', 'info');
+    } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed', 'error'); }
+    finally { removingIds.delete(id); removingIds = new Set(removingIds); }
   }
 
   async function handleFavorite(d: Device) {
     favoriteIds = new Set([...favoriteIds, d.id]);
     try {
       await setDeviceFavorite(d.id, !d.is_favorite);
-      devices = devices.map((x) =>
-        x.id === d.id ? { ...x, is_favorite: !x.is_favorite } : x
-      );
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to update favorite', 'error');
-    } finally {
-      favoriteIds.delete(d.id);
-      favoriteIds = new Set(favoriteIds);
-    }
+      devices = devices.map(x => x.id === d.id ? { ...x, is_favorite: !x.is_favorite } : x);
+    } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Failed', 'error'); }
+    finally { favoriteIds.delete(d.id); favoriteIds = new Set(favoriteIds); }
   }
 
   async function handleCheck(d: Device) {
     checkingIds = new Set([...checkingIds, d.id]);
     try {
       const result = await checkDeviceOnline(d.id);
-      devices = devices.map((x) =>
-        x.id === d.id ? { ...x, is_online: result.online, last_checked: new Date().toISOString() } : x
-      );
+      devices = devices.map(x => x.id === d.id ? { ...x, is_online: result.online, last_checked: new Date().toISOString() } : x);
       showToast(`${d.name}: ${result.online ? 'Online' : 'Offline'}`, result.online ? 'success' : 'info');
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Check failed', 'error');
-    } finally {
-      checkingIds.delete(d.id);
-      checkingIds = new Set(checkingIds);
-    }
+    } catch (err: unknown) { showToast(err instanceof Error ? err.message : 'Check failed', 'error'); }
+    finally { checkingIds.delete(d.id); checkingIds = new Set(checkingIds); }
   }
 
-  const sortedDevices = $derived(
-    [...devices].sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite))
-  );
-
-  function formatDate(ts: string | null) {
+  function fmtDate(ts: string | null) {
     if (!ts) return 'Never';
-    return new Date(ts).toLocaleString();
+    const d = new Date(ts);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return d.toLocaleDateString();
   }
-
-  // Filter discovered to not-already-added
-  const newDiscovered = $derived(
-    discovered.filter((d) => !devices.some((dev) => dev.uri === d.uri))
-  );
 </script>
 
-<div class="page-header">
-  <div class="flex items-center justify-between">
+<div class="page-wrap">
+  <!-- Header -->
+  <div class="page-header">
     <div>
-      <h1 class="page-title">📡 Devices</h1>
-      <p class="page-subtitle">Manage your network scanners</p>
+      <h1 class="page-title">Devices</h1>
+      <p class="page-sub">Manage your network scanners</p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex gap-2 flex-wrap">
       <button class="btn btn-secondary" onclick={handleDiscover} disabled={discovering}>
-        {#if discovering}<Spinner size="sm" />{/if}
+        {#if discovering}<Loader2 size={15} class="animate-spin" />{:else}<Search size={15} />{/if}
         Discover
       </button>
       <button class="btn btn-primary" onclick={() => (showAddModal = true)}>
-        + Add Manually
+        <Plus size={15} /> Add Scanner
       </button>
     </div>
   </div>
-</div>
 
-<div class="page-body">
   {#if loading}
-    <div class="flex items-center gap-3">
-      <Spinner />
-      <span class="text-muted">Loading…</span>
-    </div>
+    <div class="flex items-center gap-3 text-zinc-500 py-12"><Spinner /><span>Loading…</span></div>
   {:else if sortedDevices.length === 0}
     <div class="card">
       <div class="empty-state">
-        <div class="empty-icon">📡</div>
-        <p>No scanners yet. Click <strong>Discover</strong> or <strong>Add Manually</strong>.</p>
+        <Printer size={40} class="text-zinc-800" />
+        <p>No scanners yet.<br />Click <strong class="text-zinc-400">Discover</strong> or <strong class="text-zinc-400">Add Scanner</strong>.</p>
       </div>
     </div>
   {:else}
-    <div class="devices-grid">
+    <div class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
       {#each sortedDevices as device}
-        <div class="card device-card">
-          <div class="device-header">
-            <div class="device-identity">
-              <span
-                class={device.is_online === true ? 'online-dot' : device.is_online === false ? 'offline-dot' : 'unknown-dot'}
-                title={device.is_online === true ? 'Online' : device.is_online === false ? 'Offline' : 'Unknown'}
-              ></span>
-              <span class="device-name">{device.name}</span>
+        <div class="card flex flex-col gap-0 overflow-hidden">
+          <!-- Card header -->
+          <div class="flex items-start justify-between p-4 pb-3">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <!-- Status dot -->
+              <span class="{device.is_online === true ? 'dot-online' : device.is_online === false ? 'dot-offline' : 'dot-unknown'}"
+                    title="{device.is_online === true ? 'Online' : device.is_online === false ? 'Offline' : 'Unknown'}">
+              </span>
+              <div class="min-w-0">
+                <p class="font-semibold text-zinc-100 text-sm truncate">{device.name}</p>
+                {#if device.manufacturer || device.model}
+                  <p class="text-xs text-zinc-500 truncate">
+                    {[device.manufacturer, device.model].filter(Boolean).join(' ')}
+                  </p>
+                {/if}
+              </div>
               {#if device.is_favorite}
-                <span title="Favorite" style="color:var(--color-warning)">★</span>
+                <Star size={13} class="text-amber-400 flex-shrink-0 ml-1" fill="currentColor" />
               {/if}
             </div>
-            <div class="device-actions">
-              <button
-                class="btn btn-ghost btn-icon btn-sm"
-                title={device.is_favorite ? 'Unfavorite' : 'Favorite'}
-                onclick={() => handleFavorite(device)}
-                disabled={favoriteIds.has(device.id)}
-              >
-                {device.is_favorite ? '★' : '☆'}
-              </button>
-              <button
-                class="btn btn-ghost btn-icon btn-sm"
-                title="Check online status"
-                onclick={() => handleCheck(device)}
-                disabled={checkingIds.has(device.id)}
-              >
-                {#if checkingIds.has(device.id)}
-                  <Spinner size="sm" />
+
+            <!-- Actions -->
+            <div class="flex gap-1 flex-shrink-0 ml-2">
+              <button class="btn btn-ghost btn-icon btn-sm" title={device.is_favorite ? 'Unfavorite' : 'Favorite'}
+                      onclick={() => handleFavorite(device)} disabled={favoriteIds.has(device.id)}>
+                {#if device.is_favorite}
+                  <Star size={14} fill="currentColor" class="text-amber-400" />
                 {:else}
-                  ↺
+                  <StarOff size={14} />
                 {/if}
               </button>
-              <button
-                class="btn btn-danger btn-icon btn-sm"
-                title="Remove"
-                onclick={() => handleRemove(device.id)}
-                disabled={removingIds.has(device.id)}
-              >
-                ✕
+              <button class="btn btn-ghost btn-icon btn-sm" title="Check status"
+                      onclick={() => handleCheck(device)} disabled={checkingIds.has(device.id)}>
+                {#if checkingIds.has(device.id)}
+                  <Loader2 size={14} class="animate-spin" />
+                {:else}
+                  <RefreshCw size={14} />
+                {/if}
+              </button>
+              <button class="btn btn-ghost btn-icon btn-sm hover:text-red-400" title="Remove"
+                      onclick={() => handleRemove(device.id)} disabled={removingIds.has(device.id)}>
+                <Trash2 size={14} />
               </button>
             </div>
           </div>
 
-          <div class="device-details">
-            <div class="detail-row">
-              <span class="detail-label">URI</span>
-              <span class="detail-value font-mono" style="font-size:0.78rem">{device.uri}</span>
+          <!-- Details -->
+          <div class="mx-4 mb-4 bg-zinc-950/60 rounded-lg p-3 border border-zinc-800/60 flex flex-col gap-1.5">
+            <div class="flex gap-2 items-start">
+              <span class="text-zinc-600 text-xs flex-shrink-0 w-16 pt-0.5">URI</span>
+              <span class="text-zinc-400 text-xs font-mono truncate">{device.uri}</span>
             </div>
-            {#if device.manufacturer || device.model}
-              <div class="detail-row">
-                <span class="detail-label">Model</span>
-                <span class="detail-value">{[device.manufacturer, device.model].filter(Boolean).join(' ')}</span>
-              </div>
-            {/if}
-            <div class="detail-row">
-              <span class="detail-label">Last checked</span>
-              <span class="detail-value">{formatDate(device.last_checked)}</span>
+            <div class="flex gap-2 items-center">
+              <Clock size={10} class="text-zinc-700 flex-shrink-0 ml-0.5" />
+              <span class="text-zinc-600 text-xs">{fmtDate(device.last_checked)}</span>
             </div>
           </div>
         </div>
@@ -274,29 +212,28 @@
 </div>
 
 <!-- Discover modal -->
-<Modal open={showDiscoverModal} title="Discovered Scanners" onClose={() => (showDiscoverModal = false)} wide={true}>
+<Modal open={showDiscoverModal} title="Discovered Scanners" onClose={() => (showDiscoverModal = false)} wide>
   {#if newDiscovered.length === 0}
-    <div class="empty-state">
-      <div class="empty-icon">🔍</div>
-      <p>No new scanners found on the network, or all are already added.</p>
+    <div class="empty-state py-8">
+      <Search size={32} class="text-zinc-800" />
+      <p>No new scanners found on the network.</p>
     </div>
   {:else}
-    <p class="text-muted" style="margin-bottom:16px;font-size:0.875rem">
-      {newDiscovered.length} scanner{newDiscovered.length !== 1 ? 's' : ''} found. Click Add to configure.
-    </p>
-    <div class="discovered-list">
+    <p class="text-sm text-zinc-500 mb-4">{newDiscovered.length} scanner{newDiscovered.length !== 1 ? 's' : ''} found</p>
+    <div class="flex flex-col gap-2">
       {#each newDiscovered as d}
-        <div class="discovered-item">
-          <div class="discovered-info">
-            <strong>{d.name}</strong>
-            <span class="text-muted font-mono" style="font-size:0.78rem">{d.uri}</span>
-            {#if d.manufacturer || d.model}
-              <span class="text-dim" style="font-size:0.8rem">{[d.manufacturer, d.model].filter(Boolean).join(' ')}</span>
-            {/if}
+        <div class="flex items-center justify-between gap-3 p-3 bg-zinc-800/40 border border-zinc-700/40 rounded-lg">
+          <div class="flex items-center gap-3 min-w-0">
+            <Printer size={18} class="text-zinc-500 flex-shrink-0" />
+            <div class="min-w-0">
+              <p class="font-medium text-zinc-200 text-sm">{d.name}</p>
+              <p class="text-xs text-zinc-600 font-mono truncate">{d.uri}</p>
+              {#if d.manufacturer || d.model}
+                <p class="text-xs text-zinc-500">{[d.manufacturer, d.model].filter(Boolean).join(' ')}</p>
+              {/if}
+            </div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick={() => handleAddDiscovered(d)}>
-            Add
-          </button>
+          <button class="btn btn-primary btn-sm flex-shrink-0" onclick={() => handleAddDiscovered(d)}>Add</button>
         </div>
       {/each}
     </div>
@@ -305,17 +242,17 @@
 
 <!-- Add manually modal -->
 <Modal open={showAddModal} title="Add Scanner Manually" onClose={() => (showAddModal = false)}>
-  <form onsubmit={handleAddManual}>
+  <form onsubmit={handleAddManual} class="flex flex-col gap-4">
     <div class="form-group">
       <label class="form-label" for="add-uri">Scanner URI</label>
       <input id="add-uri" class="form-control" type="text" bind:value={addUri}
-        placeholder="escl://192.168.1.100:443/eSCL" required />
-      <p class="form-hint">SANE URI or eSCL URL of the scanner.</p>
+             placeholder="escl://192.168.1.100:443/eSCL" required />
+      <span class="form-hint">SANE URI or eSCL URL of the scanner.</span>
     </div>
     <div class="form-group">
       <label class="form-label" for="add-name">Display Name</label>
       <input id="add-name" class="form-control" type="text" bind:value={addName}
-        placeholder="Office Scanner" required />
+             placeholder="Office Scanner" required />
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -324,15 +261,13 @@
       </div>
       <div class="form-group">
         <label class="form-label" for="add-model">Model</label>
-        <input id="add-model" class="form-control" type="text" bind:value={addModel} placeholder="LaserJet 4100" />
+        <input id="add-model" class="form-control" type="text" bind:value={addModel} placeholder="LaserJet 4150" />
       </div>
     </div>
-    <div class="flex gap-2 justify-between" style="margin-top:8px">
-      <button type="button" class="btn btn-secondary" onclick={() => (showAddModal = false)} disabled={addLoading}>
-        Cancel
-      </button>
+    <div class="flex gap-2 justify-end pt-1">
+      <button type="button" class="btn btn-secondary" onclick={() => (showAddModal = false)}>Cancel</button>
       <button type="submit" class="btn btn-primary" disabled={addLoading}>
-        {#if addLoading}<Spinner size="sm" />{/if}
+        {#if addLoading}<Loader2 size={14} class="animate-spin" />{/if}
         Add Scanner
       </button>
     </div>
@@ -340,102 +275,6 @@
 </Modal>
 
 <style>
-  .devices-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
-  }
-
-  .device-card {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .device-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .device-identity {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .device-name {
-    font-weight: 600;
-    font-size: 0.95rem;
-  }
-
-  .device-actions {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-  }
-
-  .device-details {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    background: var(--color-bg);
-    border-radius: var(--radius-sm);
-    padding: 10px 12px;
-    border: 1px solid var(--color-border-subtle);
-  }
-
-  .detail-row {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-  }
-
-  .detail-label {
-    font-size: 0.75rem;
-    color: var(--color-text-dim);
-    min-width: 80px;
-    flex-shrink: 0;
-    padding-top: 2px;
-  }
-
-  .detail-value {
-    font-size: 0.8rem;
-    color: var(--color-text-muted);
-    word-break: break-all;
-  }
-
-  .unknown-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--color-text-dim);
-  }
-
-  .discovered-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .discovered-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-  }
-
-  .discovered-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
+  :global(.animate-spin) { animation: spin 0.75s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>

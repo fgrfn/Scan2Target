@@ -2,241 +2,236 @@
   import { onMount } from 'svelte';
   import { showToast } from '$lib/stores/toast.svelte';
   import {
-    getOverview,
-    getTimeline,
-    getScannerStats,
-    getTargetStats,
-    getHourlyStats,
-    type StatsOverview,
-    type TimelineEntry,
-    type ScannerStat,
-    type TargetStat,
-    type HourlyEntry
+    getOverview, getTimeline, getScannerStats, getTargetStats, getHourlyStats,
+    type StatsOverview, type TimelineEntry, type ScannerStat, type TargetStat, type HourlyEntry
   } from '$lib/api/stats';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import { BarChart3, CheckCircle2, XCircle, TrendingUp, Printer, Crosshair, Clock } from 'lucide-svelte';
 
-  let overview = $state<StatsOverview | null>(null);
-  let timeline = $state<TimelineEntry[]>([]);
+  let overview     = $state<StatsOverview | null>(null);
+  let timeline     = $state<TimelineEntry[]>([]);
   let scannerStats = $state<ScannerStat[]>([]);
-  let targetStats = $state<TargetStat[]>([]);
-  let hourly = $state<HourlyEntry[]>([]);
-  let loading = $state(true);
+  let targetStats  = $state<TargetStat[]>([]);
+  let hourly       = $state<HourlyEntry[]>([]);
+  let loading      = $state(true);
 
   onMount(async () => {
     try {
       const [ov, tl, sc, tg, hr] = await Promise.all([
-        getOverview(),
-        getTimeline(30),
-        getScannerStats(),
-        getTargetStats(),
-        getHourlyStats()
+        getOverview(), getTimeline(30), getScannerStats(), getTargetStats(), getHourlyStats()
       ]);
-      overview = ov;
-      timeline = tl;
-      scannerStats = sc;
-      targetStats = tg;
-      hourly = hr;
+      overview = ov; timeline = tl; scannerStats = sc; targetStats = tg; hourly = hr;
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to load stats', 'error');
-    } finally {
-      loading = false;
-    }
+    } finally { loading = false; }
   });
 
-  const maxTimeline = $derived(
-    timeline.length ? Math.max(...timeline.map((e) => e.total), 1) : 1
-  );
+  const maxTimeline     = $derived(timeline.length     ? Math.max(...timeline.map(e => e.total), 1) : 1);
+  const maxHourly       = $derived(hourly.length       ? Math.max(...hourly.map(e => e.count), 1) : 1);
+  const maxScannerCount = $derived(scannerStats.length ? Math.max(...scannerStats.map(s => s.total), 1) : 1);
+  const maxTargetCount  = $derived(targetStats.length  ? Math.max(...targetStats.map(t => t.total), 1) : 1);
 
-  const maxHourly = $derived(
-    hourly.length ? Math.max(...hourly.map((e) => e.count), 1) : 1
-  );
-
-  const maxScannerCount = $derived(
-    scannerStats.length ? Math.max(...scannerStats.map((s) => s.total), 1) : 1
-  );
-
-  const maxTargetCount = $derived(
-    targetStats.length ? Math.max(...targetStats.map((t) => t.total), 1) : 1
-  );
-
-  function pct(value: number, max: number): string {
-    if (max === 0) return '0%';
-    return `${Math.round((value / max) * 100)}%`;
-  }
-
-  function formatDate(ds: string): string {
-    return new Date(ds).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  }
-
-  function padHour(h: number): string {
-    return String(h).padStart(2, '0') + ':00';
-  }
-
-  // Build full 24-hour array for hourly chart
   const hourlyFull = $derived(
     Array.from({ length: 24 }, (_, h) => {
-      const found = hourly.find((e) => e.hour === h);
+      const found = hourly.find(e => e.hour === h);
       return { hour: h, count: found?.count ?? 0 };
     })
   );
+
+  function pct(val: number, max: number) { return max === 0 ? '0%' : `${Math.round((val/max)*100)}%`; }
+  function fmtDate(ds: string) { return new Date(ds).toLocaleDateString(undefined, { month:'short', day:'numeric' }); }
+  function padH(h: number) { return String(h).padStart(2,'0'); }
 </script>
 
-<div class="page-header">
-  <h1 class="page-title">📊 Statistics</h1>
-  <p class="page-subtitle">Scan activity overview and trends</p>
-</div>
+<div class="page-wrap">
+  <div class="mb-6">
+    <h1 class="page-title">Statistics</h1>
+    <p class="page-sub">Scan activity overview and trends</p>
+  </div>
 
-<div class="page-body">
   {#if loading}
-    <div class="flex items-center gap-3">
-      <Spinner />
-      <span class="text-muted">Loading…</span>
-    </div>
+    <div class="flex items-center gap-3 text-zinc-500 py-12"><Spinner /><span>Loading…</span></div>
   {:else}
-    <!-- Overview cards -->
+
+    <!-- Overview metrics -->
     {#if overview}
-      <div class="overview-grid mb-6">
-        <div class="stat-card">
-          <span class="stat-label">Total Scans</span>
-          <span class="stat-value">{overview.total}</span>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <!-- Total -->
+        <div class="card p-4">
+          <div class="flex items-start justify-between mb-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+              <BarChart3 size={16} class="text-indigo-400" />
+            </div>
+          </div>
+          <p class="text-2xl font-bold text-zinc-50">{overview.total}</p>
+          <p class="text-xs text-zinc-500 mt-0.5 uppercase tracking-wide font-medium">Total Scans</p>
         </div>
-        <div class="stat-card">
-          <span class="stat-label">Successful</span>
-          <span class="stat-value text-success">{overview.successful}</span>
+
+        <!-- Successful -->
+        <div class="card p-4">
+          <div class="flex items-start justify-between mb-3">
+            <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <CheckCircle2 size={16} class="text-emerald-400" />
+            </div>
+          </div>
+          <p class="text-2xl font-bold text-emerald-400">{overview.successful}</p>
+          <p class="text-xs text-zinc-500 mt-0.5 uppercase tracking-wide font-medium">Successful</p>
         </div>
-        <div class="stat-card">
-          <span class="stat-label">Failed</span>
-          <span class="stat-value text-error">{overview.failed}</span>
+
+        <!-- Failed -->
+        <div class="card p-4">
+          <div class="flex items-start justify-between mb-3">
+            <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <XCircle size={16} class="text-red-400" />
+            </div>
+          </div>
+          <p class="text-2xl font-bold text-red-400">{overview.failed}</p>
+          <p class="text-xs text-zinc-500 mt-0.5 uppercase tracking-wide font-medium">Failed</p>
         </div>
-        <div class="stat-card">
-          <span class="stat-label">Success Rate</span>
-          <span class="stat-value text-primary">{overview.success_rate.toFixed(1)}%</span>
+
+        <!-- Success rate -->
+        <div class="card p-4">
+          <div class="flex items-start justify-between mb-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+              <TrendingUp size={16} class="text-indigo-400" />
+            </div>
+          </div>
+          <p class="text-2xl font-bold text-indigo-400">{overview.success_rate.toFixed(1)}<span class="text-base">%</span></p>
+          <p class="text-xs text-zinc-500 mt-0.5 uppercase tracking-wide font-medium">Success Rate</p>
         </div>
       </div>
     {/if}
 
-    <div class="stats-layout">
-      <!-- Timeline -->
-      <div class="card">
-        <h2 class="card-title">📅 Last 30 Days</h2>
+    <!-- Charts grid -->
+    <div class="grid gap-4" style="grid-template-columns: 1fr 1fr;">
+
+      <!-- 30-day timeline -->
+      <div class="card p-5 col-span-full lg:col-span-1">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="card-title flex items-center gap-2">
+            <Clock size={14} class="text-zinc-500" /> Last 30 Days
+          </span>
+        </div>
+
         {#if timeline.length === 0}
-          <div class="empty-state"><p>No data for this period.</p></div>
+          <div class="empty-state py-6"><p>No data for this period.</p></div>
         {:else}
-          <div class="bar-chart timeline-chart">
+          <div class="flex flex-col gap-1.5 overflow-y-auto" style="max-height:320px;">
             {#each timeline as entry}
-              <div class="bar-row timeline-row">
-                <span class="bar-label" style="width:64px;font-size:0.7rem">{formatDate(entry.date)}</span>
-                <div class="timeline-bars">
-                  <div class="bar-track" style="flex:1">
-                    <div
-                      class="bar-fill"
-                      style="width:{pct(entry.successful, maxTimeline)};background:var(--color-success)"
-                    ></div>
+              <div class="flex items-center gap-2" style="font-size:0.75rem;">
+                <span class="text-zinc-600 flex-shrink-0 text-right" style="width:52px;">{fmtDate(entry.date)}</span>
+                <div class="flex-1 flex flex-col gap-0.5">
+                  <div class="bar-track" style="height:8px;">
+                    <div class="bar-fill"
+                         style="width:{pct(entry.successful,maxTimeline)};background:#4ade80;"></div>
                   </div>
                   {#if entry.failed > 0}
-                    <div class="bar-track" style="flex:1">
-                      <div
-                        class="bar-fill"
-                        style="width:{pct(entry.failed, maxTimeline)};background:var(--color-error)"
-                      ></div>
+                    <div class="bar-track" style="height:8px;">
+                      <div class="bar-fill"
+                           style="width:{pct(entry.failed,maxTimeline)};background:#f87171;"></div>
                     </div>
                   {/if}
                 </div>
-                <span class="bar-value">{entry.total}</span>
+                <span class="text-zinc-500 flex-shrink-0" style="width:28px;text-align:right;">{entry.total}</span>
               </div>
             {/each}
           </div>
-          <div class="legend">
-            <span class="legend-item"><span class="legend-dot" style="background:var(--color-success)"></span>Successful</span>
-            <span class="legend-item"><span class="legend-dot" style="background:var(--color-error)"></span>Failed</span>
+          <div class="flex gap-4 mt-3" style="font-size:0.75rem;">
+            <span class="flex items-center gap-1.5 text-zinc-500">
+              <span class="w-2.5 h-2.5 rounded-sm inline-block" style="background:#4ade80;"></span>Successful
+            </span>
+            <span class="flex items-center gap-1.5 text-zinc-500">
+              <span class="w-2.5 h-2.5 rounded-sm inline-block" style="background:#f87171;"></span>Failed
+            </span>
           </div>
         {/if}
       </div>
 
       <!-- Hourly distribution -->
-      <div class="card">
-        <h2 class="card-title">🕐 Hourly Distribution</h2>
+      <div class="card p-5 col-span-full lg:col-span-1">
+        <span class="card-title flex items-center gap-2 mb-4">
+          <Clock size={14} class="text-zinc-500" /> Hourly Distribution
+        </span>
         {#if hourly.length === 0}
-          <div class="empty-state"><p>No hourly data available.</p></div>
+          <div class="empty-state py-6"><p>No hourly data.</p></div>
         {:else}
-          <div class="hourly-chart">
+          <!-- Vertical bar chart -->
+          <div class="flex items-end gap-0.5 pt-2" style="height:110px;">
             {#each hourlyFull as entry}
-              <div class="hourly-col">
-                <div class="hourly-bar-wrap">
-                  <div
-                    class="hourly-bar"
-                    style="height:{pct(entry.count, maxHourly)}"
-                    title="{padHour(entry.hour)}: {entry.count} scan{entry.count !== 1 ? 's' : ''}"
-                  ></div>
-                </div>
-                {#if entry.hour % 6 === 0}
-                  <span class="hourly-label">{padHour(entry.hour)}</span>
-                {:else}
-                  <span class="hourly-label"></span>
-                {/if}
+              <div class="flex-1 flex flex-col items-center justify-end h-full">
+                <div
+                  class="w-full rounded-t transition-all duration-500"
+                  style="height:{pct(entry.count,maxHourly)};min-height:{entry.count>0?'3px':'0'};background:rgba(99,102,241,0.6);"
+                  title="{padH(entry.hour)}:00 — {entry.count} scan{entry.count!==1?'s':''}"
+                ></div>
+              </div>
+            {/each}
+          </div>
+          <!-- Hour labels -->
+          <div class="flex gap-0.5 mt-1">
+            {#each hourlyFull as entry}
+              <div class="flex-1 text-center" style="font-size:0.5rem;color:#52525b;">
+                {entry.hour % 6 === 0 ? padH(entry.hour) : ''}
               </div>
             {/each}
           </div>
         {/if}
       </div>
 
-      <!-- Scanner stats -->
-      <div class="card">
-        <h2 class="card-title">📡 Top Scanners</h2>
+      <!-- Top scanners -->
+      <div class="card p-5">
+        <span class="card-title flex items-center gap-2 mb-4">
+          <Printer size={14} class="text-zinc-500" /> Top Scanners
+        </span>
         {#if scannerStats.length === 0}
-          <div class="empty-state"><p>No scanner data.</p></div>
+          <div class="empty-state py-4"><p>No scanner data.</p></div>
         {:else}
           <div class="bar-chart">
             {#each scannerStats as s}
               <div class="bar-row">
                 <span class="bar-label" title={s.device_name}>{s.device_name}</span>
-                <div class="bar-track">
-                  <div class="bar-fill" style="width:{pct(s.total, maxScannerCount)}"></div>
-                </div>
-                <span class="bar-value">{s.total}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:{pct(s.total,maxScannerCount)}"></div></div>
+                <span class="bar-val">{s.total}</span>
               </div>
             {/each}
           </div>
         {/if}
       </div>
 
-      <!-- Target stats -->
-      <div class="card">
-        <h2 class="card-title">🎯 Top Targets</h2>
+      <!-- Top targets -->
+      <div class="card p-5">
+        <span class="card-title flex items-center gap-2 mb-4">
+          <Crosshair size={14} class="text-zinc-500" /> Top Targets
+        </span>
         {#if targetStats.length === 0}
-          <div class="empty-state"><p>No target data.</p></div>
+          <div class="empty-state py-4"><p>No target data.</p></div>
         {:else}
           <div class="bar-chart">
             {#each targetStats as t}
               <div class="bar-row">
                 <span class="bar-label" title={t.target_name}>{t.target_name}</span>
-                <div class="bar-track">
-                  <div class="bar-fill" style="width:{pct(t.total, maxTargetCount)}"></div>
-                </div>
-                <span class="bar-value">{t.total}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:{pct(t.total,maxTargetCount)}"></div></div>
+                <span class="bar-val">{t.total}</span>
               </div>
             {/each}
           </div>
 
-          <div class="table-wrap" style="margin-top:20px">
+          <!-- Details table -->
+          <div class="table-wrap mt-5">
             <table>
               <thead>
                 <tr>
-                  <th>Target</th>
-                  <th>Type</th>
-                  <th>Total</th>
-                  <th>Successful</th>
-                  <th>Failed</th>
+                  <th>Target</th><th>Type</th><th>Total</th><th>OK</th><th>Fail</th>
                 </tr>
               </thead>
               <tbody>
                 {#each targetStats as t}
                   <tr>
-                    <td>{t.target_name}</td>
+                    <td class="text-zinc-200">{t.target_name}</td>
                     <td><span class="badge badge-primary">{t.type}</span></td>
                     <td>{t.total}</td>
-                    <td class="text-success">{t.successful}</td>
-                    <td class="text-error">{t.total - t.successful}</td>
+                    <td class="text-emerald-400">{t.successful}</td>
+                    <td class="text-red-400">{t.total - t.successful}</td>
                   </tr>
                 {/each}
               </tbody>
@@ -244,113 +239,13 @@
           </div>
         {/if}
       </div>
+
     </div>
   {/if}
 </div>
 
 <style>
-  .overview-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 16px;
-  }
-
-  .stats-layout {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-  }
-
-  @media (max-width: 900px) {
-    .stats-layout {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .timeline-chart {
-    max-height: 320px;
-    overflow-y: auto;
-  }
-
-  .timeline-row {
-    align-items: center;
-  }
-
-  .timeline-bars {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .timeline-bars .bar-track {
-    height: 8px;
-  }
-
-  .legend {
-    display: flex;
-    gap: 16px;
-    margin-top: 12px;
-    font-size: 0.78rem;
-    color: var(--color-text-muted);
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .legend-dot {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
-  }
-
-  /* Hourly bar chart */
-  .hourly-chart {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 120px;
-    padding-bottom: 20px;
-    position: relative;
-  }
-
-  .hourly-col {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    height: 100%;
-    position: relative;
-  }
-
-  .hourly-bar-wrap {
-    flex: 1;
-    width: 100%;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-  }
-
-  .hourly-bar {
-    width: 100%;
-    background: var(--color-primary);
-    border-radius: 2px 2px 0 0;
-    min-height: 2px;
-    transition: height 0.4s ease;
-  }
-
-  .hourly-label {
-    font-size: 0.6rem;
-    color: var(--color-text-dim);
-    position: absolute;
-    bottom: 0;
-    white-space: nowrap;
-    transform: rotate(-35deg);
-    transform-origin: top left;
-    left: 0;
+  @media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr !important; }
   }
 </style>
