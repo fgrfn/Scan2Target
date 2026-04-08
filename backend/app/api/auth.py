@@ -9,6 +9,13 @@ router = APIRouter()
 _bearer = HTTPBearer(auto_error=False)
 
 
+@router.get("/config")
+def auth_config():
+    """Public endpoint — returns whether authentication is required."""
+    from app.app_settings.service import get_setting
+    return {"require_auth": get_setting("require_auth", False)}
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest):
     result = svc.login(req.username, req.password)

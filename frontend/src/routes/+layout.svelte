@@ -4,7 +4,7 @@
   import { auth } from '$lib/stores/auth.svelte';
   import { wsStore } from '$lib/stores/ws.svelte';
   import { showToast } from '$lib/stores/toast.svelte';
-  import { login as apiLogin, getMe } from '$lib/api/auth';
+  import { login as apiLogin, getMe, getAuthConfig } from '$lib/api/auth';
   import Toast from '$lib/components/ui/Toast.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import {
@@ -22,8 +22,10 @@
   let loginError    = $state('');
   let showPass      = $state(false);
   let bootstrapped  = $state(false);
+  let requireAuth   = $state(true);
 
   onMount(async () => {
+    try { const cfg = await getAuthConfig(); requireAuth = cfg.require_auth; } catch { /* keep default */ }
     if (auth.token) {
       try { const u = await getMe(); auth.setUser(u); wsStore.start(); }
       catch { auth.logout(); }
@@ -69,7 +71,7 @@
     <Spinner size="lg" />
   </div>
 
-{:else if !auth.isAuthenticated}
+{:else if !auth.isAuthenticated && requireAuth}
   <!-- ── Login ───────────────────────────────────────── -->
   <div style="min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--c-bg);">
     <div style="width:100%;max-width:360px;">

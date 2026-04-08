@@ -14,6 +14,10 @@ export interface TokenResponse {
   user: User;
 }
 
+export function getAuthConfig(): Promise<{ require_auth: boolean }> {
+  return apiGet<{ require_auth: boolean }>('/auth/config');
+}
+
 export function login(username: string, password: string): Promise<TokenResponse> {
   return apiPost<TokenResponse>('/auth/login', { username, password });
 }
