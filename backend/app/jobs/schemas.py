@@ -11,6 +11,8 @@ class JobOut(BaseModel):
     status: str
     file_path: str | None = None
     message: str | None = None
+    filename_prefix: str | None = None
+    profile_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

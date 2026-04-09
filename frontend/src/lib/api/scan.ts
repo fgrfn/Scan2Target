@@ -5,9 +5,14 @@ export interface ScanProfile {
   name: string;
   description: string | null;
   format: string;
-  resolution: number;
+  dpi: number;
   color_mode: string;
   source: string | null;
+}
+
+export interface PreviewResponse {
+  status: string;
+  image: string; // base64-encoded JPEG preview
 }
 
 export interface Job {
@@ -18,6 +23,8 @@ export interface Job {
   target_id: string | null;
   file_path: string | null;
   message: string | null;
+  filename_prefix: string | null;
+  profile_id: string | null;
   created_at: string | null;
   updated_at: string | null;
 }

@@ -27,7 +27,11 @@ async def start_scan(req: ScanRequest, _=_auth):
     valid_ids = {p["id"] for p in SCAN_PROFILES}
     if req.profile_id not in valid_ids:
         raise HTTPException(status_code=400, detail=f"Unknown profile: {req.profile_id}")
-    job = jobs_svc.create_job(req.device_id, req.target_id)
+    job = jobs_svc.create_job(
+        req.device_id, req.target_id,
+        filename_prefix=req.filename_prefix,
+        profile_id=req.profile_id,
+    )
     await get_worker().submit(
         job["id"],
         scan_and_deliver(job["id"], dev["uri"], req.profile_id,
@@ -97,7 +101,11 @@ async def scan_batch_page(body: dict, _=_auth):
 
 @router.post("/batch", response_model=ScanJobResponse)
 async def batch_scan(req: BatchRequest, _=_auth):
-    job = jobs_svc.create_job(req.device_id, req.target_id)
+    job = jobs_svc.create_job(
+        req.device_id, req.target_id,
+        filename_prefix=req.filename_prefix,
+        profile_id=req.profile_id,
+    )
     await get_worker().submit(
         job["id"],
         combine_batch(job["id"], req.target_id, req.filename_prefix, req.page_paths),

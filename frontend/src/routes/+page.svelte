@@ -10,7 +10,8 @@
 
   let devices = $state<Device[]>([]); let targets = $state<Target[]>([]);
   let profiles = $state<ScanProfile[]>([]); let recentJobs = $state<Job[]>([]);
-  let loading = $state(true); let scanning = $state(false);
+  let loading = $state(true); let loadError = $state<string | null>(null);
+  let scanning = $state(false);
   let previewing = $state(false); let previewImage = $state<string | null>(null);
   let activeJob = $state<Job | null>(null);
   let selectedDeviceId  = $state<string | null>(null);
@@ -27,16 +28,23 @@
   const sd = $derived([...devices].sort((a,b) => Number(b.is_favorite)-Number(a.is_favorite)));
   const st = $derived([...targets].sort((a,b) => Number(b.is_favorite)-Number(a.is_favorite)));
 
-  onMount(async () => {
-    try {
-      const [d,t,p,j] = await Promise.all([listDevices(),listTargets(),getProfiles(),listJobs()]);
-      devices=d; targets=t; profiles=p; recentJobs=j.slice(0,6);
-      if(sd.length) selectedDeviceId=sd[0].id;
-      if(st.length) selectedTargetId=st[0].id;
-      if(p.length)  selectedProfileId=p[0].id;
-    } catch(err: unknown) { showToast(err instanceof Error ? err.message : 'Failed','error'); }
-    finally { loading=false; }
-  });
+  async function loadAll() {
+    loading=true; loadError=null;
+    const [rd,rt,rp,rj] = await Promise.allSettled([listDevices(),listTargets(),getProfiles(),listJobs()]);
+    const errors: string[] = [];
+    if(rd.status==='fulfilled') { devices=rd.value; if(sd.length) selectedDeviceId=sd[0].id; }
+    else errors.push(`Devices: ${rd.reason instanceof Error ? rd.reason.message : rd.reason}`);
+    if(rt.status==='fulfilled') { targets=rt.value; if(st.length) selectedTargetId=st[0].id; }
+    else errors.push(`Targets: ${rt.reason instanceof Error ? rt.reason.message : rt.reason}`);
+    if(rp.status==='fulfilled') { profiles=rp.value; if(rp.value.length) selectedProfileId=rp.value[0].id; }
+    else errors.push(`Profiles: ${rp.reason instanceof Error ? rp.reason.message : rp.reason}`);
+    if(rj.status==='fulfilled') recentJobs=rj.value.slice(0,6);
+    else errors.push(`Jobs: ${rj.reason instanceof Error ? rj.reason.message : rj.reason}`);
+    if(errors.length) loadError=errors.join(' · ');
+    loading=false;
+  }
+
+  onMount(loadAll);
 
   $effect(() => {
     const u = wsStore.lastJobUpdate; if(!u) return;
@@ -116,6 +124,11 @@
   {#if loading}
     <div style="display:flex;align-items:center;gap:10px;color:var(--c-text-2);padding:48px 0;">
       <Spinner /><span>Loading…</span>
+    </div>
+  {:else if loadError && !devices.length && !targets.length && !profiles.length}
+    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:48px 0;">
+      <p style="color:var(--c-err);font-size:0.875rem;">{loadError}</p>
+      <button class="btn btn-secondary" onclick={loadAll}>Retry</button>
     </div>
   {:else}
     <div style="display:flex;flex-direction:column;gap:16px;max-width:660px;">

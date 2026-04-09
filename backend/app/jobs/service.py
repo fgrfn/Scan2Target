@@ -17,13 +17,17 @@ def _row(r: Any) -> dict:
 
 
 def create_job(device_id: str | None, target_id: str | None,
-               job_type: str = "scan") -> dict:
+               job_type: str = "scan",
+               filename_prefix: str | None = None,
+               profile_id: str | None = None) -> dict:
     job_id = str(uuid.uuid4())
     with get_db().connection() as conn:
         conn.execute(
-            "INSERT INTO jobs (id, job_type, device_id, target_id, status, created_at, updated_at) "
-            "VALUES (?,?,?,?,'queued',?,?)",
-            (job_id, job_type, device_id, target_id, _now(), _now()),
+            "INSERT INTO jobs (id, job_type, device_id, target_id, status, "
+            "filename_prefix, profile_id, created_at, updated_at) "
+            "VALUES (?,?,?,?,'queued',?,?,?,?)",
+            (job_id, job_type, device_id, target_id,
+             filename_prefix, profile_id, _now(), _now()),
         )
     return get_job(job_id)
 
