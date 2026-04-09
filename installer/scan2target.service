@@ -1,0 +1,55 @@
+[Unit]
+Description=Scan2Target - Network Scan Server
+Documentation=https://github.com/fgrfn/Scan2Target
+After=network.target avahi-daemon.service
+Wants=avahi-daemon.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/scan2target
+
+# Python Environment
+Environment="VIRTUAL_ENV=/opt/scan2target/.venv"
+Environment="PATH=/opt/scan2target/.venv/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+# Scan2Target Configuration
+Environment="SCAN2TARGET_DATABASE_PATH=/opt/scan2target/scan2target.db"
+Environment="SCAN2TARGET_DATA_DIR=/opt/scan2target/data"
+Environment="SCAN2TARGET_REQUIRE_AUTH=false"
+# Environment="SCAN2TARGET_JWT_SECRET=change-this-in-production"
+# Environment="SCAN2TARGET_CORS_ORIGINS=*"
+
+# Security: Encryption key for credentials (REQUIRED for production)
+# Generate with: openssl rand -base64 32
+# Environment="SCAN2TARGET_SECRET_KEY=CHANGE-THIS-TO-YOUR-SECRET-KEY"
+
+# Start Scan2Target
+ExecStart=/opt/scan2target/.venv/bin/uvicorn app.main:app \
+    --host 0.0.0.0 \
+    --port 80 \
+    --log-level info \
+    --access-log
+
+# Restart on failure
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=3
+StartLimitInterval=300
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/scan2target /tmp/scan2target
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=scan2target
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,567 @@
+# Home Assistant Beispiel-Konfiguration für Scan2Target
+
+## Schnellstart - Minimalkonfiguration
+
+Fügen Sie dies zu Ihrer `configuration.yaml` hinzu:
+
+```yaml
+# REST Command für schnellen Scan
+rest_command:
+  scan_document:
+    url: "http://192.168.1.100/api/v1/homeassistant/scan"
+    method: POST
+    content_type: "application/json"
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "flatbed_document_200_gray_pdf"}'
+  
+  scan_multipage:
+    url: "http://192.168.1.100/api/v1/homeassistant/scan"
+    method: POST
+    content_type: "application/json"
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "adf_document_200_gray_pdf"}'
+
+# Scripts for simple buttons (recommended for beginners)
+script:
+  # Flatbed scan (single page)
+  scan_flatbed:
+    alias: "Scan Flatbed"
+    icon: mdi:file-document-outline
+    sequence:
+      - service: rest_command.scan_document
+      - service: notify.persistent_notification
+        data:
+          title: "Scan started"
+          message: "Flatbed scan in progress..."
+  
+  # ADF scan (multiple pages)
+  scan_adf:
+    alias: "Scan ADF (Multi-page)"
+    icon: mdi:file-document-multiple-outline
+    sequence:
+      - service: rest_command.scan_multipage
+      - service: notify.persistent_notification
+        data:
+          title: "Scan started"
+          message: "ADF scan (document feeder) in progress..."
+```
+
+**Wichtig:** Ersetzen Sie `192.168.1.100` mit der IP-Adresse Ihres Scan2Target-Servers.
+
+## Vollständige Konfiguration mit Dashboard
+
+### 1. configuration.yaml
+
+```yaml
+# ============================================================================
+# SCAN2TARGET INTEGRATION
+# ============================================================================
+
+# Input Selects für Benutzerauswahl
+input_select:
+  scan_profile:
+    name: Scan-Profil
+    options:
+      - "📄 Dokument (200 DPI, Klein)"
+      - "📄 Dokument (300 DPI, Mittel)"
+      - "📄 Farbe (300 DPI)"
+      - "📄 Foto (600 DPI)"
+      - "📚 Mehrseiten ADF (200 DPI)"
+      - "📚 Mehrseiten ADF (300 DPI)"
+      - "📚 Mehrseiten Farbe (300 DPI)"
+    initial: "📄 Dokument (200 DPI, Klein)"
+    icon: mdi:cog
+
+# Input Text für benutzerdefinierte Dateinamen
+input_text:
+  scan_filename:
+    name: Dateiname (optional)
+    initial: ""
+    icon: mdi:file-document-edit-outline
+    max: 50
+
+# Sensoren
+sensor:
+  # Status-Sensor
+  - platform: rest
+    name: "Scan2Target Status"
+    resource: "http://192.168.1.100/api/v1/homeassistant/status"
+    method: GET
+    value_template: "{{ 'Online' if value_json.online else 'Offline' }}"
+    json_attributes:
+      - scanner_count
+      - target_count
+      - active_scans
+      - favorite_scanner
+      - favorite_target
+      - last_scan
+    scan_interval: 30
+  
+  # Template-Sensoren für bessere Anzeige
+  - platform: template
+    sensors:
+      scan2target_scanner_count:
+        friendly_name: "Anzahl Scanner"
+        value_template: "{{ state_attr('sensor.scan2target_status', 'scanner_count') or 0 }}"
+        unit_of_measurement: "Scanner"
+        icon_template: mdi:scanner
+      
+      scan2target_target_count:
+        friendly_name: "Anzahl Ziele"
+        value_template: "{{ state_attr('sensor.scan2target_status', 'target_count') or 0 }}"
+        unit_of_measurement: "Ziele"
+        icon_template: mdi:target
+      
+      scan2target_active_scans:
+        friendly_name: "Aktive Scans"
+        value_template: "{{ state_attr('sensor.scan2target_status', 'active_scans') or 0 }}"
+        unit_of_measurement: "Scans"
+        icon_template: mdi:file-document-outline
+      
+      scan2target_favorite_scanner:
+        friendly_name: "Favoriten-Scanner"
+        value_template: "{{ state_attr('sensor.scan2target_status', 'favorite_scanner') or 'Nicht gesetzt' }}"
+        icon_template: mdi:star
+      
+      scan2target_favorite_target:
+        friendly_name: "Favoriten-Ziel"
+        value_template: "{{ state_attr('sensor.scan2target_status', 'favorite_target') or 'Nicht gesetzt' }}"
+        icon_template: mdi:star
+
+# REST Commands
+rest_command:
+  # Basis-Scan mit benutzerdefinierten Optionen
+  scan_custom:
+    url: "http://192.168.1.100/api/v1/homeassistant/scan"
+    method: POST
+    content_type: "application/json"
+    payload: >
+      {
+        "scanner_id": "favorite",
+        "target_id": "favorite",
+        "profile": "{% set profile = states('input_select.scan_profile') %}{% if '200 DPI, Klein' in profile %}flatbed_document_200_gray_pdf{% elif '300 DPI, Mittel' in profile %}flatbed_document_300_gray_pdf{% elif 'Farbe (300 DPI)' in profile %}flatbed_color_300_pdf{% elif 'Foto (600 DPI)' in profile %}flatbed_photo_600_jpeg{% elif 'Mehrseiten ADF (200 DPI)' in profile %}adf_document_200_gray_pdf{% elif 'Mehrseiten ADF (300 DPI)' in profile %}adf_document_300_gray_pdf{% elif 'Mehrseiten Farbe' in profile %}adf_color_300_pdf{% else %}flatbed_document_200_gray_pdf{% endif %}",
+        "filename": "{{ states('input_text.scan_filename') if states('input_text.scan_filename') != '' else omit }}"
+      }
+  
+  # Schnell-Scans
+  scan_document:
+    url: "http://192.168.1.100/api/v1/homeassistant/scan"
+    method: POST
+    content_type: "application/json"
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "flatbed_document_200_gray_pdf"}'
+  
+  scan_multipage:
+    url: "http://192.168.1.100/api/v1/homeassistant/scan"
+    method: POST
+    content_type: "application/json"
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "adf_document_200_gray_pdf"}'
+  
+  scan_color:
+    url: "http://192.168.1.100/api/v1/homeassistant/scan"
+    method: POST
+    content_type: "application/json"
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "flatbed_color_300_pdf"}'
+  
+  scan_photo:
+    url: "http://192.168.1.100/api/v1/homeassistant/scan"
+    method: POST
+    content_type: "application/json"
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "flatbed_photo_600_jpeg"}'
+
+# Automations
+automation:
+  - id: scan_custom_trigger
+    alias: "Benutzerdefinierter Scan"
+    description: "Startet Scan mit benutzerdefinierten Einstellungen"
+    trigger:
+      - platform: state
+        entity_id: input_button.scan_start
+    action:
+      - service: rest_command.scan_custom
+      - service: notify.persistent_notification
+        data:
+          title: "Scan gestartet"
+          message: >
+            Profil: {{ states('input_select.scan_profile') }}
+            {% if states('input_text.scan_filename') != '' %}
+            Dateiname: {{ states('input_text.scan_filename') }}
+            {% endif %}
+  
+  - id: scan_document_quick
+    alias: "Schnell-Scan Dokument"
+    description: "Schneller Dokumenten-Scan"
+    trigger:
+      - platform: state
+        entity_id: input_button.scan_document
+    action:
+      - service: rest_command.scan_document
+      - service: notify.mobile_app_smartphone
+        data:
+          message: "Dokument wird gescannt..."
+  
+  - id: scan_nfc_tag
+    alias: "Scan bei NFC-Tag"
+    description: "Startet Scan wenn NFC-Tag erkannt wird"
+    trigger:
+      - platform: tag
+        tag_id: !secret scan_nfc_tag_id
+    action:
+      - service: rest_command.scan_document
+      - service: tts.google_translate_say
+        data:
+          entity_id: media_player.wohnzimmer
+          message: "Scan wird gestartet"
+  
+  - id: scan_voice_command
+    alias: "Scan bei Sprachbefehl"
+    description: "Startet Scan über Sprachassistent"
+    trigger:
+      - platform: conversation
+        command:
+          - "Scanne ein Dokument"
+          - "Starte einen Scan"
+          - "Scanne [etwas]"
+    action:
+      - service: rest_command.scan_document
+      - service: tts.google_translate_say
+        data:
+          entity_id: media_player.wohnzimmer
+          message: "Okay, ich starte den Scan"
+  
+  - id: scan_scheduled_daily
+    alias: "Geplanter täglicher Scan"
+    description: "Führt werktags um 9 Uhr einen Scan durch"
+    trigger:
+      - platform: time
+        at: "09:00:00"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.workday_sensor
+        state: "on"
+    action:
+      - service: rest_command.scan_document
+      - service: notify.mobile_app_smartphone
+        data:
+          title: "Täglicher Scan"
+          message: "Automatischer Scan wurde gestartet"
+
+# Helper Entities
+input_button:
+  scan_start:
+    name: "Scan starten"
+    icon: mdi:play
+  
+  scan_document:
+    name: "Dokument scannen"
+    icon: mdi:file-document-outline
+```
+
+### 2. secrets.yaml (optional)
+
+```yaml
+# Scan2Target
+scan2target_url: "http://192.168.1.100"
+scan_nfc_tag_id: "YOUR_NFC_TAG_ID_HERE"
+```
+
+### 3. Lovelace Dashboard (ui-lovelace.yaml oder über UI)
+
+```yaml
+title: Scan2Target
+views:
+  - title: Scanner
+    icon: mdi:scanner
+    cards:
+      # Status-Karte
+      - type: entities
+        title: Scan2Target Status
+        show_header_toggle: false
+        entities:
+          - entity: sensor.scan2target_status
+            name: Status
+          - entity: sensor.scan2target_scanner_count
+            name: Verfügbare Scanner
+          - entity: sensor.scan2target_target_count
+            name: Verfügbare Ziele
+          - entity: sensor.scan2target_active_scans
+            name: Aktive Scans
+          - type: divider
+          - entity: sensor.scan2target_favorite_scanner
+            name: Standard-Scanner
+          - entity: sensor.scan2target_favorite_target
+            name: Standard-Ziel
+      
+      # Schnell-Scan Buttons
+      - type: horizontal-stack
+        title: Schnell-Scans
+        cards:
+          - type: button
+            name: Dokument
+            icon: mdi:file-document-outline
+            tap_action:
+              action: call-service
+              service: rest_command.scan_document
+            hold_action:
+              action: none
+          
+          - type: button
+            name: Mehrseiten
+            icon: mdi:file-document-multiple-outline
+            tap_action:
+              action: call-service
+              service: rest_command.scan_multipage
+          
+          - type: button
+            name: Farbe
+            icon: mdi:palette
+            tap_action:
+              action: call-service
+              service: rest_command.scan_color
+          
+          - type: button
+            name: Foto
+            icon: mdi:camera
+            tap_action:
+              action: call-service
+              service: rest_command.scan_photo
+      
+      # Benutzerdefinierter Scan
+      - type: entities
+        title: Benutzerdefinierter Scan
+        show_header_toggle: false
+        entities:
+          - entity: input_select.scan_profile
+          - entity: input_text.scan_filename
+          - type: button
+            name: Scan starten
+            icon: mdi:play
+            action_name: Starten
+            tap_action:
+              action: call-service
+              service: automation.trigger
+              service_data:
+                entity_id: automation.benutzerdefinierter_scan
+      
+      # Web UI Link
+      - type: markdown
+        content: |
+          ## Scan2Target Web UI
+          
+          [Web Interface öffnen](http://192.168.1.100)
+          
+          Hier können Sie:
+          - Scanner entdecken und verwalten
+          - Ziele konfigurieren
+          - Scan-Verlauf einsehen
+          - Einstellungen anpassen
+```
+
+### 4. Mobile App Dashboard (für schnellen Zugriff)
+
+Erstellen Sie eine neue View in der Mobile App:
+
+```yaml
+- title: Scanner
+  path: scanner
+  icon: mdi:scanner
+  badges: []
+  cards:
+    - type: glance
+      entities:
+        - entity: sensor.scan2target_status
+        - entity: sensor.scan2target_active_scans
+    
+    - type: grid
+      columns: 2
+      square: false
+      cards:
+        - type: button
+          name: Dokument
+          icon: mdi:file-document-outline
+          tap_action:
+            action: call-service
+            service: rest_command.scan_document
+        
+        - type: button
+          name: Mehrseiten
+          icon: mdi:file-document-multiple-outline
+          tap_action:
+            action: call-service
+            service: rest_command.scan_multipage
+        
+        - type: button
+          name: Farbe
+          icon: mdi:palette
+          tap_action:
+            action: call-service
+            service: rest_command.scan_color
+        
+        - type: button
+          name: Foto
+          icon: mdi:camera
+          tap_action:
+            action: call-service
+            service: rest_command.scan_photo
+```
+
+## Installation
+
+1. **Scan2Target vorbereiten:**
+   ```bash
+   # Favoriten-Scanner und -Ziel in der Web UI festlegen
+   # http://YOUR_SERVER_IP
+   ```
+
+2. **Home Assistant Konfiguration:**
+   - Kopieren Sie die relevanten Abschnitte in Ihre `configuration.yaml`
+   - Passen Sie die IP-Adresse an (`192.168.1.100` → Ihre Server-IP)
+   - Speichern und Home Assistant neu laden
+
+3. **Dashboard erstellen:**
+   - Einstellungen → Dashboards → Neues Dashboard hinzufügen
+   - YAML-Modus aktivieren
+   - Dashboard-Code einfügen
+
+4. **Testen:**
+   - Button "Dokument scannen" drücken
+   - Status in der Web UI überprüfen
+
+## Erweiterte Beispiele
+
+### Widget für Tablet-Dashboard
+
+```yaml
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    name: SCANNER
+    styles:
+      card:
+        - background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)
+        - height: 100px
+      name:
+        - color: white
+        - font-size: 24px
+        - font-weight: bold
+    tap_action:
+      action: none
+  
+  - type: grid
+    columns: 2
+    square: true
+    cards:
+      - type: custom:button-card
+        name: Dokument
+        icon: mdi:file-document-outline
+        tap_action:
+          action: call-service
+          service: rest_command.scan_document
+        styles:
+          card:
+            - background: rgba(255, 255, 255, 0.1)
+          icon:
+            - color: white
+            - font-size: 48px
+          name:
+            - color: white
+      
+      - type: custom:button-card
+        name: Mehrseiten
+        icon: mdi:file-document-multiple-outline
+        tap_action:
+          action: call-service
+          service: rest_command.scan_multipage
+        styles:
+          card:
+            - background: rgba(255, 255, 255, 0.1)
+          icon:
+            - color: white
+            - font-size: 48px
+      
+      - type: custom:button-card
+        name: Farbe
+        icon: mdi:palette
+        tap_action:
+          action: call-service
+          service: rest_command.scan_color
+        styles:
+          card:
+            - background: rgba(255, 255, 255, 0.1)
+          icon:
+            - color: white
+            - font-size: 48px
+      
+      - type: custom:button-card
+        name: Foto
+        icon: mdi:camera
+        tap_action:
+          action: call-service
+          service: rest_command.scan_photo
+        styles:
+          card:
+            - background: rgba(255, 255, 255, 0.1)
+          icon:
+            - color: white
+            - font-size: 48px
+```
+
+### Benachrichtigung mit Actionable Notification
+
+```yaml
+automation:
+  - id: scan_with_actionable_notification
+    alias: "Scan mit Benachrichtigung"
+    trigger:
+      - platform: state
+        entity_id: input_button.scan_with_notification
+    action:
+      # Scan starten
+      - service: rest_command.scan_document
+      
+      # Benachrichtigung mit Aktionen senden
+      - service: notify.mobile_app_smartphone
+        data:
+          title: "Scan gestartet"
+          message: "Ihr Dokument wird gescannt (ca. 15 Sekunden)"
+          data:
+            actions:
+              - action: "SCAN_OPEN_WEB"
+                title: "Web UI öffnen"
+              - action: "SCAN_VIEW_HISTORY"
+                title: "Verlauf anzeigen"
+      
+      # Warten auf Scan-Abschluss (geschätzt)
+      - delay:
+          seconds: 20
+      
+      # Erfolgs-Benachrichtigung
+      - service: notify.mobile_app_smartphone
+        data:
+          title: "Scan abgeschlossen"
+          message: "Ihr Dokument wurde erfolgreich gescannt"
+          data:
+            url: "http://192.168.1.100"
+
+  - id: scan_notification_actions
+    alias: "Scan Benachrichtigungs-Aktionen"
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: SCAN_OPEN_WEB
+    action:
+      - service: notify.mobile_app_smartphone
+        data:
+          message: "command_broadcast_intent"
+          data:
+            intent_action: "android.intent.action.VIEW"
+            intent_uri: "http://192.168.1.100"
+```
+
+## Nächste Schritte
+
+1. **Testen Sie die Basis-Konfiguration**
+2. **Fügen Sie weitere Automationen hinzu**
+3. **Passen Sie das Dashboard an Ihre Bedürfnisse an**
+4. **Erstellen Sie NFC-Tags für schnellen Zugriff**
+5. **Konfigurieren Sie Sprachbefehle**
+
+Bei Fragen: [Scan2Target Dokumentation](http://YOUR_SERVER_IP/docs)
