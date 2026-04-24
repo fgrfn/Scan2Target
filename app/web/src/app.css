@@ -457,42 +457,6 @@ select:disabled {
   to { transform: rotate(360deg); }
 }
 
-
-.toast-stack {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 1200;
-  max-width: min(520px, calc(100% - 2rem));
-}
-
-.toast {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.72rem 0.82rem;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  color: var(--text);
-  background: rgba(12, 21, 38, 0.95);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
-}
-
-.toast-info {
-  border-color: rgba(89, 208, 255, 0.4);
-}
-
-.toast-success {
-  border-color: rgba(107, 230, 168, 0.5);
-  background: rgba(12, 58, 38, 0.95);
-}
-
-.toast-error {
-  border-color: rgba(255, 127, 141, 0.5);
-  background: rgba(69, 20, 32, 0.95);
-}
-
 .light-mode {
   color-scheme: light;
   --bg: #f2f6fb;
