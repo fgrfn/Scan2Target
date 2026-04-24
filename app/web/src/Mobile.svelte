@@ -75,6 +75,38 @@
   let batchPages = [];
   let isBatchScanning = false;
 
+  let toastMessage = '';
+  let toastType = 'info';
+  let showToast = false;
+  let toastTimer = null;
+
+  function dismissToast() {
+    showToast = false;
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+  }
+
+  function notify(message, type = 'info') {
+    toastMessage = String(message);
+    if (type === 'info') {
+      if (toastMessage.startsWith('✅')) type = 'success';
+      else if (toastMessage.startsWith('❌')) type = 'error';
+    }
+    toastType = type;
+    showToast = true;
+
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+    }
+
+    toastTimer = setTimeout(() => {
+      showToast = false;
+      toastTimer = null;
+    }, 3800);
+  }
+
   onMount(async () => {
     await loadData();
     // Auto-select favorites
@@ -119,7 +151,7 @@
 
   async function startScan(source = 'Flatbed') {
     if (!selectedScanner || !selectedTarget) {
-      alert(t.pleaseSelect);
+      notify(t.pleaseSelect);
       return;
     }
 
@@ -139,14 +171,14 @@
       });
 
       if (response.ok) {
-        alert(t.success);
+        notify(t.success);
         scanFilename = '';
       } else {
         const error = await response.json();
-        alert(`${t.error}: ${error.detail || 'Unknown error'}`);
+        notify(`${t.error}: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
-      alert(`${t.error}: ${error.message}`);
+      notify(`${t.error}: ${error.message}`);
     } finally {
       isScanning = false;
     }
@@ -154,7 +186,7 @@
 
   function startBatchMode() {
     if (!selectedScanner) {
-      alert(t.pleaseSelect);
+      notify(t.pleaseSelect);
       return;
     }
     batchMode = true;
@@ -163,7 +195,7 @@
 
   async function addPageToBatch() {
     if (!selectedScanner || !selectedProfile) {
-      alert(t.pleaseSelect);
+      notify(t.pleaseSelect);
       return;
     }
     
@@ -187,10 +219,10 @@
         });
       } else {
         const error = await response.json();
-        alert(`${t.error}: ${error.detail || 'Scan failed'}`);
+        notify(`${t.error}: ${error.detail || 'Scan failed'}`);
       }
     } catch (error) {
-      alert(`${t.error}: ${error.message}`);
+      notify(`${t.error}: ${error.message}`);
     } finally {
       isBatchScanning = false;
     }
@@ -198,12 +230,12 @@
 
   async function finishBatch() {
     if (batchPages.length === 0 || !selectedTarget) {
-      alert(t.pleaseSelect);
+      notify(t.pleaseSelect);
       return;
     }
 
     if (!selectedProfile) {
-      alert(t.pleaseSelect);
+      notify(t.pleaseSelect);
       return;
     }
 
@@ -222,16 +254,16 @@
       });
 
       if (response.ok) {
-        alert(t.success);
+        notify(t.success);
         batchMode = false;
         batchPages = [];
         scanFilename = '';
       } else {
         const error = await response.json();
-        alert(`${t.error}: ${error.detail || 'Unknown error'}`);
+        notify(`${t.error}: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
-      alert(`${t.error}: ${error.message}`);
+      notify(`${t.error}: ${error.message}`);
     } finally {
       isScanning = false;
     }
@@ -266,8 +298,8 @@
     <div class="container">
       <!-- Scanner Selection -->
       <div class="card">
-        <label>{t.selectScanner}</label>
-        <select bind:value={selectedScanner} disabled={batchMode}>
+        <label for="mobile-scanner-select">{t.selectScanner}</label>
+        <select id="mobile-scanner-select" bind:value={selectedScanner} disabled={batchMode}>
           <option value="">-- {t.selectScanner} --</option>
           {#each scanners as scanner}
             <option value={scanner.id}>
@@ -282,8 +314,8 @@
 
       <!-- Target Selection -->
       <div class="card">
-        <label>{t.selectTarget}</label>
-        <select bind:value={selectedTarget} disabled={batchMode && batchPages.length > 0}>
+        <label for="mobile-target-select">{t.selectTarget}</label>
+        <select id="mobile-target-select" bind:value={selectedTarget} disabled={batchMode && batchPages.length > 0}>
           <option value="">-- {t.selectTarget} --</option>
           {#each targets as target}
             <option value={target.id}>
@@ -298,8 +330,8 @@
 
       <!-- Profile Selection -->
       <div class="card">
-        <label>{t.selectProfile}</label>
-        <select bind:value={selectedProfile} disabled={batchMode}>
+        <label for="mobile-profile-select">{t.selectProfile}</label>
+        <select id="mobile-profile-select" bind:value={selectedProfile} disabled={batchMode}>
           {#each profiles as profile}
             <option value={profile.id}>{profile.name}</option>
           {/each}
@@ -308,8 +340,9 @@
 
       <!-- Filename -->
       <div class="card">
-        <label>{t.filename}</label>
+        <label for="mobile-filename">{t.filename}</label>
         <input 
+          id="mobile-filename"
           type="text" 
           bind:value={scanFilename} 
           placeholder={t.filenamePlaceholder}
@@ -389,6 +422,14 @@
           </div>
         </div>
       {/if}
+    </div>
+  {/if}
+  {#if showToast}
+    <div class="toast-stack" role="status" aria-live="polite">
+      <div class={`toast toast-${toastType}`}>
+        <span>{toastMessage}</span>
+        <button class="toast-close" on:click={dismissToast}>✕</button>
+      </div>
     </div>
   {/if}
 </main>
@@ -663,4 +704,43 @@
       font-size: 20px;
     }
   }
+
+
+  .toast-stack {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    display: flex;
+    justify-content: center;
+    z-index: 1200;
+    padding: 0 12px;
+  }
+
+  .toast {
+    width: min(560px, 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: #fff;
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: 0 12px 30px rgba(0,0,0,.25);
+    background: rgba(27, 35, 63, 0.95);
+  }
+
+  .toast-info { background: rgba(27, 35, 63, 0.95); }
+  .toast-success { background: rgba(19, 99, 67, 0.95); }
+  .toast-error { background: rgba(131, 44, 62, 0.96); }
+
+  .toast-close {
+    border: none;
+    border-radius: 8px;
+    background: rgba(255,255,255,.2);
+    color: #fff;
+    font-size: 0.9rem;
+    padding: 4px 9px;
+  }
+
 </style>
