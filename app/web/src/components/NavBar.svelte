@@ -1,4 +1,6 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
+
   export let brand = 'Scan2Target';
   export let links = [];
   export let currentLang = 'en';
@@ -8,11 +10,21 @@
   const getCurrentHash = () => (typeof window !== 'undefined' ? window.location.hash : '#dashboard');
   let currentHash = getCurrentHash();
 
-  if (typeof window !== 'undefined') {
-    window.addEventListener('hashchange', () => {
-      currentHash = getCurrentHash();
-    });
-  }
+  const handleHashChange = () => {
+    currentHash = getCurrentHash();
+  };
+
+  onMount(() => {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('hashchange', handleHashChange);
+    }
+  });
+
+  onDestroy(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('hashchange', handleHashChange);
+    }
+  });
 </script>
 
 <header class="topbar">

@@ -726,6 +726,10 @@
     return scannerUri;
   }
 
+  function toggleExpandedThumbnail(id) {
+    expandedThumbnail = expandedThumbnail === id ? null : id;
+  }
+
   async function loadVersion() {
     try {
       const res = await fetch(`${API_BASE}/version`);
@@ -2158,6 +2162,8 @@
                   {#each batchPages as page, index (page.pageNumber)}
                     <div 
                       style="position: relative; cursor: move;"
+                      role="listitem"
+                      aria-label={`Batch page ${page.pageNumber}`}
                       draggable="true"
                       on:dragstart={(e) => {
                         e.dataTransfer.effectAllowed = 'move';
@@ -2240,8 +2246,8 @@
   
   <!-- Preview Modal -->
   {#if showPreview}
-    <div style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 2rem;" on:click={closePreview}>
-      <div class="card" style="max-width: 90%; max-height: 90%; overflow: auto; padding: 2rem;" on:click|stopPropagation>
+    <div style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 2rem;" role="dialog" aria-modal="true">
+      <div class="card" style="max-width: 90%; max-height: 90%; overflow: auto; padding: 2rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
           <h2>{t.previewScan}</h2>
           <button class="ghost" on:click={closePreview}>✕</button>
@@ -2275,14 +2281,14 @@
           </div>
           
           {#if job.thumbnailUrl}
-            <div style="margin-bottom: 0.75rem; cursor: pointer; display: flex; justify-content: flex-start;" on:click={() => expandedThumbnail = expandedThumbnail === job.id ? null : job.id}>
+            <button class="ghost" style="margin-bottom: 0.75rem; cursor: pointer; display: flex; justify-content: flex-start; padding: 0; width: 100%; border: none; background: transparent;" on:click={() => toggleExpandedThumbnail(job.id)} aria-label={expandedThumbnail === job.id ? 'Collapse thumbnail' : 'Expand thumbnail'}>
               <img 
                 src={job.thumbnailUrl} 
                 alt="Scan preview" 
                 style="width: {expandedThumbnail === job.id ? '100%' : '50%'}; height: auto; border-radius: 6px; border: 1px solid var(--border); transition: width 0.3s ease;"
                 title="Click to {expandedThumbnail === job.id ? 'shrink' : 'expand'}"
               />
-            </div>
+            </button>
           {:else if job.status === 'running'}
             <div style="margin-bottom: 0.75rem; padding: 3rem 1rem; background: var(--surface-dim); border-radius: 6px; text-align: center;">
               <p class="muted">🖨️ Scanning...</p>
@@ -2332,14 +2338,14 @@
           </div>
           
           {#if lastCompletedJob.thumbnailUrl}
-            <div style="margin-bottom: 0.75rem; cursor: pointer; display: flex; justify-content: flex-start;" on:click={() => expandedThumbnail = expandedThumbnail === lastCompletedJob.id ? null : lastCompletedJob.id}>
+            <button class="ghost" style="margin-bottom: 0.75rem; cursor: pointer; display: flex; justify-content: flex-start; padding: 0; width: 100%; border: none; background: transparent;" on:click={() => toggleExpandedThumbnail(lastCompletedJob.id)} aria-label={expandedThumbnail === lastCompletedJob.id ? 'Collapse thumbnail' : 'Expand thumbnail'}>
               <img 
                 src={lastCompletedJob.thumbnailUrl} 
                 alt="Scan preview" 
                 style="width: {expandedThumbnail === lastCompletedJob.id ? '100%' : '50%'}; height: auto; border-radius: 6px; border: 1px solid var(--border); transition: width 0.3s ease;"
                 title="Click to {expandedThumbnail === lastCompletedJob.id ? 'shrink' : 'expand'}"
               />
-            </div>
+            </button>
           {/if}
           
           <!-- Status breakdown -->
