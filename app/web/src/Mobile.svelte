@@ -266,8 +266,8 @@
     <div class="container">
       <!-- Scanner Selection -->
       <div class="card">
-        <label>{t.selectScanner}</label>
-        <select bind:value={selectedScanner} disabled={batchMode}>
+        <label for="mobile-scanner-select">{t.selectScanner}</label>
+        <select id="mobile-scanner-select" bind:value={selectedScanner} disabled={batchMode}>
           <option value="">-- {t.selectScanner} --</option>
           {#each scanners as scanner}
             <option value={scanner.id}>
@@ -282,8 +282,8 @@
 
       <!-- Target Selection -->
       <div class="card">
-        <label>{t.selectTarget}</label>
-        <select bind:value={selectedTarget} disabled={batchMode && batchPages.length > 0}>
+        <label for="mobile-target-select">{t.selectTarget}</label>
+        <select id="mobile-target-select" bind:value={selectedTarget} disabled={batchMode && batchPages.length > 0}>
           <option value="">-- {t.selectTarget} --</option>
           {#each targets as target}
             <option value={target.id}>
@@ -298,8 +298,8 @@
 
       <!-- Profile Selection -->
       <div class="card">
-        <label>{t.selectProfile}</label>
-        <select bind:value={selectedProfile} disabled={batchMode}>
+        <label for="mobile-profile-select">{t.selectProfile}</label>
+        <select id="mobile-profile-select" bind:value={selectedProfile} disabled={batchMode}>
           {#each profiles as profile}
             <option value={profile.id}>{profile.name}</option>
           {/each}
@@ -308,8 +308,9 @@
 
       <!-- Filename -->
       <div class="card">
-        <label>{t.filename}</label>
+        <label for="mobile-filename">{t.filename}</label>
         <input 
+          id="mobile-filename"
           type="text" 
           bind:value={scanFilename} 
           placeholder={t.filenamePlaceholder}
