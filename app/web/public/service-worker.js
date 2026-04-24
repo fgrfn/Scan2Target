@@ -1,73 +1,62 @@
 // Service Worker for Progressive Web App (PWA)
-const CACHE_NAME = 'scan2target-v1';
-const STATIC_CACHE = [
-  '/',
-  '/index.html',
-  '/assets/index.css',
-  '/assets/index.js'
-];
+// v2: avoid pinning stale /index.html or hashed assets across redesign deployments
+const CACHE_NAME = 'scan2target-v2';
 
-// Install event - cache static assets
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing service worker...');
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Caching static assets');
-      return cache.addAll(STATIC_CACHE);
-    })
-  );
   self.skipWaiting();
 });
 
-// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activating service worker...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    })
+    caches.keys().then((cacheNames) => Promise.all(
+      cacheNames
+        .filter((name) => name !== CACHE_NAME)
+        .map((name) => caches.delete(name))
+    ))
   );
   self.clients.claim();
 });
 
-// Fetch event - network first, fallback to cache
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  
+
   // Skip non-GET requests
-  if (request.method !== 'GET') {
-    return;
-  }
-  
-  // API requests - always fetch from network
+  if (request.method !== 'GET') return;
+
+  // Always bypass cache for API traffic
   if (request.url.includes('/api/')) {
     event.respondWith(fetch(request));
     return;
   }
-  
-  // Static assets - network first, fallback to cache
+
+  // Network-first for UI/assets to make sure newest redesign is shown.
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Clone response to cache
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(request, responseToCache);
-        });
+        const sameOrigin = new URL(request.url).origin === self.location.origin;
+        if (sameOrigin && response.ok && request.url.startsWith('http')) {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache));
+        }
         return response;
       })
-      .catch(() => {
-        // Network failed, try cache
-        return caches.match(request);
+      .catch(async () => {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+
+        // Fallback to app shell when offline navigation is requested
+        if (request.mode === 'navigate') {
+          const cachedIndex = await caches.match('/');
+          if (cachedIndex) return cachedIndex;
+        }
+
+        throw new Error('Network error and no cache fallback available');
       })
   );
 });
 
-// Push notification event (for future webhook notifications)
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
   const title = data.title || 'Scan2Target';
@@ -75,25 +64,20 @@ self.addEventListener('push', (event) => {
     body: data.body || 'Scan completed',
     icon: '/icon-192.png',
     badge: '/icon-96.png',
-    data: data,
+    data,
     actions: [
       { action: 'view', title: 'View' },
       { action: 'close', title: 'Close' }
     ]
   };
-  
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
+
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Notification click event
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  
+
   if (event.action === 'view') {
-    event.waitUntil(
-      clients.openWindow('/#history')
-    );
+    event.waitUntil(clients.openWindow('/#history'));
   }
 });
