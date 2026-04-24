@@ -532,6 +532,11 @@
   let scannerIsOnline = null;
   let appVersion = '';
 
+  let showToastMessage = false;
+  let toastMessage = '';
+  let toastType = 'info';
+  let toastTimer = null;
+
   $: navLinks = [
     { label: t.dashboard, href: '#dashboard' },
     { label: t.scan, href: '#scan' },
@@ -546,6 +551,33 @@
     { id: 'gray_150_pdf', name: 'Grayscale @150 DPI', description: 'Lightweight PDF' },
     { id: 'photo_600_jpeg', name: 'Photo @600 DPI', description: 'High quality JPEG' }
   ];
+
+  function dismissToast() {
+    showToastMessage = false;
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+  }
+
+  function notify(message, type = 'info') {
+    toastMessage = String(message);
+    if (type === 'info') {
+      if (toastMessage.startsWith('✅')) type = 'success';
+      else if (toastMessage.startsWith('❌')) type = 'error';
+    }
+    toastType = type;
+    showToastMessage = true;
+
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+    }
+
+    toastTimer = setTimeout(() => {
+      showToastMessage = false;
+      toastTimer = null;
+    }, 4500);
+  }
 
   onMount(() => {
     const pageStart = performance.now();
@@ -588,6 +620,9 @@
       }
       if (ws) {
         ws.close();
+      }
+      if (toastTimer) {
+        clearTimeout(toastTimer);
       }
     };
   });
@@ -724,6 +759,10 @@
     
     // Last resort: return original URI
     return scannerUri;
+  }
+
+  function toggleExpandedThumbnail(id) {
+    expandedThumbnail = expandedThumbnail === id ? null : id;
   }
 
   async function loadVersion() {
@@ -1007,7 +1046,7 @@
 
   async function previewScan() {
     if (!selectedScanner) {
-      alert(t.pleaseSelectScanner);
+      notify(t.pleaseSelectScanner);
       return;
     }
     
@@ -1027,12 +1066,12 @@
         previewImage = result.image; // base64 data URI
       } else {
         const error = await response.json();
-        alert(`❌ Preview failed: ${error.detail || 'Unknown error'}`);
+        notify(`❌ Preview failed: ${error.detail || 'Unknown error'}`);
         showPreview = false;
       }
     } catch (error) {
       console.error('Preview error:', error);
-      alert(`❌ Preview failed: ${error.message}`);
+      notify(`❌ Preview failed: ${error.message}`);
       showPreview = false;
     } finally {
       isPreviewing = false;
@@ -1046,7 +1085,7 @@
 
   async function startBatchMode() {
     if (!selectedScanner) {
-      alert(t.pleaseSelectScanner);
+      notify(t.pleaseSelectScanner);
       return;
     }
     batchMode = true;
@@ -1055,7 +1094,7 @@
 
   async function addPageToBatch() {
     if (!selectedScanner || !selectedProfile) {
-      alert(t.pleaseSelectScanner);
+      notify(t.pleaseSelectScanner);
       return;
     }
     
@@ -1077,14 +1116,14 @@
           url: data.image,
           pageNumber: batchPages.length + 1
         });
-        alert(`✅ ${t.scanningPage} ${batchPages.length} ${t.done.toLowerCase()}`);
+        notify(`✅ ${t.scanningPage} ${batchPages.length} ${t.done.toLowerCase()}`);
       } else {
         const error = await response.json();
-        alert(`❌ ${error.detail || 'Scan failed'}`);
+        notify(`❌ ${error.detail || 'Scan failed'}`);
       }
     } catch (error) {
       console.error('Batch scan error:', error);
-      alert(`❌ Error: ${error.message}`);
+      notify(`❌ Error: ${error.message}`);
     } finally {
       isBatchScanning = false;
     }
@@ -1092,12 +1131,12 @@
 
   async function finishBatch() {
     if (batchPages.length === 0) {
-      alert('No pages in batch');
+      notify('No pages in batch');
       return;
     }
     
     if (!selectedTarget) {
-      alert(t.pleaseSelectTarget);
+      notify(t.pleaseSelectTarget);
       return;
     }
 
@@ -1116,7 +1155,7 @@
 
       if (response.ok) {
         const data = await response.json();
-        alert(`✅ Batch scan started: ${batchPages.length} pages combined into PDF`);
+        notify(`✅ Batch scan started: ${batchPages.length} pages combined into PDF`);
         
         // Reset batch mode
         batchMode = false;
@@ -1126,11 +1165,11 @@
         await loadData();
       } else {
         const error = await response.json();
-        alert(`❌ ${error.detail || 'Batch scan failed'}`);
+        notify(`❌ ${error.detail || 'Batch scan failed'}`);
       }
     } catch (error) {
       console.error('Finish batch error:', error);
-      alert(`❌ Error: ${error.message}`);
+      notify(`❌ Error: ${error.message}`);
     }
   }
   
@@ -1173,15 +1212,15 @@
       });
       
       if (response.ok) {
-        alert(t.jobCancelled);
+        notify(t.jobCancelled);
         await loadData();
       } else {
         const error = await response.json();
-        alert(`❌ ${error.detail || 'Cancel failed'}`);
+        notify(`❌ ${error.detail || 'Cancel failed'}`);
       }
     } catch (error) {
       console.error('Cancel error:', error);
-      alert(`❌ Error: ${error.message}`);
+      notify(`❌ Error: ${error.message}`);
     }
   }
 
@@ -1194,17 +1233,17 @@
 
   async function startScan() {
     if (!selectedScanner) {
-      alert('Please select a scanner');
+      notify('Please select a scanner');
       return;
     }
     
     if (!selectedProfile) {
-      alert('Please select a scan profile');
+      notify('Please select a scan profile');
       return;
     }
     
     if (!selectedTarget) {
-      alert('Please select a target');
+      notify('Please select a target');
       return;
     }
 
@@ -1224,20 +1263,20 @@
         // Close preview if open
         if (showPreview) closePreview();
         await loadData();
-        alert('✅ Scan started successfully');
+        notify('✅ Scan started successfully');
       } else {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        alert(`❌ Failed to start scan: ${error.detail || response.statusText}`);
+        notify(`❌ Failed to start scan: ${error.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Scan error:', error);
-      alert(`❌ Failed to start scan: ${error.message}`);
+      notify(`❌ Failed to start scan: ${error.message}`);
     }
   }
 
   async function submitPrintJob() {
     if (!selectedPrinter || !printFile) {
-      alert('Please select printer and file');
+      notify('Please select printer and file');
       return;
     }
 
@@ -1255,19 +1294,19 @@
       if (response.ok) {
         await loadData();
         printFile = null;
-        alert('Print job submitted');
+        notify('Print job submitted');
       } else {
-        alert('Failed to submit print job');
+        notify('Failed to submit print job');
       }
     } catch (error) {
       console.error('Print error:', error);
-      alert('Failed to submit print job');
+      notify('Failed to submit print job');
     }
   }
 
   async function saveTarget(skipValidation = false) {
     if (!targetName) {
-      alert('Please enter a target name');
+      notify('Please enter a target name');
       return;
     }
 
@@ -1275,7 +1314,7 @@
 
     if (targetType === 'SMB') {
       if (!targetConnection || !targetUsername) {
-        alert('Please fill in connection and username for SMB');
+        notify('Please fill in connection and username for SMB');
         return;
       }
       
@@ -1298,7 +1337,7 @@
       // No separate upload_path needed - it's in the connection string
     } else if (targetType === 'SFTP') {
       if (!targetSftpHost || !targetUsername) {
-        alert('Please fill in SFTP host and username');
+        notify('Please fill in SFTP host and username');
         return;
       }
       // Store as user@host for compatibility with existing backend format
@@ -1310,7 +1349,7 @@
       config.remote_path = targetRemotePath || '/uploads/scans';
     } else if (targetType === 'Email') {
       if (!targetEmailTo || !targetSmtpHost) {
-        alert('Please fill in recipient email and SMTP host');
+        notify('Please fill in recipient email and SMTP host');
         return;
       }
       config.connection = targetEmailTo;
@@ -1322,20 +1361,20 @@
       config.use_tls = targetUseTLS;
     } else if (targetType === 'Paperless-ngx') {
       if (!targetConnection || !targetApiToken) {
-        alert('Please fill in URL and API token');
+        notify('Please fill in URL and API token');
         return;
       }
       config.connection = targetConnection;
       config.api_token = targetApiToken;
     } else if (targetType === 'Webhook') {
       if (!targetConnection) {
-        alert('Please enter webhook URL');
+        notify('Please enter webhook URL');
         return;
       }
       config.connection = targetConnection;
     } else if (targetType === 'Google Drive' || targetType === 'Dropbox' || targetType === 'OneDrive') {
       if (!targetAccessToken) {
-        alert('Please enter access token');
+        notify('Please enter access token');
         return;
       }
       config.access_token = targetAccessToken;
@@ -1345,7 +1384,7 @@
       config.connection = targetFolderPath || targetFolderId || '/';
     } else if (targetType === 'Nextcloud') {
       if (!targetWebdavUrl || !targetUsername || !targetPassword) {
-        alert('Please fill in WebDAV URL, username and password');
+        notify('Please fill in WebDAV URL, username and password');
         return;
       }
       config.webdav_url = targetWebdavUrl;
@@ -1383,7 +1422,7 @@
         const successMsg = skipValidation 
           ? '✅ Target gespeichert (ohne Test)'
           : '✅ Verbindungstest erfolgreich - Target gespeichert';
-        alert(successMsg);
+        notify(successMsg);
         // Reset all form fields
         targetName = '';
         targetConnection = '';
@@ -1411,11 +1450,11 @@
         // Show detailed error message from backend
         const errorMsg = errorData.detail || response.statusText || 'Unknown error';
         const prefix = skipValidation ? '❌ Fehler beim Speichern' : '❌ Verbindungstest fehlgeschlagen';
-        alert(`${prefix}:\n\n${errorMsg}`);
+        notify(`${prefix}:\n\n${errorMsg}`);
       }
     } catch (error) {
       console.error('Save target error:', error);
-      alert(`❌ Fehler: ${error.message}`);
+      notify(`❌ Fehler: ${error.message}`);
     }
   }
 
@@ -1436,11 +1475,11 @@
       if (response.ok) {
         await loadTargets();
       } else {
-        alert('Failed to update favorite');
+        notify('Failed to update favorite');
       }
     } catch (error) {
       console.error('Toggle favorite error:', error);
-      alert('Failed to update favorite');
+      notify('Failed to update favorite');
     }
   }
 
@@ -1458,11 +1497,11 @@
       } else {
         const error = await response.json().catch(() => ({}));
         console.error('Failed to update favorite:', error);
-        alert('Failed to update favorite');
+        notify('Failed to update favorite');
       }
     } catch (error) {
       console.error('Toggle device favorite error:', error);
-      alert('Failed to update favorite');
+      notify('Failed to update favorite');
     }
   }
 
@@ -1483,13 +1522,13 @@
       const result = await response.json();
       
       if (result.status === 'ok') {
-        alert(`✅ Connection successful!\n\nTarget: ${target.name}\nType: ${target.type}`);
+        notify(`✅ Connection successful!\n\nTarget: ${target.name}\nType: ${target.type}`);
       } else {
-        alert(`❌ Connection failed\n\n${result.message || 'Unable to connect to target'}`);
+        notify(`❌ Connection failed\n\n${result.message || 'Unable to connect to target'}`);
       }
     } catch (error) {
       console.error('Test target error:', error);
-      alert(`❌ Test failed: ${error.message}`);
+      notify(`❌ Test failed: ${error.message}`);
     } finally {
       testBtn.textContent = originalText;
       testBtn.disabled = false;
@@ -1511,15 +1550,15 @@
       
       if (response.ok) {
         const result = await response.json();
-        alert(`✅ ${result.message}`);
+        notify(`✅ ${result.message}`);
         await loadHistory();
       } else {
         const error = await response.json();
-        alert(`❌ Retry failed\n\n${error.detail || 'Unknown error'}`);
+        notify(`❌ Retry failed\n\n${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Retry upload error:', error);
-      alert(`❌ Retry failed: ${error.message}`);
+      notify(`❌ Retry failed: ${error.message}`);
     }
   }
 
@@ -1535,16 +1574,16 @@
       
       if (response.ok) {
         const result = await response.json();
-        alert(`✅ ${result.deleted_count} ${currentLang === 'de' ? 'Aufträge gelöscht' : 'jobs deleted'}`);
+        notify(`✅ ${result.deleted_count} ${currentLang === 'de' ? 'Aufträge gelöscht' : 'jobs deleted'}`);
         await loadHistory();
         await loadStats(); // Reload stats to reflect changes
       } else {
         const error = await response.json();
-        alert(`❌ ${error.detail || 'Failed to clear history'}`);
+        notify(`❌ ${error.detail || 'Failed to clear history'}`);
       }
     } catch (error) {
       console.error('Clear history error:', error);
-      alert(`❌ Error: ${error.message}`);
+      notify(`❌ Error: ${error.message}`);
     }
   }
 
@@ -1559,16 +1598,16 @@
       });
       
       if (response.ok) {
-        alert(`✅ ${t.jobDeleted}`);
+        notify(`✅ ${t.jobDeleted}`);
         await loadHistory();
         await loadStats();
       } else {
         const error = await response.json();
-        alert(`❌ ${error.detail || 'Failed to delete job'}`);
+        notify(`❌ ${error.detail || 'Failed to delete job'}`);
       }
     } catch (error) {
       console.error('Delete job error:', error);
-      alert(`❌ Error: ${error.message}`);
+      notify(`❌ Error: ${error.message}`);
     }
   }
 
@@ -1584,15 +1623,15 @@
       
       if (response.ok) {
         const result = await response.json();
-        alert(`✅ ${t.targetStatsDeleted} (${result.deleted_count} ${currentLang === 'de' ? 'Einträge gelöscht' : 'entries deleted'})`);
+        notify(`✅ ${t.targetStatsDeleted} (${result.deleted_count} ${currentLang === 'de' ? 'Einträge gelöscht' : 'entries deleted'})`);
         await loadStats();
       } else {
         const error = await response.json();
-        alert(`❌ ${error.detail || 'Failed to delete target statistics'}`);
+        notify(`❌ ${error.detail || 'Failed to delete target statistics'}`);
       }
     } catch (error) {
       console.error('Delete target stats error:', error);
-      alert(`❌ Error: ${error.message}`);
+      notify(`❌ Error: ${error.message}`);
     }
   }
 
@@ -1614,16 +1653,16 @@
         targets = targets.filter(t => t.id !== targetId);
         // Remove from stats immediately
         statsTargets = statsTargets.filter(s => s.target !== targetName && s.target !== targetId);
-        alert('✅ Target erfolgreich entfernt');
+        notify('✅ Target erfolgreich entfernt');
         // Reload stats to get updated data
         await loadStats();
       } else {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        alert(`❌ Fehler beim Entfernen: ${errorData.detail || response.statusText}`);
+        notify(`❌ Fehler beim Entfernen: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Remove target error:', error);
-      alert(`❌ Fehler beim Entfernen: ${error.message}`);
+      notify(`❌ Fehler beim Entfernen: ${error.message}`);
     }
   }
 
@@ -1639,15 +1678,15 @@
       });
       
       if (response.ok) {
-        alert(`✅ ${typeName.charAt(0).toUpperCase() + typeName.slice(1)} removed successfully`);
+        notify(`✅ ${typeName.charAt(0).toUpperCase() + typeName.slice(1)} removed successfully`);
         await loadDevices();
       } else {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        alert(`❌ Failed to remove ${typeName}: ${errorData.detail || response.statusText}`);
+        notify(`❌ Failed to remove ${typeName}: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error(`Remove ${typeName} error:`, error);
-      alert(`❌ Failed to remove ${typeName}: ${error.message}`);
+      notify(`❌ Failed to remove ${typeName}: ${error.message}`);
     }
   }
 
@@ -1667,11 +1706,11 @@
         console.log('All devices:', allDevices.length);
       } else {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        alert(`Failed to discover printers: ${error.detail || response.statusText}`);
+        notify(`Failed to discover printers: ${error.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Discovery error:', error);
-      alert(`Failed to discover printers: ${error.message}`);
+      notify(`Failed to discover printers: ${error.message}`);
     } finally {
       isDiscovering = false;
     }
@@ -1698,14 +1737,14 @@
         await loadData();
         // Refresh discovery to update "already_added" status
         await discoverPrinters();
-        alert(`✅ Printer "${device.name}" added successfully`);
+        notify(`✅ Printer "${device.name}" added successfully`);
       } else {
         const error = await response.json();
-        alert(`❌ Failed to add printer: ${error.detail || 'Unknown error'}`);
+        notify(`❌ Failed to add printer: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Add printer error:', error);
-      alert(`❌ Failed to add printer: ${error.message || 'Network error'}`);
+      notify(`❌ Failed to add printer: ${error.message || 'Network error'}`);
     }
   }
 
@@ -1723,11 +1762,11 @@
         console.log('Discovery complete:', discoveredScanners.length, 'scanners found');
       } else {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        alert(`Failed to discover scanners: ${error.detail || response.statusText}`);
+        notify(`Failed to discover scanners: ${error.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Discovery error:', error);
-      alert(`Failed to discover scanners: ${error.message}`);
+      notify(`Failed to discover scanners: ${error.message}`);
     } finally {
       isDiscovering = false;
     }
@@ -1753,27 +1792,27 @@
         await loadData();
         // Refresh discovery to update "already_added" status
         await discoverScanners();
-        alert(`✅ Scanner "${device.name}" added successfully`);
+        notify(`✅ Scanner "${device.name}" added successfully`);
       } else {
         const error = await response.json();
-        alert(`❌ Failed to add scanner: ${error.detail || 'Unknown error'}`);
+        notify(`❌ Failed to add scanner: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Add scanner error:', error);
-      alert(`❌ Failed to add scanner: ${error.message || 'Network error'}`);
+      notify(`❌ Failed to add scanner: ${error.message || 'Network error'}`);
     }
   }
   
   async function addManualScanner() {
     if (!manualScannerIP) {
-      alert(currentLang === 'de' ? 'Bitte IP-Adresse eingeben' : 'Please enter IP address');
+      notify(currentLang === 'de' ? 'Bitte IP-Adresse eingeben' : 'Please enter IP address');
       return;
     }
     
     // Validate IP format
     const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
     if (!ipRegex.test(manualScannerIP)) {
-      alert(currentLang === 'de' ? 'Ungültige IP-Adresse' : 'Invalid IP address');
+      notify(currentLang === 'de' ? 'Ungültige IP-Adresse' : 'Invalid IP address');
       return;
     }
     
@@ -1798,7 +1837,7 @@
       });
 
       if (response.ok) {
-        alert(`✅ Scanner "${name}" ${currentLang === 'de' ? 'erfolgreich hinzugefügt' : 'added successfully'}`);
+        notify(`✅ Scanner "${name}" ${currentLang === 'de' ? 'erfolgreich hinzugefügt' : 'added successfully'}`);
         // Reset form
         manualScannerIP = '';
         manualScannerName = '';
@@ -1807,11 +1846,11 @@
         await loadData();
       } else {
         const error = await response.json();
-        alert(`❌ ${currentLang === 'de' ? 'Fehler beim Hinzufügen' : 'Failed to add scanner'}: ${error.detail || 'Unknown error'}`);
+        notify(`❌ ${currentLang === 'de' ? 'Fehler beim Hinzufügen' : 'Failed to add scanner'}: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Add manual scanner error:', error);
-      alert(`❌ ${currentLang === 'de' ? 'Fehler beim Hinzufügen' : 'Failed to add scanner'}: ${error.message || 'Network error'}`);
+      notify(`❌ ${currentLang === 'de' ? 'Fehler beim Hinzufügen' : 'Failed to add scanner'}: ${error.message || 'Network error'}`);
     }
   }
 
@@ -1819,7 +1858,7 @@
 
   async function addPrinter() {
     if (!newPrinterUri || !newPrinterName) {
-      alert('Please enter printer URI and name');
+      notify('Please enter printer URI and name');
       return;
     }
 
@@ -1838,14 +1877,14 @@
         newPrinterUri = '';
         newPrinterName = '';
         showPrinterSettings = false;
-        alert('Printer added successfully');
+        notify('Printer added successfully');
       } else {
         const error = await response.json();
-        alert(`Failed to add printer: ${error.detail || 'Unknown error'}`);
+        notify(`Failed to add printer: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Add printer error:', error);
-      alert(`Failed to add printer: ${error.message || 'Network error'}`);
+      notify(`Failed to add printer: ${error.message || 'Network error'}`);
     }
   }
 </script>
@@ -2158,6 +2197,8 @@
                   {#each batchPages as page, index (page.pageNumber)}
                     <div 
                       style="position: relative; cursor: move;"
+                      role="listitem"
+                      aria-label={`Batch page ${page.pageNumber}`}
                       draggable="true"
                       on:dragstart={(e) => {
                         e.dataTransfer.effectAllowed = 'move';
@@ -2240,8 +2281,8 @@
   
   <!-- Preview Modal -->
   {#if showPreview}
-    <div style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 2rem;" on:click={closePreview}>
-      <div class="card" style="max-width: 90%; max-height: 90%; overflow: auto; padding: 2rem;" on:click|stopPropagation>
+    <div style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 2rem;" role="dialog" aria-modal="true">
+      <div class="card" style="max-width: 90%; max-height: 90%; overflow: auto; padding: 2rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
           <h2>{t.previewScan}</h2>
           <button class="ghost" on:click={closePreview}>✕</button>
@@ -2275,14 +2316,14 @@
           </div>
           
           {#if job.thumbnailUrl}
-            <div style="margin-bottom: 0.75rem; cursor: pointer; display: flex; justify-content: flex-start;" on:click={() => expandedThumbnail = expandedThumbnail === job.id ? null : job.id}>
+            <button class="ghost" style="margin-bottom: 0.75rem; cursor: pointer; display: flex; justify-content: flex-start; padding: 0; width: 100%; border: none; background: transparent;" on:click={() => toggleExpandedThumbnail(job.id)} aria-label={expandedThumbnail === job.id ? 'Collapse thumbnail' : 'Expand thumbnail'}>
               <img 
                 src={job.thumbnailUrl} 
                 alt="Scan preview" 
                 style="width: {expandedThumbnail === job.id ? '100%' : '50%'}; height: auto; border-radius: 6px; border: 1px solid var(--border); transition: width 0.3s ease;"
                 title="Click to {expandedThumbnail === job.id ? 'shrink' : 'expand'}"
               />
-            </div>
+            </button>
           {:else if job.status === 'running'}
             <div style="margin-bottom: 0.75rem; padding: 3rem 1rem; background: var(--surface-dim); border-radius: 6px; text-align: center;">
               <p class="muted">🖨️ Scanning...</p>
@@ -2332,14 +2373,14 @@
           </div>
           
           {#if lastCompletedJob.thumbnailUrl}
-            <div style="margin-bottom: 0.75rem; cursor: pointer; display: flex; justify-content: flex-start;" on:click={() => expandedThumbnail = expandedThumbnail === lastCompletedJob.id ? null : lastCompletedJob.id}>
+            <button class="ghost" style="margin-bottom: 0.75rem; cursor: pointer; display: flex; justify-content: flex-start; padding: 0; width: 100%; border: none; background: transparent;" on:click={() => toggleExpandedThumbnail(lastCompletedJob.id)} aria-label={expandedThumbnail === lastCompletedJob.id ? 'Collapse thumbnail' : 'Expand thumbnail'}>
               <img 
                 src={lastCompletedJob.thumbnailUrl} 
                 alt="Scan preview" 
                 style="width: {expandedThumbnail === lastCompletedJob.id ? '100%' : '50%'}; height: auto; border-radius: 6px; border: 1px solid var(--border); transition: width 0.3s ease;"
                 title="Click to {expandedThumbnail === lastCompletedJob.id ? 'shrink' : 'expand'}"
               />
-            </div>
+            </button>
           {/if}
           
           <!-- Status breakdown -->
@@ -2752,6 +2793,17 @@
       </div>
     {/if}
   </SectionCard>
+
+
+
+{#if showToastMessage}
+  <div class="toast-stack" role="status" aria-live="polite">
+    <div class={`toast toast-${toastType}`}>
+      <span>{toastMessage}</span>
+      <button class="ghost small" on:click={dismissToast}>✕</button>
+    </div>
+  </div>
+{/if}
 
 </main>
 <footer style="background: var(--surface); border-top: 1px solid var(--border); padding: 2rem 0; margin-top: 4rem; text-align: center; color: var(--muted);">
