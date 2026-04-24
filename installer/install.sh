@@ -79,6 +79,7 @@ User=${RUN_USER}
 WorkingDirectory=${APP_DIR}
 Environment="VIRTUAL_ENV=${VENV_DIR}"
 Environment="PATH=${VENV_DIR}/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=${APP_DIR}/app"
 ExecStart=${VENV_DIR}/bin/uvicorn app.main:app --host 0.0.0.0 --port 80
 Restart=on-failure
 RestartSec=5

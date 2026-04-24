@@ -8,6 +8,13 @@ from pathlib import Path
 import os
 import asyncio
 import logging
+import sys
+
+# Ensure local app modules are importable regardless of how uvicorn is started
+# (e.g. from repository root via `uvicorn app.main:app` under systemd).
+APP_DIR = Path(__file__).resolve().parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
 
 from core.logging_config import setup_logging
 from api import scan, targets, auth, history, devices, maintenance, websocket, stats, homeassistant
