@@ -8,6 +8,13 @@ from pathlib import Path
 import os
 import asyncio
 import logging
+import sys
+
+# Ensure local app modules are importable regardless of how uvicorn is started
+# (e.g. from repository root via `uvicorn app.main:app` under systemd).
+APP_DIR = Path(__file__).resolve().parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
 
 from core.logging_config import setup_logging
 from api import scan, targets, auth, history, devices, maintenance, websocket, stats, homeassistant
@@ -139,11 +146,8 @@ def create_app() -> FastAPI:
         
         @app.get("/mobile")
         async def serve_mobile():
-            mobile_html = web_dist / "mobile.html"
-            if mobile_html.exists():
-                return FileResponse(str(mobile_html))
-            else:
-                return FileResponse(str(web_dist / "index.html"))
+            # Legacy mobile UI removed; always use the current unified WebUI.
+            return FileResponse(str(web_dist / "index.html"))
     elif web_dev.exists():
         # Development: serve from web directory
         app.mount("/src", StaticFiles(directory=str(web_dev.parent / "src")), name="src")
@@ -154,11 +158,8 @@ def create_app() -> FastAPI:
         
         @app.get("/mobile")
         async def serve_mobile():
-            mobile_html = web_dev.parent / "mobile.html"
-            if mobile_html.exists():
-                return FileResponse(str(mobile_html))
-            else:
-                return FileResponse(str(web_dev))
+            # Legacy mobile UI removed; always use the current unified WebUI.
+            return FileResponse(str(web_dev))
     else:
         @app.get("/")
         async def serve_root():
