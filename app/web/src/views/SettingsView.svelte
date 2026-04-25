@@ -1,36 +1,28 @@
 <script>
   import Card from '../components/ui/Card.svelte';
+  import Badge from '../components/ui/Badge.svelte';
   export let settings;
+  export let version = '';
+  export let lastUpdated = null;
   export let onChange = () => {};
+
+  $: updatedText = lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Not synced yet';
 </script>
 
 <section class="grid cols-2">
-  <Card title="Application settings" subtitle="Behavior and UI preferences" eyebrow="Preferences">
-    <div class="form-grid">
-      <label class="check-field"><input type="checkbox" checked={settings.autoRefresh} on:change={(event) => onChange({ autoRefresh: event.target.checked })} /> Auto refresh dashboards every 10 seconds</label>
-      <label class="check-field"><input type="checkbox" checked={settings.compactTables} on:change={(event) => onChange({ compactTables: event.target.checked })} /> Compact table rows</label>
-    </div>
+  <Card title="Interface behavior" subtitle="Small preferences for daily operation.">
+    <label class="checkbox-line"><input type="checkbox" checked={settings.autoRefresh} on:change={(e) => onChange({ autoRefresh: e.target.checked })} /> Auto refresh dashboards every 10 seconds</label>
+    <label class="checkbox-line"><input type="checkbox" checked={settings.compactTables} on:change={(e) => onChange({ compactTables: e.target.checked })} /> Compact table rows</label>
+    <label class="checkbox-line"><input type="checkbox" checked={settings.glassEffects} on:change={(e) => onChange({ glassEffects: e.target.checked })} /> Modern glass effects</label>
   </Card>
 
-  <Card title="System info" subtitle="Deployment hints" eyebrow="Scan2Target">
-    <div class="list-stack">
-      <div class="list-row">
-        <div class="list-main"><strong>Frontend</strong><span>Svelte + Vite, responsive PWA shell</span></div>
-      </div>
-      <div class="list-row">
-        <div class="list-main"><strong>API</strong><span>Existing /api/v1 contracts are unchanged</span></div>
-      </div>
-      <div class="list-row">
-        <div class="list-main"><strong>Cache</strong><span>Service worker is network-first to avoid stale UI</span></div>
-      </div>
+  <Card title="System info" subtitle="Frontend and backend status.">
+    <div class="resource-meta">
+      <div class="meta-box"><span>Version</span><strong>{version || 'unknown'}</strong></div>
+      <div class="meta-box"><span>Last update</span><strong>{updatedText}</strong></div>
+      <div class="meta-box"><span>UI package</span><strong>Modern Command Center</strong></div>
+      <div class="meta-box"><span>Cache strategy</span><strong>Network-first</strong></div>
     </div>
+    <div class="top-gap"><Badge tone="success" text="redesigned" /></div>
   </Card>
 </section>
-
-<Card title="Redesign notes" subtitle="What changed visually" eyebrow="UI">
-  <div class="grid cols-3">
-    <div class="review-item"><span>Navigation</span><strong>Desktop sidebar + mobile dock</strong></div>
-    <div class="review-item"><span>Dashboard</span><strong>Hero, metrics and live queue</strong></div>
-    <div class="review-item"><span>Workflow</span><strong>Guided scan wizard</strong></div>
-  </div>
-</Card>

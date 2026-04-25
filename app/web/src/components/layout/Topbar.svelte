@@ -2,41 +2,35 @@
   export let title = '';
   export let subtitle = '';
   export let lang = 'en';
+  export let version = '';
   export let loading = false;
-  export let activeJobs = 0;
-  export let onlineDevices = 0;
+  export let lastUpdated = null;
   export let onLangChange = () => {};
   export let onRefresh = () => {};
+
+  $: updatedText = lastUpdated ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
 </script>
 
 <header class="topbar">
-  <div class="topbar-title">
-    <span class="eyebrow">Scan2Target Control</span>
+  <div class="topbar-title-wrap">
+    <div class="eyebrow">Scan2Target {#if version}· v{version}{/if}</div>
     <h1>{title}</h1>
     <p>{subtitle}</p>
   </div>
 
   <div class="topbar-actions">
-    <div class="topbar-pill" title="Online scanners">
-      <span class="status-dot online"></span>
-      <span>{onlineDevices} online</span>
-    </div>
-    <div class="topbar-pill" title="Active scan jobs">
-      <span class="status-dot busy"></span>
-      <span>{activeJobs} jobs</span>
+    <div class="command-field" aria-label="Command palette placeholder">
+      <span>⌕ Search scans, devices, targets</span>
+      <span class="command-kbd">⌘ K</span>
     </div>
 
-    <button class="btn refresh-btn" class:spinning={loading} on:click={onRefresh} aria-label="Refresh data">
-      <span aria-hidden="true">↻</span>
-      <span>Refresh</span>
+    <div class="segmented" aria-label="Language switcher">
+      <button class:active={lang === 'en'} on:click={() => onLangChange('en')}>EN</button>
+      <button class:active={lang === 'de'} on:click={() => onLangChange('de')}>DE</button>
+    </div>
+
+    <button class="btn ghost" on:click={onRefresh} disabled={loading} title={`Last update: ${updatedText}`}>
+      {loading ? 'Syncing…' : 'Refresh'}
     </button>
-
-    <label class="language-select">
-      <span class="sr-only">Language</span>
-      <select value={lang} on:change={(e) => onLangChange(e.target.value)}>
-        <option value="en">EN</option>
-        <option value="de">DE</option>
-      </select>
-    </label>
   </div>
 </header>

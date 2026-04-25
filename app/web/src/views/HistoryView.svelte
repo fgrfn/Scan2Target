@@ -9,24 +9,22 @@
   let query = '';
   let status = 'all';
 
+  const tone = (value) => {
+    if (value === 'completed') return 'success';
+    if (value === 'failed') return 'danger';
+    if (['running', 'queued', 'waiting'].includes(value)) return 'warning';
+    return 'info';
+  };
+
   $: filtered = (data.history || []).filter((item) => {
     const q = query.trim().toLowerCase();
-    const id = String(item.id || '').toLowerCase();
-    const device = String(item.device_id || '').toLowerCase();
-    const target = String(item.target_id || '').toLowerCase();
-    const matchQuery = !q || id.includes(q) || device.includes(q) || target.includes(q);
+    const matchQuery = !q || String(item.id || '').toLowerCase().includes(q) || String(item.device_id || '').toLowerCase().includes(q) || String(item.target_id || '').toLowerCase().includes(q);
     const matchStatus = status === 'all' || item.status === status;
     return matchQuery && matchStatus;
   });
-  $: failedCount = (data.history || []).filter((item) => item.status === 'failed').length;
-  $: completedCount = (data.history || []).filter((item) => item.status === 'completed').length;
 
   async function refresh() {
-    try {
-      onHistory(await api.getHistory());
-    } catch (error) {
-      onNotify(error.message, 'error');
-    }
+    onHistory(await api.getHistory());
   }
 
   async function clear() {
@@ -59,25 +57,14 @@
   }
 </script>
 
-<section class="grid cols-3">
-  <div class="metric-card success">
-    <span class="metric-label">Completed</span>
-    <strong class="metric-value">{completedCount}</strong>
-    <span class="metric-foot">Loaded history records</span>
-  </div>
-  <div class="metric-card warning">
-    <span class="metric-label">Filtered</span>
-    <strong class="metric-value">{filtered.length}</strong>
-    <span class="metric-foot">Matching current filter</span>
-  </div>
-  <div class="metric-card">
-    <span class="metric-label">Failed</span>
-    <strong class="metric-value">{failedCount}</strong>
-    <span class="metric-foot">Retry candidates</span>
-  </div>
+<section class="grid cols-4">
+  <Card variant="kpi-card"><div class="kpi-label">Records</div><strong class="kpi">{data.history.length}</strong><div class="kpi-note">Total jobs in history</div></Card>
+  <Card variant="kpi-card"><div class="kpi-label">Completed</div><strong class="kpi">{data.history.filter((i) => i.status === 'completed').length}</strong><div class="kpi-note">Successful jobs</div></Card>
+  <Card variant="kpi-card"><div class="kpi-label">Failed</div><strong class="kpi">{data.history.filter((i) => i.status === 'failed').length}</strong><div class="kpi-note">Need attention</div></Card>
+  <Card variant="kpi-card"><div class="kpi-label">Filtered</div><strong class="kpi">{filtered.length}</strong><div class="kpi-note">Visible records</div></Card>
 </section>
 
-<Card title="History" subtitle="Search, filter, retry and remove scan jobs" eyebrow="Archive">
+<Card title="History explorer" subtitle="Search by job id, device, target or status.">
   <div class="row gap">
     <input class="search" bind:value={query} placeholder="Search by id, device or target" />
     <select bind:value={status}>
@@ -99,8 +86,8 @@
         {#if filtered.length === 0}<tr><td colspan="6" class="muted">No matching records.</td></tr>{/if}
         {#each filtered as item}
           <tr>
-            <td class="code-text">{item.id}</td>
-            <td><Badge tone={item.status === 'completed' ? 'success' : item.status === 'failed' ? 'danger' : 'warning'} text={item.status || 'unknown'} /></td>
+            <td class="id-cell">{item.id}</td>
+            <td><Badge tone={tone(item.status)} text={item.status} /></td>
             <td>{item.device_id || '-'}</td>
             <td>{item.target_id || '-'}</td>
             <td>{item.created_at || '-'}</td>

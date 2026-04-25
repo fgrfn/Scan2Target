@@ -18,93 +18,64 @@
   import SettingsView from './views/SettingsView.svelte';
 
   let state;
-  const unsubscribe = appStore.subscribe((value) => (state = value));
-
+  const unsubscribe = appStore.subscribe((v) => (state = v));
   let currentLang = 'en';
-  const langUnsub = lang.subscribe((value) => (currentLang = value));
+  const langUnsub = lang.subscribe((v) => (currentLang = v));
 
-  const hashAliases = {
-    scan: 'new-scan',
-    newscan: 'new-scan',
-    queue: 'active-scans',
-    jobs: 'active-scans',
-    stats: 'statistics',
-    analytics: 'statistics'
+  const pageCopy = {
+    dashboard: 'Live overview for scanners, scan jobs and target delivery health.',
+    'new-scan': 'A cleaner one-flow wizard for selecting scanner, source, profile and destination.',
+    'active-scans': 'Monitor and control queued, waiting and running scan jobs.',
+    devices: 'Discover, test and register scanners from one modern inventory view.',
+    targets: 'Manage delivery destinations like SMB, Email, Paperless, Webhooks and SFTP.',
+    history: 'Search, filter, retry and clean up completed scan jobs.',
+    statistics: 'Usage timeline, hourly distribution and performance insights.',
+    settings: 'Behavior, refresh and UI preferences.'
   };
 
-  $: pageMeta = pages.find((page) => page.id === state?.page) || pages[0];
-  $: activeJobs = (state?.jobs || []).filter((job) => ['queued', 'running', 'waiting'].includes(job.status)).length;
-  $: onlineDevices = (state?.devices || []).filter((device) => device.status === 'online').length;
+  $: pageMeta = pages.find((p) => p.id === state?.page) || pages[0];
+  $: pageSubtitle = pageCopy[state?.page] || 'Modern scanning control center.';
 
-  function pageFromHash() {
-    const raw = window.location.hash.replace('#', '').trim();
-    if (!raw) return 'dashboard';
-    return hashAliases[raw] || raw;
-  }
+  onMount(async () => {
+    await appStore.refreshAll();
+    const interval = setInterval(async () => {
+      if (state?.settings.autoRefresh) await appStore.refreshAll();
+    }, 10000);
 
-  function navigate(page) {
-    appStore.setPage(page);
-    if (typeof window !== 'undefined') {
-      const hash = page === 'dashboard' ? '' : `#${page}`;
-      history.replaceState(null, '', `${window.location.pathname}${hash}`);
-    }
-  }
-
-  function applyHashRoute() {
-    const page = pageFromHash();
-    if (pages.some((item) => item.id === page)) appStore.setPage(page);
-  }
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+      langUnsub();
+    };
+  });
 
   function notify(message, type = 'info') {
     appStore.notify(message, type);
     setTimeout(() => appStore.clearToast(), 3500);
   }
-
-  onMount(() => {
-    applyHashRoute();
-    appStore.refreshAll();
-
-    const interval = setInterval(() => {
-      if (state?.settings.autoRefresh) appStore.refreshAll();
-    }, 10000);
-
-    window.addEventListener('hashchange', applyHashRoute);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('hashchange', applyHashRoute);
-      unsubscribe();
-      langUnsub();
-    };
-  });
 </script>
 
-<svelte:head>
-  <meta name="theme-color" content="#101828" />
-</svelte:head>
-
-<div class:app-loading={state?.loading} class="app-shell">
-  <Sidebar {pages} current={state.page} onNavigate={navigate} />
-
+<div class="app-shell">
+  <Sidebar {pages} current={state.page} onNavigate={appStore.setPage} />
   <main class="main-area">
     <Topbar
       title={pageMeta.label}
-      subtitle={pageMeta.description}
+      subtitle={pageSubtitle}
       lang={currentLang}
+      version={state.version}
       loading={state.loading}
-      activeJobs={activeJobs}
-      onlineDevices={onlineDevices}
+      lastUpdated={state.lastUpdated}
       onLangChange={(value) => lang.set(value)}
       onRefresh={appStore.refreshAll}
     />
 
     <div class="view-container">
       {#if state.page === 'dashboard'}
-        <DashboardView data={state} onNavigate={navigate} />
+        <DashboardView data={state} onNavigate={appStore.setPage} />
       {:else if state.page === 'new-scan'}
         <NewScanView data={state} onDone={notify} />
       {:else if state.page === 'active-scans'}
-        <ActiveScansView data={state} onNotify={notify} />
+        <ActiveScansView data={state} onNotify={notify} onJobs={appStore.replaceJobs} />
       {:else if state.page === 'devices'}
         <DevicesView data={state} onDevices={appStore.replaceDevices} onNotify={notify} />
       {:else if state.page === 'targets'}
@@ -114,11 +85,11 @@
       {:else if state.page === 'statistics'}
         <StatisticsView data={state} />
       {:else if state.page === 'settings'}
-        <SettingsView settings={state.settings} onChange={appStore.setSettings} />
+        <SettingsView settings={state.settings} version={state.version} lastUpdated={state.lastUpdated} onChange={appStore.setSettings} />
       {/if}
     </div>
   </main>
 
-  <BottomNav {pages} current={state.page} onNavigate={navigate} />
+  <BottomNav {pages} current={state.page} onNavigate={appStore.setPage} />
   <Toast toast={state.toast} onClose={appStore.clearToast} />
 </div>

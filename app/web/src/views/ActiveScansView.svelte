@@ -4,13 +4,19 @@
   import { api } from '../lib/api';
   export let data;
   export let onNotify = () => {};
+  export let onJobs = () => {};
 
-  $: active = (data.jobs || []).filter((job) => ['queued', 'running', 'waiting'].includes(job.status));
-  $: completedToday = (data.history || []).filter((job) => job.status === 'completed').length;
+  const tone = (status) => status === 'running' ? 'warning' : status === 'failed' ? 'danger' : status === 'completed' ? 'success' : 'info';
+  $: active = (data.jobs || []).filter((j) => ['queued', 'running', 'waiting'].includes(j.status));
+
+  async function refreshJobs() {
+    onJobs(await api.getJobs());
+  }
 
   async function cancel(id) {
     try {
       await api.cancelJob(id);
+      await refreshJobs();
       onNotify(`Cancelled ${id}`, 'success');
     } catch (error) {
       onNotify(error.message, 'error');
@@ -19,42 +25,42 @@
 </script>
 
 <section class="grid cols-3">
-  <div class="metric-card info">
-    <span class="metric-label">Active jobs</span>
-    <strong class="metric-value">{active.length}</strong>
-    <span class="metric-foot">Queued, waiting or running</span>
-  </div>
-  <div class="metric-card success">
-    <span class="metric-label">Configured scanners</span>
-    <strong class="metric-value">{data.devices.length}</strong>
-    <span class="metric-foot">Available in workflow</span>
-  </div>
-  <div class="metric-card">
-    <span class="metric-label">History records</span>
-    <strong class="metric-value">{completedToday}</strong>
-    <span class="metric-foot">Completed records loaded</span>
-  </div>
+  <Card variant="kpi-card"><div class="kpi-label">Active</div><strong class="kpi">{active.length}</strong><div class="kpi-note">Running, queued or waiting</div></Card>
+  <Card variant="kpi-card"><div class="kpi-label">Running</div><strong class="kpi">{active.filter((j) => j.status === 'running').length}</strong><div class="kpi-note">Currently scanning</div></Card>
+  <Card variant="kpi-card"><div class="kpi-label">Queued</div><strong class="kpi">{active.filter((j) => j.status === 'queued').length}</strong><div class="kpi-note">Waiting for resources</div></Card>
 </section>
 
-<Card title="Scan Queue" subtitle="Real-time operational queue with cancel actions" eyebrow="Operations">
-  {#if active.length === 0}
-    <div class="empty-state"><div><strong>No active scans right now</strong><span>New jobs will appear here as soon as they start.</span></div></div>
-  {:else}
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>ID</th><th>Status</th><th>Device</th><th>Target</th><th>Actions</th></tr></thead>
-        <tbody>
-          {#each active as job}
-            <tr>
-              <td class="code-text">{job.id}</td>
-              <td><Badge tone="warning" text={job.status || 'unknown'} /></td>
-              <td>{job.device_id || '-'}</td>
-              <td>{job.target_id || '-'}</td>
-              <td><button class="btn danger" on:click={() => cancel(job.id)}>Cancel</button></td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-  {/if}
+<Card title="Queue control" subtitle="Cancel scans directly from the live queue.">
+  <div class="resource-grid">
+    {#if active.length === 0}
+      <div class="resource-card">
+        <div class="resource-head">
+          <div class="resource-title"><div class="resource-icon">✓</div><div><h4>No active scans</h4><p>The queue is currently idle.</p></div></div>
+          <Badge tone="success" text="idle" />
+        </div>
+      </div>
+    {/if}
+    {#each active as job}
+      <article class="resource-card">
+        <div class="resource-head">
+          <div class="resource-title">
+            <div class="resource-icon">↻</div>
+            <div>
+              <h4>{job.device_id || 'Unknown scanner'}</h4>
+              <p class="truncate">{job.id}</p>
+            </div>
+          </div>
+          <Badge tone={tone(job.status)} text={job.status} />
+        </div>
+        <div class="resource-meta">
+          <div class="meta-box"><span>Target</span><strong>{job.target_id || '-'}</strong></div>
+          <div class="meta-box"><span>Created</span><strong>{job.created_at || '-'}</strong></div>
+        </div>
+        <div class="stat-track"><div class="stat-fill" style={`width:${job.status === 'running' ? 68 : 28}%`}></div></div>
+        <div class="row gap">
+          <button class="btn danger" on:click={() => cancel(job.id)}>Cancel job</button>
+        </div>
+      </article>
+    {/each}
+  </div>
 </Card>

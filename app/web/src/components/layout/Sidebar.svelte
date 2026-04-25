@@ -2,34 +2,62 @@
   export let pages = [];
   export let current = 'dashboard';
   export let onNavigate = () => {};
+
+  const iconMap = {
+    dashboard: '⌘',
+    'new-scan': '◉',
+    'active-scans': '↻',
+    devices: '▣',
+    targets: '→',
+    history: '◷',
+    statistics: '▰',
+    settings: '⚙'
+  };
+
+  $: primaryPages = pages.filter((p) => ['dashboard', 'new-scan', 'active-scans', 'history'].includes(p.id));
+  $: managePages = pages.filter((p) => ['devices', 'targets', 'statistics', 'settings'].includes(p.id));
 </script>
 
-<aside class="sidebar" aria-label="Primary navigation">
+<aside class="sidebar">
   <div class="brand-card">
-    <div class="brand-mark" aria-hidden="true">S2</div>
-    <div>
-      <div class="brand-title">Scan2Target</div>
-      <div class="brand-subtitle">Document command center</div>
+    <div class="logo-mark">S2</div>
+    <div class="brand-text">
+      <div class="logo-title">Scan2Target</div>
+      <div class="logo-subtitle">Document Command Center</div>
     </div>
   </div>
 
-  <nav class="side-nav">
-    {#each pages as item}
-      <button class:item-active={item.id === current} on:click={() => onNavigate(item.id)} title={item.description}>
-        <span class="nav-icon" aria-hidden="true">{item.icon}</span>
-        <span class="nav-copy">
-          <span>{item.label}</span>
-          <small>{item.description}</small>
-        </span>
-      </button>
-    {/each}
-  </nav>
+  <div>
+    <div class="sidebar-section-label">Workflow</div>
+    <nav aria-label="Primary navigation">
+      {#each primaryPages as item}
+        <button class="nav-item" class:item-active={item.id === current} on:click={() => onNavigate(item.id)}>
+          <span class="nav-icon">{iconMap[item.id] || '•'}</span>
+          <span class="nav-label">{item.label}</span>
+          <span class="nav-dot" aria-hidden="true"></span>
+        </button>
+      {/each}
+    </nav>
+  </div>
+
+  <div>
+    <div class="sidebar-section-label">Manage</div>
+    <nav aria-label="Management navigation">
+      {#each managePages as item}
+        <button class="nav-item" class:item-active={item.id === current} on:click={() => onNavigate(item.id)}>
+          <span class="nav-icon">{iconMap[item.id] || '•'}</span>
+          <span class="nav-label">{item.label}</span>
+          <span class="nav-dot" aria-hidden="true"></span>
+        </button>
+      {/each}
+    </nav>
+  </div>
 
   <div class="sidebar-footer">
-    <span class="pulse-dot"></span>
-    <div>
-      <strong>API linked</strong>
-      <small>Local scan hub ready</small>
+    <div class="mini-panel">
+      <div class="mini-panel-title">System status</div>
+      <div class="mini-panel-row"><span>API</span><span class="status-dot" title="Online"></span></div>
+      <div class="mini-panel-row"><span>Cache strategy</span><strong>Network first</strong></div>
     </div>
   </div>
 </aside>
