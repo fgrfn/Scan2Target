@@ -8,7 +8,9 @@
   export let onLangChange = () => {};
   export let onRefresh = () => {};
 
-  $: updatedText = lastUpdated ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+  $: updatedText = lastUpdated
+    ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '—';
 </script>
 
 <header class="topbar">
@@ -19,8 +21,8 @@
   </div>
 
   <div class="topbar-actions">
-    <div class="command-field" aria-label="Command palette placeholder">
-      <span>⌕ Search scans, devices, targets</span>
+    <div class="command-field" role="status" aria-live="polite">
+      <span>Last sync: {updatedText}</span>
       <span class="command-kbd">⌘ K</span>
     </div>
 
@@ -29,8 +31,8 @@
       <button class:active={lang === 'de'} on:click={() => onLangChange('de')}>DE</button>
     </div>
 
-    <button class="btn ghost" on:click={onRefresh} disabled={loading} title={`Last update: ${updatedText}`}>
-      {loading ? 'Syncing…' : 'Refresh'}
+    <button class="btn primary" on:click={onRefresh} disabled={loading}>
+      {loading ? 'Syncing…' : 'Refresh data'}
     </button>
   </div>
 </header>
