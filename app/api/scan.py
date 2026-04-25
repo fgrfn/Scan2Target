@@ -18,6 +18,7 @@ class ScanRequest(BaseModel):
     device_id: str
     profile_id: str
     target_id: str
+    source: str | None = None
     filename_prefix: str | None = None
     webhook_url: str | None = None
 
@@ -28,6 +29,12 @@ class BatchScanRequest(BaseModel):
     target_id: str
     filename_prefix: str | None = None
     page_urls: List[str]  # List of preview URLs to combine
+
+
+class ScanPageRequest(BaseModel):
+    device_id: str
+    profile_id: str
+    source: str | None = None
 
 
 class ScanProfile(BaseModel):
@@ -98,6 +105,7 @@ async def start_scan(payload: ScanRequest):
             device_id=device_uri,  # Pass URI instead of database ID
             profile_id=payload.profile_id,
             target_id=payload.target_id,
+            source=payload.source,
             filename_prefix=payload.filename_prefix,
             webhook_url=payload.webhook_url,
         )
@@ -255,6 +263,74 @@ async def preview_scan(request: dict):
                 preview_file.unlink()
         except Exception:
             pass
+
+
+@router.post("/page")
+async def scan_single_page(payload: ScanPageRequest):
+    """
+    Scan a single page using profile settings and return it as base64 image.
+    Used by manual multi-page flow where the user confirms after each page.
+    """
+    from fastapi import HTTPException
+    from fastapi.responses import JSONResponse
+    from core.devices.repository import DeviceRepository
+    import tempfile
+    from pathlib import Path
+
+    if not payload.device_id:
+        raise HTTPException(status_code=400, detail="device_id is required")
+
+    page_file = None
+    try:
+        # Convert UI device ID to scanner URI
+        device_repo = DeviceRepository()
+        device = device_repo.get_device(payload.device_id)
+        if not device:
+            raise HTTPException(status_code=404, detail=f"Scanner '{payload.device_id}' not found")
+
+        # Resolve profile settings
+        scanner_mgr = ScannerManager()
+        profiles = scanner_mgr.list_profiles()
+        profile = next((p for p in profiles if p['id'] == payload.profile_id), None)
+        if not profile:
+            raise HTTPException(status_code=400, detail=f"Profile '{payload.profile_id}' not found")
+
+        source = payload.source or profile.get('source', 'Flatbed')
+        with tempfile.NamedTemporaryFile(suffix='.tiff', delete=False) as tmp:
+            page_file = Path(tmp.name)
+
+        cmd = [
+            'scanimage',
+            '--device-name', device.uri,
+            '--resolution', str(profile.get('dpi', 200)),
+            '--mode', profile.get('color_mode', 'Gray'),
+            '--format', 'tiff'
+        ]
+        if source:
+            cmd.extend(['--source', source])
+
+        with open(page_file, 'wb') as output:
+            result = subprocess.run(cmd, stdout=output, stderr=subprocess.PIPE, timeout=120)
+
+        if result.returncode != 0:
+            error_msg = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
+            raise HTTPException(status_code=500, detail=f"Single page scan failed: {error_msg}")
+
+        with open(page_file, 'rb') as f:
+            image_data = base64.b64encode(f.read()).decode('utf-8')
+
+        return JSONResponse({
+            "status": "success",
+            "image": f"data:image/tiff;base64,{image_data}",
+            "format": "tiff"
+        })
+    finally:
+        try:
+            if page_file and page_file.exists():
+                page_file.unlink()
+        except Exception:
+            pass
+
 @router.post("/batch", response_model=ScanJobResponse)
 async def start_batch_scan(payload: BatchScanRequest):
     """Combine multiple scanned pages into one PDF and upload to target."""

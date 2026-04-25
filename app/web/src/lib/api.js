@@ -48,6 +48,8 @@ export const api = {
 
   getProfiles: () => request('/scan/profiles'),
   startScan: (payload) => request('/scan/start', { method: 'POST', body: JSON.stringify(payload) }),
+  scanPage: (payload) => request('/scan/page', { method: 'POST', body: JSON.stringify(payload) }),
+  startBatchScan: (payload) => request('/scan/batch', { method: 'POST', body: JSON.stringify(payload) }),
   getJobs: () => request('/scan/jobs'),
   cancelJob: (id) => request(`/scan/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
 

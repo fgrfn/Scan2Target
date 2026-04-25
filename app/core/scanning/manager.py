@@ -239,7 +239,15 @@ class ScannerManager:
             }
         ]
 
-    def start_scan(self, device_id: str, profile_id: str, target_id: str, filename_prefix: str | None, webhook_url: str | None = None) -> str:
+    def start_scan(
+        self,
+        device_id: str,
+        profile_id: str,
+        target_id: str,
+        filename_prefix: str | None,
+        source: str | None = None,
+        webhook_url: str | None = None
+    ) -> str:
         """
         Start a scan job in the background.
         
@@ -266,14 +274,23 @@ class ScannerManager:
             await loop.run_in_executor(
                 None, 
                 self._execute_scan, 
-                job_id, device_id, profile_id, target_id, filename_prefix, webhook_url
+                job_id, device_id, profile_id, target_id, filename_prefix, source, webhook_url
             )
         
         worker.submit_task(job_id, scan_task)
             
         return job_id
     
-    def _execute_scan(self, job_id: str, device_id: str, profile_id: str, target_id: str, filename_prefix: str | None, webhook_url: str | None = None):
+    def _execute_scan(
+        self,
+        job_id: str,
+        device_id: str,
+        profile_id: str,
+        target_id: str,
+        filename_prefix: str | None,
+        source_override: str | None = None,
+        webhook_url: str | None = None
+    ):
         """
         Execute the actual scan using scanimage.
         Supports multi-page scanning (ADF), automatic document detection, and webhook notifications.
@@ -300,7 +317,7 @@ class ScannerManager:
             prefix = filename_prefix or 'scan'
             output_format = profile['format']
             batch_scan = profile.get('batch_scan', False)
-            source = profile.get('source', 'Flatbed')
+            source = source_override or profile.get('source', 'Flatbed')
             
             scanned_files = []
             page_num = 1

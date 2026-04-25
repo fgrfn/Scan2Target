@@ -16,6 +16,7 @@
 
   let step = 0;
   let starting = false;
+  let multiPage = false;
   let form = {
     device_id: '',
     source: 'Flatbed',
@@ -34,8 +35,32 @@
   async function startScan() {
     try {
       starting = true;
-      await api.startScan(form);
-      onDone('Scan started successfully', 'success');
+      if (multiPage) {
+        const pageUrls = [];
+        let continueScan = true;
+
+        while (continueScan) {
+          const pageResult = await api.scanPage({
+            device_id: form.device_id,
+            profile_id: form.profile_id,
+            source: form.source
+          });
+          pageUrls.push(pageResult.image);
+          continueScan = window.confirm(`Seite ${pageUrls.length} gescannt. Weitere Seite scannen?`);
+        }
+
+        await api.startBatchScan({
+          device_id: form.device_id,
+          profile_id: form.profile_id,
+          target_id: form.target_id,
+          filename_prefix: form.filename_prefix,
+          page_urls: pageUrls
+        });
+        onDone(`${pageUrls.length} Seiten als eine PDF gescannt und versendet`, 'success');
+      } else {
+        await api.startScan(form);
+        onDone('Scan started successfully', 'success');
+      }
       step = 0;
       form.filename_prefix = '';
     } catch (error) {
@@ -83,6 +108,10 @@
           </button>
         {/each}
       </div>
+      <label class="checkbox-line top-gap">
+        <input type="checkbox" bind:checked={multiPage} />
+        Multi-Page Modus: Nach jeder Seite nach weiterer Seite fragen und alles in einer PDF speichern
+      </label>
     {:else if step === 2}
       {#if data.profiles.length === 0}
         <p class="muted">No scan profiles available.</p>
