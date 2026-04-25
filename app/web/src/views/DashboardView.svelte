@@ -1,6 +1,8 @@
 <script>
   import Card from '../components/ui/Card.svelte';
   import Badge from '../components/ui/Badge.svelte';
+  import SectionCard from '../components/SectionCard.svelte';
+  import StatGrid from '../components/StatGrid.svelte';
   export let data;
   export let onNavigate = () => {};
 
@@ -17,6 +19,12 @@
   $: onlineDevices = (data.devices || []).filter((d) => d.status === 'online').length;
   $: enabledTargets = (data.targets || []).filter((t) => t.enabled !== false).length;
   $: success = Number(overview.success_rate || 0);
+  $: kpiCards = [
+    { icon: '⇄', label: 'Total scans', value: overview.total_scans || 0, sub: 'All tracked scan jobs' },
+    { icon: '☀', label: 'Today', value: overview.today_scans || 0, sub: 'Created in the current day' },
+    { icon: '✓', label: 'Success rate', value: `${success}%`, sub: 'Delivery success' },
+    { icon: '▰', label: 'Avg/day', value: overview.average_scans_per_day || 0, sub: 'Long-term workload trend' }
+  ];
 </script>
 
 <Card variant="hero-card">
@@ -41,27 +49,10 @@
   </div>
 </Card>
 
-<section class="grid cols-4">
-  <Card variant="kpi-card">
-    <div class="kpi-top"><div><div class="kpi-label">Total scans</div><strong class="kpi">{overview.total_scans || 0}</strong></div><div class="kpi-icon">⇄</div></div>
-    <div class="kpi-note">All tracked scan jobs</div>
-  </Card>
-  <Card variant="kpi-card">
-    <div class="kpi-top"><div><div class="kpi-label">Today</div><strong class="kpi">{overview.today_scans || 0}</strong></div><div class="kpi-icon">☀</div></div>
-    <div class="kpi-note">Created in the current day</div>
-  </Card>
-  <Card variant="kpi-card">
-    <div class="kpi-top"><div><div class="kpi-label">Success rate</div><strong class="kpi">{success}%</strong></div><div class="kpi-icon">✓</div></div>
-    <div class="stat-track"><div class="stat-fill" style={`width:${Math.min(100, Math.max(0, success))}%`}></div></div>
-  </Card>
-  <Card variant="kpi-card">
-    <div class="kpi-top"><div><div class="kpi-label">Avg/day</div><strong class="kpi">{overview.average_scans_per_day || 0}</strong></div><div class="kpi-icon">▰</div></div>
-    <div class="kpi-note">Long-term workload trend</div>
-  </Card>
-</section>
+<StatGrid cards={kpiCards} />
 
 <section class="grid cols-2">
-  <Card title="Live queue" subtitle={`${active.length} job${active.length === 1 ? '' : 's'} waiting or running`}>
+  <SectionCard title="Live queue" subtitle={`${active.length} job${active.length === 1 ? '' : 's'} waiting or running`}>
     {#if active.length === 0}
       <div class="list-row"><div><strong>No active scans</strong><p class="muted small">Everything is calm. Start a new scan when ready.</p></div><Badge tone="success" text="idle" /></div>
     {/if}
@@ -79,9 +70,9 @@
     {#if active.length > 5}
       <button class="btn ghost top-gap" on:click={() => onNavigate('active-scans')}>Show all queue items</button>
     {/if}
-  </Card>
+  </SectionCard>
 
-  <Card title="Workflow health" subtitle="Scanners, targets and delivery pipeline">
+  <SectionCard title="Workflow health" subtitle="Scanners, targets and delivery pipeline">
     <div class="stat-grid">
       <div class="stat-row">
         <div><strong>Scanner readiness</strong><div class="stat-track"><div class="stat-fill" style={`width:${data.devices.length ? (onlineDevices / data.devices.length) * 100 : 0}%`}></div></div></div>
@@ -96,7 +87,7 @@
         <Badge tone={success >= 90 ? 'success' : success >= 60 ? 'warning' : 'danger'} text={`${success}%`} />
       </div>
     </div>
-  </Card>
+  </SectionCard>
 </section>
 
 <Card title="Recent activity" subtitle="Latest scans and delivery state">
