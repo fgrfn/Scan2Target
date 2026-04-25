@@ -22,6 +22,18 @@ class TargetManager:
 
     def __init__(self):
         self.repo = TargetRepository()
+
+    @staticmethod
+    def _target_type_key(target_type: str) -> str:
+        normalized = (target_type or '').strip().lower().replace('_', '-')
+        aliases = {
+            'paperless-ngx': 'paperless',
+            'paperless': 'paperless',
+            'google drive': 'google-drive',
+            'googledrive': 'google-drive',
+            'onedrive': 'onedrive'
+        }
+        return aliases.get(normalized, normalized)
     
     @staticmethod
     def _parse_smb_connection(connection: str) -> tuple[str, str, str]:
@@ -125,11 +137,11 @@ class TargetManager:
             dict with 'status' and optional 'message'
         """
         try:
-            if target.type == 'SMB':
+            if self._target_type_key(target.type) == 'smb':
                 # Test SMB connectivity with smbclient
                 username = target.config.get('username', 'guest')
                 password = target.config.get('password', '')
-                connection = target.config.get('connection', '')
+                connection = target.config.get('connection') or target.config.get('url') or target.config.get('path', '')
                 
                 if not connection:
                     return {"status": "error", "message": "Connection string is required"}
@@ -194,7 +206,7 @@ class TargetManager:
                 except subprocess.TimeoutExpired:
                     return {"status": "error", "message": f"Connection timeout - server {server} not responding"}
                 
-            elif target.type == 'SFTP':
+            elif self._target_type_key(target.type) == 'sftp':
                 # Test SFTP with ssh
                 host = target.config.get('host', target.config.get('connection', '').split('@')[-1])
                 port = target.config.get('port', 22)
@@ -234,7 +246,7 @@ class TargetManager:
                     else:
                         return {"status": "error", "message": "ssh not installed"}
                 
-            elif target.type == 'Email':
+            elif self._target_type_key(target.type) == 'email':
                 # Test SMTP connection and authentication
                 smtp_host = target.config.get('smtp_host', 'localhost')
                 smtp_port = target.config.get('smtp_port', 587)
@@ -250,9 +262,9 @@ class TargetManager:
                 server.quit()
                 return {"status": "ok"}
                 
-            elif target.type == 'Paperless-ngx':
+            elif self._target_type_key(target.type) == 'paperless':
                 # Test Paperless-ngx API endpoint
-                url = target.config.get('connection', '').rstrip('/')
+                url = target.config.get('connection') or target.config.get('url', '').rstrip('/')
                 if not url:
                     return {"status": "error", "message": "Paperless-ngx URL is required"}
                 
@@ -279,9 +291,9 @@ class TargetManager:
                 except requests.exceptions.Timeout:
                     return {"status": "error", "message": "Connection timeout"}
                 
-            elif target.type == 'Webhook':
+            elif self._target_type_key(target.type) == 'webhook':
                 # Test HTTP endpoint
-                url = target.config.get('connection', '')
+                url = target.config.get('connection') or target.config.get('url', '')
                 if not url:
                     return {"status": "error", "message": "URL is required"}
                 
@@ -295,7 +307,7 @@ class TargetManager:
                 except requests.exceptions.RequestException as e:
                     return {"status": "error", "message": f"Cannot reach webhook: {str(e)}"}
             
-            elif target.type == 'Google Drive':
+            elif self._target_type_key(target.type) == 'google-drive':
                 # Basic validation for Google Drive
                 access_token = target.config.get('access_token', '')
                 if not access_token:
@@ -316,7 +328,7 @@ class TargetManager:
                 except requests.exceptions.RequestException as e:
                     return {"status": "error", "message": f"Cannot connect to Google Drive: {str(e)}"}
             
-            elif target.type == 'Dropbox':
+            elif self._target_type_key(target.type) == 'dropbox':
                 # Basic validation for Dropbox
                 access_token = target.config.get('access_token', '')
                 if not access_token:
@@ -337,7 +349,7 @@ class TargetManager:
                 except requests.exceptions.RequestException as e:
                     return {"status": "error", "message": f"Cannot connect to Dropbox: {str(e)}"}
             
-            elif target.type == 'OneDrive':
+            elif self._target_type_key(target.type) == 'onedrive':
                 # Basic validation for OneDrive
                 access_token = target.config.get('access_token', '')
                 if not access_token:
@@ -358,9 +370,9 @@ class TargetManager:
                 except requests.exceptions.RequestException as e:
                     return {"status": "error", "message": f"Cannot connect to OneDrive: {str(e)}"}
             
-            elif target.type == 'Nextcloud':
+            elif self._target_type_key(target.type) == 'nextcloud':
                 # Basic validation for Nextcloud/WebDAV
-                webdav_url = target.config.get('webdav_url', '')
+                webdav_url = target.config.get('webdav_url') or target.config.get('connection') or target.config.get('url', '')
                 username = target.config.get('username', '')
                 password = target.config.get('password', '')
                 
@@ -427,7 +439,7 @@ class TargetManager:
             return {"target_id": target_id, "status": "error", "message": "Target not found"}
         
         try:
-            if target.type == 'SMB':
+            if self._target_type_key(target.type) == 'smb':
                 # Test SMB connectivity by attempting to create and delete a test file
                 import tempfile
                 
@@ -440,7 +452,7 @@ class TargetManager:
                     # Try to upload the test file
                     username = target.config.get('username', 'guest')
                     password = target.config.get('password', '')
-                    connection = target.config.get('connection', '')
+                    connection = target.config.get('connection') or target.config.get('url') or target.config.get('path', '')
                     
                     if not connection:
                         return {"target_id": target_id, "status": "error", "message": "Connection string is missing"}
@@ -503,7 +515,7 @@ class TargetManager:
                     # Clean up test file
                     Path(test_file).unlink(missing_ok=True)
                 
-            elif target.type == 'SFTP':
+            elif self._target_type_key(target.type) == 'sftp':
                 # Test SFTP with ssh
                 host = target.config['connection']
                 result = subprocess.run(
@@ -514,7 +526,7 @@ class TargetManager:
                 status = "ok" if result.returncode == 0 else "error"
                 message = None
                 
-            elif target.type == 'Email':
+            elif self._target_type_key(target.type) == 'email':
                 # Test SMTP connection
                 smtp_host = target.config.get('smtp_host', 'localhost')
                 smtp_port = target.config.get('smtp_port', 587)
@@ -523,7 +535,7 @@ class TargetManager:
                 status = "ok"
                 message = None
                 
-            elif target.type == 'Paperless-ngx':
+            elif self._target_type_key(target.type) == 'paperless':
                 # Test Paperless-ngx API
                 url = target.config['connection'].rstrip('/')
                 token = target.config.get('api_token') or target.config.get('token', '')
@@ -533,7 +545,7 @@ class TargetManager:
                 status = "ok" if response.status_code == 200 else "error"
                 message = f"Status code: {response.status_code}" if status == "error" else None
                 
-            elif target.type == 'Webhook':
+            elif self._target_type_key(target.type) == 'webhook':
                 # Test HTTP endpoint
                 url = target.config['connection']
                 response = requests.head(url, timeout=5)
@@ -579,23 +591,23 @@ class TargetManager:
             try:
                 logger.info(f"Delivery attempt {attempt + 1}/{max_retries} to {target.name}")
                 
-                if target.type == 'SMB':
+                if self._target_type_key(target.type) == 'smb':
                     self._deliver_smb(target, file)
-                elif target.type == 'SFTP':
+                elif self._target_type_key(target.type) == 'sftp':
                     self._deliver_sftp(target, file)
-                elif target.type == 'Email':
+                elif self._target_type_key(target.type) == 'email':
                     self._deliver_email(target, file, metadata)
-                elif target.type == 'Paperless-ngx':
+                elif self._target_type_key(target.type) == 'paperless':
                     self._deliver_paperless(target, file, metadata)
-                elif target.type == 'Webhook':
+                elif self._target_type_key(target.type) == 'webhook':
                     self._deliver_webhook(target, file, metadata)
-                elif target.type == 'Google Drive':
+                elif self._target_type_key(target.type) == 'google-drive':
                     self._deliver_google_drive(target, file)
-                elif target.type == 'Dropbox':
+                elif self._target_type_key(target.type) == 'dropbox':
                     self._deliver_dropbox(target, file)
-                elif target.type == 'OneDrive':
+                elif self._target_type_key(target.type) == 'onedrive':
                     self._deliver_onedrive(target, file)
-                elif target.type == 'Nextcloud':
+                elif self._target_type_key(target.type) == 'nextcloud':
                     self._deliver_nextcloud(target, file)
                 else:
                     raise Exception(f"Unsupported target type: {target.type}")
@@ -623,7 +635,7 @@ class TargetManager:
         """Upload file to SMB share with robust path handling."""
         username = target.config.get('username', 'guest')
         password = target.config.get('password', '')
-        connection = target.config['connection']
+        connection = target.config.get('connection') or target.config.get('path') or target.config.get('url')
         
         logger.debug(f"[SMB] Delivering file: {file.name}")
         logger.debug(f"[SMB] Connection: {connection}")
@@ -694,9 +706,10 @@ class TargetManager:
     
     def _deliver_sftp(self, target: TargetConfig, file: Path) -> None:
         """Upload file via SFTP."""
-        host = target.config.get('host', target.config['connection'].split('@')[-1] if '@' in target.config['connection'] else target.config['connection'])
+        connection = target.config.get('connection', '')
+        host = target.config.get('host', connection.split('@')[-1] if '@' in connection else connection)
         port = target.config.get('port', 22)
-        username = target.config.get('username', target.config['connection'].split('@')[0] if '@' in target.config['connection'] else 'root')
+        username = target.config.get('username', connection.split('@')[0] if '@' in connection else 'root')
         password = target.config.get('password', '')
         remote_path = target.config.get('remote_path', '.')
         
@@ -732,10 +745,12 @@ class TargetManager:
         smtp_host = target.config.get('smtp_host', 'localhost')
         smtp_port = target.config.get('smtp_port', 587)
         from_addr = target.config.get('from', 'scan2target@localhost')
-        to_addr = target.config['connection']  # email address
+        to_addr = target.config.get('connection') or target.config.get('to')  # email address
         
         msg = MIMEMultipart()
         msg['From'] = from_addr
+        if not to_addr:
+            raise Exception('Email target is missing recipient address')
         msg['To'] = to_addr
         msg['Subject'] = f"Scan2Target: {file.name}"
         
@@ -758,7 +773,7 @@ class TargetManager:
     
     def _deliver_paperless(self, target: TargetConfig, file: Path, metadata: dict) -> None:
         """Upload to Paperless-ngx via API."""
-        base_url = target.config.get('connection', '').rstrip('/')
+        base_url = target.config.get('connection') or target.config.get('url', '').rstrip('/')
         if not base_url:
             raise Exception("Paperless-ngx URL is not configured")
         

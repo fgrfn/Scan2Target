@@ -8,7 +8,7 @@
 <section class="section-card" {id}>
   <header class="section-heading">
     <div class="section-title-wrap">
-      <h2>{title}</h2>
+      <h2 class="section-title">{title}</h2>
       {#if subtitle}
         <p class="muted">{subtitle}</p>
       {/if}
@@ -16,7 +16,7 @@
     {#if actions.length > 0}
       <div class="section-actions">
         {#each actions as action}
-          <button class="ghost" on:click={action.onClick}>{action.label}</button>
+          <button class="btn ghost" on:click={action.onClick}>{action.label}</button>
         {/each}
       </div>
     {/if}
