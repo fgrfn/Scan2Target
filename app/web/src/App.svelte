@@ -18,45 +18,89 @@
   import SettingsView from './views/SettingsView.svelte';
 
   let state;
-  const unsubscribe = appStore.subscribe((v) => (state = v));
+  const unsubscribe = appStore.subscribe((value) => (state = value));
+
   let currentLang = 'en';
-  const langUnsub = lang.subscribe((v) => (currentLang = v));
+  const langUnsub = lang.subscribe((value) => (currentLang = value));
 
-  $: pageMeta = pages.find((p) => p.id === state?.page) || pages[0];
+  const hashAliases = {
+    scan: 'new-scan',
+    newscan: 'new-scan',
+    queue: 'active-scans',
+    jobs: 'active-scans',
+    stats: 'statistics',
+    analytics: 'statistics'
+  };
 
-  onMount(async () => {
-    await appStore.refreshAll();
-    const interval = setInterval(async () => {
-      if (state?.settings.autoRefresh) await appStore.refreshAll();
-    }, 10000);
+  $: pageMeta = pages.find((page) => page.id === state?.page) || pages[0];
+  $: activeJobs = (state?.jobs || []).filter((job) => ['queued', 'running', 'waiting'].includes(job.status)).length;
+  $: onlineDevices = (state?.devices || []).filter((device) => device.status === 'online').length;
 
-    return () => {
-      clearInterval(interval);
-      unsubscribe();
-      langUnsub();
-    };
-  });
+  function pageFromHash() {
+    const raw = window.location.hash.replace('#', '').trim();
+    if (!raw) return 'dashboard';
+    return hashAliases[raw] || raw;
+  }
+
+  function navigate(page) {
+    appStore.setPage(page);
+    if (typeof window !== 'undefined') {
+      const hash = page === 'dashboard' ? '' : `#${page}`;
+      history.replaceState(null, '', `${window.location.pathname}${hash}`);
+    }
+  }
+
+  function applyHashRoute() {
+    const page = pageFromHash();
+    if (pages.some((item) => item.id === page)) appStore.setPage(page);
+  }
 
   function notify(message, type = 'info') {
     appStore.notify(message, type);
     setTimeout(() => appStore.clearToast(), 3500);
   }
+
+  onMount(() => {
+    applyHashRoute();
+    appStore.refreshAll();
+
+    const interval = setInterval(() => {
+      if (state?.settings.autoRefresh) appStore.refreshAll();
+    }, 10000);
+
+    window.addEventListener('hashchange', applyHashRoute);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('hashchange', applyHashRoute);
+      unsubscribe();
+      langUnsub();
+    };
+  });
 </script>
 
-<div class="app-shell">
-  <Sidebar {pages} current={state.page} onNavigate={appStore.setPage} />
+<svelte:head>
+  <meta name="theme-color" content="#101828" />
+</svelte:head>
+
+<div class:app-loading={state?.loading} class="app-shell">
+  <Sidebar {pages} current={state.page} onNavigate={navigate} />
+
   <main class="main-area">
     <Topbar
       title={pageMeta.label}
-      subtitle="Modern scanning control center"
+      subtitle={pageMeta.description}
       lang={currentLang}
+      loading={state.loading}
+      activeJobs={activeJobs}
+      onlineDevices={onlineDevices}
       onLangChange={(value) => lang.set(value)}
       onRefresh={appStore.refreshAll}
     />
 
     <div class="view-container">
       {#if state.page === 'dashboard'}
-        <DashboardView data={state} onNavigate={appStore.setPage} />
+        <DashboardView data={state} onNavigate={navigate} />
       {:else if state.page === 'new-scan'}
         <NewScanView data={state} onDone={notify} />
       {:else if state.page === 'active-scans'}
@@ -75,6 +119,6 @@
     </div>
   </main>
 
-  <BottomNav {pages} current={state.page} onNavigate={appStore.setPage} />
+  <BottomNav {pages} current={state.page} onNavigate={navigate} />
   <Toast toast={state.toast} onClose={appStore.clearToast} />
 </div>

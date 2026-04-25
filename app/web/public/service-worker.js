@@ -1,57 +1,44 @@
-// Service Worker for Progressive Web App (PWA)
-// v2: avoid pinning stale /index.html or hashed assets across redesign deployments
-const CACHE_NAME = 'scan2target-v2';
+// Scan2Target service worker
+// v3: force fresh UI after full redesign and keep offline fallback best-effort only.
+const CACHE_NAME = 'scan2target-v3-command-center';
 
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing service worker...');
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating service worker...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => Promise.all(
-      cacheNames
-        .filter((name) => name !== CACHE_NAME)
-        .map((name) => caches.delete(name))
-    ))
+    caches.keys().then((cacheNames) => Promise.all(cacheNames.map((name) => caches.delete(name))))
   );
   self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-
-  // Skip non-GET requests
   if (request.method !== 'GET') return;
 
-  // Always bypass cache for API traffic
-  if (request.url.includes('/api/')) {
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(request));
     return;
   }
 
-  // Network-first for UI/assets to make sure newest redesign is shown.
   event.respondWith(
-    fetch(request)
+    fetch(request, { cache: 'no-store' })
       .then((response) => {
-        const sameOrigin = new URL(request.url).origin === self.location.origin;
-        if (sameOrigin && response.ok && request.url.startsWith('http')) {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache));
+        if (response.ok && request.mode === 'navigate') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put('/', clone));
         }
         return response;
       })
       .catch(async () => {
-        const cached = await caches.match(request);
-        if (cached) return cached;
-
-        // Fallback to app shell when offline navigation is requested
         if (request.mode === 'navigate') {
           const cachedIndex = await caches.match('/');
           if (cachedIndex) return cachedIndex;
         }
-
+        const cached = await caches.match(request);
+        if (cached) return cached;
         throw new Error('Network error and no cache fallback available');
       })
   );
@@ -76,8 +63,5 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
-  if (event.action === 'view') {
-    event.waitUntil(clients.openWindow('/#history'));
-  }
+  if (event.action === 'view') event.waitUntil(clients.openWindow('/#history'));
 });

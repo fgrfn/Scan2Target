@@ -29,6 +29,26 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
+class NoCacheStaticFiles(StaticFiles):
+    """StaticFiles variant that prevents stale Web UI assets after redesign deploys."""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+
+def no_cache_file(path: Path, media_type: str | None = None) -> FileResponse:
+    """Return a FileResponse with strict no-cache headers for the Web UI shell."""
+    response = FileResponse(str(path), media_type=media_type)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 def get_version() -> str:
     """Read version from VERSION file."""
     version_file = Path(__file__).parent.parent / "VERSION"
@@ -136,76 +156,58 @@ def create_app() -> FastAPI:
     web_dev = Path(__file__).parent / "web" / "index.html"
 
     if web_dist.exists():
-        # Production: serve built assets
-        app.mount("/assets", StaticFiles(directory=str(web_dist / "assets")), name="assets")
+        # Production: serve built assets. No-cache is intentional to avoid stale PWA/UI bundles.
+        app.mount("/assets", NoCacheStaticFiles(directory=str(web_dist / "assets")), name="assets")
 
         @app.get("/service-worker.js", include_in_schema=False)
         async def serve_service_worker():
             sw_file = web_dist / "service-worker.js"
             if not sw_file.exists():
                 raise HTTPException(status_code=404, detail="Service worker not found")
-
-            response = FileResponse(str(sw_file), media_type="application/javascript")
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            return response
+            return no_cache_file(sw_file, media_type="application/javascript")
 
         @app.get("/manifest.json", include_in_schema=False)
         async def serve_manifest():
             manifest_file = web_dist / "manifest.json"
             if not manifest_file.exists():
                 raise HTTPException(status_code=404, detail="Manifest not found")
-
-            response = FileResponse(str(manifest_file), media_type="application/manifest+json")
-            response.headers["Cache-Control"] = "no-cache"
-            return response
+            return no_cache_file(manifest_file, media_type="application/manifest+json")
 
         @app.get("/icon-192.png", include_in_schema=False)
         async def serve_icon_192():
             icon_file = web_dist / "icon-192.png"
             if not icon_file.exists():
                 raise HTTPException(status_code=404, detail="Icon not found")
-
-            return FileResponse(str(icon_file), media_type="image/png")
+            return no_cache_file(icon_file, media_type="image/png")
 
         @app.get("/icon-96.png", include_in_schema=False)
         async def serve_icon_96():
             icon_file = web_dist / "icon-96.png"
             if not icon_file.exists():
                 raise HTTPException(status_code=404, detail="Icon not found")
-
-            return FileResponse(str(icon_file), media_type="image/png")
+            return no_cache_file(icon_file, media_type="image/png")
 
         @app.get("/")
         async def serve_root():
-            index_file = web_dist / "index.html"
-            response = FileResponse(str(index_file))
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            return response
+            return no_cache_file(web_dist / "index.html")
 
         @app.get("/mobile")
         async def serve_mobile():
             # Legacy mobile UI removed; always use the current unified WebUI.
-            index_file = web_dist / "index.html"
-            response = FileResponse(str(index_file))
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            return response
+            return no_cache_file(web_dist / "index.html")
 
     elif web_dev.exists():
         # Development: serve from web directory
-        app.mount("/src", StaticFiles(directory=str(web_dev.parent / "src")), name="src")
+        app.mount("/src", NoCacheStaticFiles(directory=str(web_dev.parent / "src")), name="src")
 
         @app.get("/")
         async def serve_root():
-            response = FileResponse(str(web_dev))
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            return response
+            return no_cache_file(web_dev)
 
         @app.get("/mobile")
         async def serve_mobile():
             # Legacy mobile UI removed; always use the current unified WebUI.
-            response = FileResponse(str(web_dev))
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            return response
+            return no_cache_file(web_dev)
 
     else:
         @app.get("/")

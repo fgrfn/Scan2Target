@@ -2,14 +2,14 @@ import { writable } from 'svelte/store';
 import { api } from '../lib/api';
 
 export const pages = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'ri-dashboard-line' },
-  { id: 'new-scan', label: 'New Scan', icon: 'ri-focus-3-line' },
-  { id: 'active-scans', label: 'Active Scans', icon: 'ri-loader-4-line' },
-  { id: 'devices', label: 'Devices', icon: 'ri-scanner-line' },
-  { id: 'targets', label: 'Targets', icon: 'ri-send-plane-line' },
-  { id: 'history', label: 'History', icon: 'ri-time-line' },
-  { id: 'statistics', label: 'Statistics', icon: 'ri-bar-chart-2-line' },
-  { id: 'settings', label: 'Settings', icon: 'ri-settings-3-line' }
+  { id: 'dashboard', label: 'Dashboard', mobileLabel: 'Home', icon: '⌁', description: 'Live overview, quick actions and recent scan activity' },
+  { id: 'new-scan', label: 'New Scan', mobileLabel: 'Scan', icon: '◎', description: 'Guided one-tap workflow from scanner to target' },
+  { id: 'active-scans', label: 'Queue', mobileLabel: 'Queue', icon: '◌', description: 'Running and waiting jobs' },
+  { id: 'devices', label: 'Devices', mobileLabel: 'Devices', icon: '▣', description: 'Scanner discovery, health checks and favorites' },
+  { id: 'targets', label: 'Targets', mobileLabel: 'Targets', icon: '↗', description: 'SMB, Paperless, mail, SFTP, webhook and cloud destinations' },
+  { id: 'history', label: 'History', mobileLabel: 'History', icon: '◷', description: 'Search, retry and clean up completed jobs' },
+  { id: 'statistics', label: 'Analytics', mobileLabel: 'Stats', icon: '▥', description: 'Throughput, hourly distribution and target performance' },
+  { id: 'settings', label: 'Settings', mobileLabel: 'More', icon: '⚙', description: 'Application behavior and system information' }
 ];
 
 function createAppStore() {

@@ -11,36 +11,75 @@
 
   $: filtered = (data.history || []).filter((item) => {
     const q = query.trim().toLowerCase();
-    const matchQuery = !q || item.id.toLowerCase().includes(q) || (item.device_id || '').toLowerCase().includes(q) || (item.target_id || '').toLowerCase().includes(q);
+    const id = String(item.id || '').toLowerCase();
+    const device = String(item.device_id || '').toLowerCase();
+    const target = String(item.target_id || '').toLowerCase();
+    const matchQuery = !q || id.includes(q) || device.includes(q) || target.includes(q);
     const matchStatus = status === 'all' || item.status === status;
     return matchQuery && matchStatus;
   });
+  $: failedCount = (data.history || []).filter((item) => item.status === 'failed').length;
+  $: completedCount = (data.history || []).filter((item) => item.status === 'completed').length;
 
   async function refresh() {
-    onHistory(await api.getHistory());
+    try {
+      onHistory(await api.getHistory());
+    } catch (error) {
+      onNotify(error.message, 'error');
+    }
   }
 
   async function clear() {
-    await api.clearHistory();
-    await refresh();
-    onNotify('Completed history cleared', 'success');
+    try {
+      await api.clearHistory();
+      await refresh();
+      onNotify('Completed history cleared', 'success');
+    } catch (error) {
+      onNotify(error.message, 'error');
+    }
   }
 
   async function del(id) {
-    await api.deleteHistoryJob(id);
-    await refresh();
-    onNotify(`Deleted ${id}`, 'success');
+    try {
+      await api.deleteHistoryJob(id);
+      await refresh();
+      onNotify(`Deleted ${id}`, 'success');
+    } catch (error) {
+      onNotify(error.message, 'error');
+    }
   }
 
   async function retry(id) {
-    await api.retryUpload(id);
-    onNotify(`Retry requested for ${id}`, 'success');
+    try {
+      await api.retryUpload(id);
+      onNotify(`Retry requested for ${id}`, 'success');
+    } catch (error) {
+      onNotify(error.message, 'error');
+    }
   }
 </script>
 
-<Card title="History" subtitle="Search and filter job history">
+<section class="grid cols-3">
+  <div class="metric-card success">
+    <span class="metric-label">Completed</span>
+    <strong class="metric-value">{completedCount}</strong>
+    <span class="metric-foot">Loaded history records</span>
+  </div>
+  <div class="metric-card warning">
+    <span class="metric-label">Filtered</span>
+    <strong class="metric-value">{filtered.length}</strong>
+    <span class="metric-foot">Matching current filter</span>
+  </div>
+  <div class="metric-card">
+    <span class="metric-label">Failed</span>
+    <strong class="metric-value">{failedCount}</strong>
+    <span class="metric-foot">Retry candidates</span>
+  </div>
+</section>
+
+<Card title="History" subtitle="Search, filter, retry and remove scan jobs" eyebrow="Archive">
   <div class="row gap">
-    <input class="search" bind:value={query} placeholder="Search by id/device/target" />
+    <input class="search" bind:value={query} placeholder="Search by id, device or target" />
     <select bind:value={status}>
       <option value="all">All statuses</option>
       <option value="completed">Completed</option>
@@ -60,8 +99,8 @@
         {#if filtered.length === 0}<tr><td colspan="6" class="muted">No matching records.</td></tr>{/if}
         {#each filtered as item}
           <tr>
-            <td>{item.id}</td>
-            <td><Badge tone={item.status === 'completed' ? 'success' : item.status === 'failed' ? 'danger' : 'warning'} text={item.status} /></td>
+            <td class="code-text">{item.id}</td>
+            <td><Badge tone={item.status === 'completed' ? 'success' : item.status === 'failed' ? 'danger' : 'warning'} text={item.status || 'unknown'} /></td>
             <td>{item.device_id || '-'}</td>
             <td>{item.target_id || '-'}</td>
             <td>{item.created_at || '-'}</td>
