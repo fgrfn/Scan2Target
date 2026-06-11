@@ -16,30 +16,36 @@ class JobManager:
         self.repo = JobRepository()
     
     def _broadcast_job_update(self, job: JobRecord):
-        """Broadcast job update via WebSocket (non-blocking)."""
+        """Broadcast job update via WebSocket (non-blocking, thread-safe)."""
         try:
-            from core.websocket import get_connection_manager
+            from core.websocket import get_connection_manager, get_main_loop
             manager = get_connection_manager()
-            
-            # Schedule the broadcast in the event loop
+
+            payload = {
+                "id": job.id,
+                "job_type": job.job_type,
+                "status": job.status.value,
+                "device_id": job.device_id,
+                "target_id": job.target_id,
+                "printer_id": job.printer_id,
+                "file_path": job.file_path,
+                "message": job.message,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+            }
+
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.create_task(manager.send_job_update({
-                        "id": job.id,
-                        "job_type": job.job_type,
-                        "status": job.status.value,
-                        "device_id": job.device_id,
-                        "target_id": job.target_id,
-                        "printer_id": job.printer_id,
-                        "file_path": job.file_path,
-                        "message": job.message,
-                        "created_at": job.created_at.isoformat() if job.created_at else None,
-                        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
-                    }))
+                # Running inside the event loop (API call path)
+                asyncio.get_running_loop()
+                asyncio.create_task(manager.send_job_update(payload))
             except RuntimeError:
-                # No event loop running, skip broadcast
-                pass
+                # Called from a worker thread (scan execution): schedule on the
+                # main loop. Pre-4.0 this silently dropped all live updates.
+                main_loop = get_main_loop()
+                if main_loop and main_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(
+                        manager.send_job_update(payload), main_loop
+                    )
         except Exception as e:
             # Don't fail job updates if WebSocket broadcast fails
             logger.error(f"WebSocket broadcast failed: {e}")

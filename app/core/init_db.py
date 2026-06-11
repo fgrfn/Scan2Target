@@ -25,25 +25,10 @@ def init_database():
         logger.warning("✓ Default admin user created: username='admin', password='admin'")
         logger.warning("  ⚠️  CHANGE THE DEFAULT PASSWORD IMMEDIATELY!")
     
-    # Add default scan profiles if needed
-    with db.get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) as count FROM scan_profiles")
-        row = cursor.fetchone()
-        
-        if row['count'] == 0:
-            logger.info("Creating default scan profiles...")
-            profiles = [
-                ('color_300_pdf', 'Color @300 DPI', 300, 'Color', 'A4', 'pdf'),
-                ('gray_150_pdf', 'Grayscale @150 DPI', 150, 'Gray', 'A4', 'pdf'),
-                ('photo_600_jpeg', 'Photo @600 DPI', 600, 'Color', 'A4', 'jpeg'),
-            ]
-            
-            cursor.executemany("""
-                INSERT INTO scan_profiles (id, name, dpi, color_mode, paper_size, format)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, profiles)
-            logger.info("✓ Default scan profiles created")
+    # Seed/refresh built-in scan profiles (idempotent)
+    from core.scanning.profiles import get_profile_repository
+    get_profile_repository().seed_defaults()
+    logger.info("✓ Built-in scan profiles seeded")
     
     logger.info("✓ Database initialized successfully")
 

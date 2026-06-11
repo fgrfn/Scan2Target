@@ -186,7 +186,9 @@ docker run -d \
 | Variable | Beschreibung | Standard |
 |----------|--------------|----------|
 | `SCAN2TARGET_SECRET_KEY` | Encryption Key für Credentials (required) | - |
-| `SCAN2TARGET_REQUIRE_AUTH` | Authentifizierung erzwingen | `true` |
+| `SCAN2TARGET_REQUIRE_AUTH` | Authentifizierung für alle API-Routen erzwingen | `false` |
+| `SCAN2TARGET_HA_API_KEY` | API-Key für Home-Assistant-Endpunkte (`X-API-Key` Header) | - (offen) |
+| `SCAN2TARGET_CORS_ORIGINS` | Erlaubte CORS-Origins (kommagetrennt) | `*` |
 | `SCAN2TARGET_DATA_DIR` | Datenverzeichnis | `/data` |
 | `SCAN2TARGET_DB_PATH` | Datenbankpfad | `/data/db/scan2target.db` |
 | `SCAN2TARGET_SCANNER_CHECK_INTERVAL` | Health-Check Intervall (Sekunden) | `30` |
@@ -362,6 +364,14 @@ script:
           title: "Scan gestartet"
           message: "ADF-Scan läuft..."
 ```
+
+**Profile:** Es können alle Profil-IDs aus `GET /api/v1/homeassistant/profiles`
+verwendet werden (auch selbst angelegte Profile). Kurz-Aliase wie `document`,
+`adf`, `color`, `photo`, `fast` funktionieren ebenfalls.
+
+**Optionale Absicherung:** Mit `SCAN2TARGET_HA_API_KEY=<key>` verlangen die
+Home-Assistant-Endpunkte einen `X-API-Key`-Header (siehe
+[docs/homeassistant.md](docs/homeassistant.md)).
 
 ### Features
 

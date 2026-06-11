@@ -19,9 +19,11 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 from core.logging_config import setup_logging
-from api import scan, targets, auth, history, devices, maintenance, websocket, stats, homeassistant
+from api import scan, targets, auth, history, devices, maintenance, websocket, stats, homeassistant, profiles
+from core.config.settings import get_settings
 from core.init_db import init_database
 from core.scanning.health import get_health_monitor
+from core.websocket import register_main_loop
 
 
 # Initialize logging first
@@ -54,7 +56,8 @@ def get_version() -> str:
     version_file = Path(__file__).parent.parent / "VERSION"
     try:
         return version_file.read_text().strip()
-    except Exception:
+    except OSError as e:
+        logger.warning(f"Could not read VERSION file ({version_file}): {e}")
         return "0.0.0"
 
 
@@ -64,6 +67,10 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info("Starting Scan2Target...")
     logger.info("=" * 60)
+
+    # Register the main event loop so worker threads can broadcast
+    # job updates over WebSocket (live progress in the Web UI).
+    register_main_loop(asyncio.get_running_loop())
 
     init_database()
     logger.info("Database initialized")
@@ -118,17 +125,50 @@ def create_app() -> FastAPI:
         redirect_slashes=False,
     )
 
+    settings = get_settings()
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # tighten in production or configure via settings
+        allow_origins=settings.cors_origin_list,  # SCAN2TARGET_CORS_ORIGINS, default ["*"]
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
+    if settings.require_auth:
+        from fastapi.responses import JSONResponse
+        from core.auth.manager import get_auth_manager
+
+        # Paths that stay reachable without a session token. The Home
+        # Assistant routes have their own guard (API key / token).
+        AUTH_EXEMPT_PREFIXES = (
+            "/api/v1/auth/",
+            "/api/v1/homeassistant/",
+            "/api/v1/ws",
+        )
+        AUTH_EXEMPT_PATHS = ("/health", "/api/v1/version")
+
+        @app.middleware("http")
+        async def enforce_auth(request, call_next):
+            path = request.url.path
+            needs_auth = (
+                path.startswith("/api/")
+                and path not in AUTH_EXEMPT_PATHS
+                and not any(path.startswith(p) for p in AUTH_EXEMPT_PREFIXES)
+            )
+            if needs_auth and request.method != "OPTIONS":
+                header = request.headers.get("authorization", "")
+                token = header[7:] if header.lower().startswith("bearer ") else None
+                if not token or not get_auth_manager().verify_token(token):
+                    return JSONResponse(status_code=401, content={"detail": "Authentication required"})
+            return await call_next(request)
+
+        logger.info("API authentication is ENFORCED (SCAN2TARGET_REQUIRE_AUTH=true)")
+
     # API routes
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(scan.router, prefix="/api/v1/scan", tags=["scan"])
+    app.include_router(profiles.router, prefix="/api/v1/profiles", tags=["profiles"])
     app.include_router(devices.router, prefix="/api/v1/devices", tags=["devices"])
     app.include_router(targets.router, prefix="/api/v1/targets", tags=["targets"])
     app.include_router(history.router, prefix="/api/v1/history", tags=["history"])

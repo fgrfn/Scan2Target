@@ -98,6 +98,10 @@ class ConnectionManager:
 # Global connection manager instance
 _manager: ConnectionManager = None
 
+# Main asyncio event loop, registered at startup so broadcasts can be
+# scheduled from worker threads (scan execution runs in an executor).
+_main_loop: asyncio.AbstractEventLoop = None
+
 
 def get_connection_manager() -> ConnectionManager:
     """Get or create the global WebSocket connection manager."""
@@ -105,3 +109,13 @@ def get_connection_manager() -> ConnectionManager:
     if _manager is None:
         _manager = ConnectionManager()
     return _manager
+
+
+def register_main_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Remember the main event loop for thread-safe broadcasting."""
+    global _main_loop
+    _main_loop = loop
+
+
+def get_main_loop() -> asyncio.AbstractEventLoop:
+    return _main_loop

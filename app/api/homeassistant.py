@@ -8,18 +8,24 @@ import asyncio
 from core.devices.repository import DeviceRepository
 from core.targets.repository import TargetRepository
 from core.scanning.manager import ScannerManager
-from core.auth.dependencies import get_current_user_optional
+from core.scanning.profiles import get_profile_repository
+from core.auth.dependencies import verify_homeassistant_access
+from core.jobs.manager import JobManager
+from core.jobs.models import JobStatus
 
-router = APIRouter()
+# All Home Assistant routes share one guard: open by default, locked down
+# via SCAN2TARGET_HA_API_KEY (X-API-Key header) or SCAN2TARGET_REQUIRE_AUTH.
+router = APIRouter(dependencies=[Depends(verify_homeassistant_access)])
 
 
 class HomeAssistantScanRequest(BaseModel):
     """Home Assistant scan request model."""
     scanner_id: Optional[str] = Field(None, description="Scanner ID or 'favorite' to use favorite scanner")
     target_id: Optional[str] = Field(None, description="Target ID or 'favorite' to use favorite target")
-    profile: Optional[str] = Field("document_200_pdf", description="Scan profile ID (e.g., 'document_200_pdf', 'document_adf_200_pdf', 'color_300_pdf', 'photo_600_jpeg')")
+    profile: Optional[str] = Field("document_200_pdf", description="Scan profile ID or alias ('document', 'adf', 'color', 'photo', 'fast')")
+    source: Optional[str] = Field(None, description="Override paper source: 'Flatbed' or 'ADF'")
     filename: Optional[str] = Field(None, description="Custom filename (without extension)")
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -53,10 +59,7 @@ class HomeAssistantStatusResponse(BaseModel):
 
 
 @router.post("/scan", response_model=HomeAssistantScanResponse)
-async def trigger_scan_from_homeassistant(
-    request: HomeAssistantScanRequest,
-    current_user = Depends(get_current_user_optional)
-):
+async def trigger_scan_from_homeassistant(request: HomeAssistantScanRequest):
     """
     Trigger a scan from Home Assistant.
     
@@ -91,8 +94,11 @@ async def trigger_scan_from_homeassistant(
         url: http://YOUR_SERVER_IP/api/v1/homeassistant/scan
         method: POST
         content_type: "application/json"
-        payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "adf", "source": "ADF"}'
+        payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "document_adf_200_pdf"}'
     ```
+
+    Short profile aliases are accepted: 'document', 'adf', 'color', 'photo', 'fast'.
+    If SCAN2TARGET_HA_API_KEY is configured, add `headers: {X-API-Key: "your-key"}`.
     """
     device_repo = DeviceRepository()
     target_repo = TargetRepository()
@@ -147,23 +153,28 @@ async def trigger_scan_from_homeassistant(
         
         # Generate filename
         filename = request.filename or f"scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+
+        # Resolve profile (accepts canonical IDs and aliases like 'adf' or
+        # legacy pre-4.0 IDs such as 'flatbed_document_200_gray_pdf')
+        profile = get_profile_repository().resolve(request.profile)
+
         # Start scan using ScannerManager (same as /api/v1/scan/start)
         job_id = scanner_manager.start_scan(
             device_id=scanner.uri,  # Use device URI
-            profile_id=request.profile,
+            profile_id=profile['id'],
             target_id=target.id,  # Use target.id (e.g. "unraid_docs"), not database ID
+            source=request.source,
             filename_prefix=filename,
             webhook_url=None
         )
-        
-        # Estimate duration based on profile
+
+        # Estimate duration based on resolved profile
         estimated_duration = 15  # Default
-        if "photo" in request.profile.lower() or "600" in request.profile:
+        if profile['dpi'] >= 600:
             estimated_duration = 30
-        elif "adf" in request.profile.lower():
+        if profile.get('batch_scan') or (request.source or profile.get('source')) == 'ADF':
             estimated_duration = 45
-        
+
         return HomeAssistantScanResponse(
             success=True,
             job_id=job_id,
@@ -183,9 +194,7 @@ async def trigger_scan_from_homeassistant(
 
 
 @router.get("/status", response_model=HomeAssistantStatusResponse)
-async def get_homeassistant_status(
-    current_user = Depends(get_current_user_optional)
-):
+async def get_homeassistant_status():
     """
     Get Scan2Target status for Home Assistant sensors.
     
@@ -215,10 +224,13 @@ async def get_homeassistant_status(
         # Get counts
         scanners = device_repo.list_devices(device_type="scanner")
         targets = target_repo.list()
-        
-        # Get last scan (simplified - just show current time if no DB access needed)
-        last_scan = None
-        
+
+        # Real job data (pre-4.0 these were hardcoded placeholders)
+        jobs = JobManager().list_jobs(job_type="scan")
+        active_scans = sum(1 for j in jobs if j.status in (JobStatus.queued, JobStatus.running))
+        completed = [j for j in jobs if j.status == JobStatus.completed and j.created_at]
+        last_scan = max((j.created_at for j in completed), default=None)
+
         # Get favorites
         favorite_scanners = [s for s in scanners if s.is_favorite]
         favorite_scanner = favorite_scanners[0] if favorite_scanners else None
@@ -230,7 +242,7 @@ async def get_homeassistant_status(
             online=True,
             scanner_count=len(scanners),
             target_count=len(targets),
-            active_scans=0,  # Simplified - would need JobRepository for real count
+            active_scans=active_scans,
             last_scan=last_scan,
             favorite_scanner=favorite_scanner.name if favorite_scanner else None,
             favorite_target=favorite_target.name if favorite_target else None
@@ -244,9 +256,7 @@ async def get_homeassistant_status(
 
 
 @router.get("/scanners")
-async def list_scanners_for_homeassistant(
-    current_user = Depends(get_current_user_optional)
-):
+async def list_scanners_for_homeassistant():
     """
     List available scanners for Home Assistant dropdown/select.
     
@@ -281,9 +291,7 @@ async def list_scanners_for_homeassistant(
 
 
 @router.get("/targets")
-async def list_targets_for_homeassistant(
-    current_user = Depends(get_current_user_optional)
-):
+async def list_targets_for_homeassistant():
     """
     List available targets for Home Assistant dropdown/select.
     
@@ -319,23 +327,25 @@ async def list_targets_for_homeassistant(
 
 
 @router.get("/profiles")
-async def list_profiles_for_homeassistant(current_user = Depends(get_current_user_optional)):
+async def list_profiles_for_homeassistant():
     """
     List available scan profiles for Home Assistant dropdown/select.
-    
-    Returns both Flatbed and ADF profiles with their full profile IDs.
+
+    Returns the same profile IDs as /api/v1/scan/profiles, so any ID from
+    this list is guaranteed to be accepted by the /scan endpoint.
+    (Pre-4.0 this endpoint advertised non-existent flatbed_*/adf_* IDs;
+    those legacy IDs are still accepted as aliases.)
     """
+    profiles = get_profile_repository().list()
     return {
         "profiles": [
-            # Flatbed profiles
-            {"id": "flatbed_document_200_gray_pdf", "name": "📄 Document @200 DPI (Small)", "source": "Flatbed"},
-            {"id": "flatbed_document_300_gray_pdf", "name": "📄 Document @300 DPI (Medium)", "source": "Flatbed"},
-            {"id": "flatbed_color_300_pdf", "name": "📄 Color @300 DPI", "source": "Flatbed"},
-            {"id": "flatbed_photo_600_jpeg", "name": "📄 Photo @600 DPI", "source": "Flatbed"},
-            
-            # ADF (Multi-page) profiles
-            {"id": "adf_document_200_gray_pdf", "name": "📚 Multi-Page @200 DPI (Small)", "source": "ADF"},
-            {"id": "adf_document_300_gray_pdf", "name": "📚 Multi-Page @300 DPI (Medium)", "source": "ADF"},
-            {"id": "adf_color_300_pdf", "name": "📚 Multi-Page Color @300 DPI", "source": "ADF"}
+            {
+                "id": p["id"],
+                "name": ("📚 " if p["batch_scan"] else "📄 ") + p["name"],
+                "source": p["source"],
+                "dpi": p["dpi"],
+                "format": p["format"],
+            }
+            for p in profiles
         ]
     }
