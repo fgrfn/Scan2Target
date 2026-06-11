@@ -212,14 +212,10 @@ async def preview_scan(request: dict):
         
         device_uri = device.uri
         
-        # Get profile settings
-        scanner_mgr = ScannerManager()
-        profiles = scanner_mgr.list_profiles()
-        profile = next((p for p in profiles if p['id'] == profile_id), None)
-        
-        # Use profile settings or defaults
-        color_mode = profile['color_mode'] if profile else 'Gray'
-        dpi = min(profile['dpi'] if profile else 150, 200)  # Cap preview at 200 DPI for speed
+        # Get profile settings (accepts IDs and aliases)
+        profile = ScannerManager().resolve_profile(profile_id)
+        color_mode = profile['color_mode']
+        dpi = min(profile['dpi'], 200)  # Cap preview at 200 DPI for speed
         
         # Create temp file for preview
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
@@ -288,12 +284,8 @@ async def scan_single_page(payload: ScanPageRequest):
         if not device:
             raise HTTPException(status_code=404, detail=f"Scanner '{payload.device_id}' not found")
 
-        # Resolve profile settings
-        scanner_mgr = ScannerManager()
-        profiles = scanner_mgr.list_profiles()
-        profile = next((p for p in profiles if p['id'] == payload.profile_id), None)
-        if not profile:
-            raise HTTPException(status_code=400, detail=f"Profile '{payload.profile_id}' not found")
+        # Resolve profile settings (accepts IDs and aliases)
+        profile = ScannerManager().resolve_profile(payload.profile_id)
 
         source = payload.source or profile.get('source', 'Flatbed')
         with tempfile.NamedTemporaryFile(suffix='.tiff', delete=False) as tmp:
@@ -368,13 +360,8 @@ async def start_batch_scan(payload: BatchScanRequest):
         if not device:
             raise HTTPException(status_code=404, detail=f"Scanner '{payload.device_id}' not found")
         
-        # Get profile settings
-        scanner_mgr = ScannerManager()
-        profiles = scanner_mgr.list_profiles()
-        profile = next((p for p in profiles if p['id'] == payload.profile_id), None)
-        
-        if not profile:
-            raise HTTPException(status_code=400, detail=f"Profile '{payload.profile_id}' not found")
+        # Get profile settings (accepts IDs and aliases)
+        profile = ScannerManager().resolve_profile(payload.profile_id)
         
         # Decode all page images from base64
         images = []

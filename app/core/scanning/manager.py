@@ -11,6 +11,7 @@ from pathlib import Path
 
 from core.jobs.manager import JobManager
 from core.jobs.models import JobRecord, JobStatus
+from core.scanning.profiles import get_profile_repository
 from core.targets.manager import TargetManager
 from core.worker import get_worker
 
@@ -157,87 +158,20 @@ class ScannerManager:
                 
                 logger.info(f"airscan-discover found {len(devices)} scanner(s)")
                         
-        except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+        except Exception as e:
             logger.error(f"Error discovering scanners with airscan-discover: {e}", exc_info=True)
-            # SANE/scanimage not installed or not accessible
+            # airscan-discover not installed or not accessible
         
         logger.info(f"Scanner discovery complete: {len(devices)} device(s) found")
         return devices
 
     def list_profiles(self) -> List[dict]:
-        """
-        Return available scan profiles.
-        
-        For now returns hardcoded defaults.
-        TODO: Store in SQLite/config file for user customization.
-        """
-        return [
-            {
-                'id': 'document_200_pdf',
-                'name': 'Document @200 DPI (Small)',
-                'dpi': 200,
-                'color_mode': 'Gray',
-                'paper_size': 'A4',
-                'format': 'pdf',
-                'quality': 80,
-                'source': 'Flatbed',
-                'batch_scan': False,
-                'auto_detect': True,
-                'description': 'Best for text documents - smallest size'
-            },
-            {
-                'id': 'document_adf_200_pdf',
-                'name': 'Multi-Page Document (ADF)',
-                'dpi': 200,
-                'color_mode': 'Gray',
-                'paper_size': 'A4',
-                'format': 'pdf',
-                'quality': 80,
-                'source': 'ADF',
-                'batch_scan': True,
-                'auto_detect': True,
-                'description': 'Scan multiple pages from document feeder'
-            },
-            {
-                'id': 'color_300_pdf',
-                'name': 'Color @300 DPI (Medium)',
-                'dpi': 300,
-                'color_mode': 'Color',
-                'paper_size': 'A4',
-                'format': 'pdf',
-                'quality': 85,
-                'source': 'Flatbed',
-                'batch_scan': False,
-                'auto_detect': True,
-                'description': 'Good quality for mixed content'
-            },
-            {
-                'id': 'gray_150_pdf',
-                'name': 'Grayscale @150 DPI (Fast)',
-                'dpi': 150,
-                'color_mode': 'Gray',
-                'paper_size': 'A4',
-                'format': 'pdf',
-                'quality': 75,
-                'source': 'Flatbed',
-                'batch_scan': False,
-                'auto_detect': True,
-                'description': 'Quick scans, very small size'
-            },
-            {
-                'id': 'photo_600_jpeg',
-                'name': 'Photo @600 DPI (High Quality)',
-                'dpi': 600,
-                'color_mode': 'Color',
-                'paper_size': 'A4',
-                'format': 'jpeg',
-                'quality': 95,
-                'source': 'Flatbed',
-                'batch_scan': False,
-                'auto_detect': False,
-                'description': 'Best quality for photos'
-            }
-        ]
+        """Return available scan profiles (DB-backed, see core.scanning.profiles)."""
+        return get_profile_repository().list()
+
+    def resolve_profile(self, profile_id: str | None) -> dict:
+        """Resolve a profile ID or alias to a full profile dict."""
+        return get_profile_repository().resolve(profile_id)
 
     def start_scan(
         self,
@@ -296,30 +230,31 @@ class ScannerManager:
         Supports multi-page scanning (ADF), automatic document detection, and webhook notifications.
         """
         job_manager = JobManager()
-        
+        scanned_files = []
+        final_file = None
+        thumbnail_file = None
+
         try:
             # Update job status
             job = job_manager.get_job(job_id)
             if job:
                 job.status = JobStatus.running
                 job_manager.update_job(job)
-            
-            # Get profile settings
-            profiles = {p['id']: p for p in self.list_profiles()}
-            profile = profiles.get(profile_id, profiles['color_300_pdf'])
-            
+
+            # Resolve profile (accepts canonical IDs and aliases, e.g. from Home Assistant)
+            profile = self.resolve_profile(profile_id)
+
             logger.info(f"Starting scan with profile: {profile}")
-            
+
             # Create temp output file
             output_dir = Path(tempfile.gettempdir()) / 'scan2target' / 'scans'
             output_dir.mkdir(parents=True, exist_ok=True)
-            
+
             prefix = filename_prefix or 'scan'
             output_format = profile['format']
             batch_scan = profile.get('batch_scan', False)
             source = source_override or profile.get('source', 'Flatbed')
-            
-            scanned_files = []
+
             page_num = 1
             
             # For ADF batch scans, use scanimage --batch mode to scan all pages at once
@@ -608,20 +543,7 @@ class ScannerManager:
                     logger.warning(f"Warning: JPEG conversion failed: {convert_result.stderr}")
                     final_file = tiff_file
             
-            # Update job with file path
-            job = job_manager.get_job(job_id)
-            if job:
-                job.file_path = str(final_file)
-                # Store thumbnail path if it exists
-                if thumbnail_file and thumbnail_file.exists():
-                    job.thumbnail_path = str(thumbnail_file)
-                job.status = JobStatus.completed
-                job_manager.update_job(job)
-            
-            logger.info(f"Delivering scan to target: {target_id}")
-            
-            # Generate thumbnail preview
-            thumbnail_file = None
+            # Generate thumbnail preview from the final file
             try:
                 thumbnail_file = output_dir / f"{prefix}_{job_id}_thumb.jpg"
                 subprocess.run(
@@ -639,7 +561,17 @@ class ScannerManager:
                     logger.debug(f"Thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
             except Exception as e:
                 logger.warning(f"Warning: Failed to generate thumbnail: {e}")
-            
+
+            # Record scan result on the job (still running until delivery is done)
+            job = job_manager.get_job(job_id)
+            if job:
+                job.file_path = str(final_file)
+                if thumbnail_file and thumbnail_file.exists():
+                    job.thumbnail_path = str(thumbnail_file)
+                job_manager.update_job(job)
+
+            logger.info(f"Delivering scan to target: {target_id}")
+
             # Deliver to target
             try:
                 TargetManager().deliver(target_id, str(final_file), {'job_id': job_id})
@@ -714,9 +646,19 @@ class ScannerManager:
                     'failed',
                     {'error': str(e)}
                 )
-            
+
             raise
-    
+        finally:
+            # Always remove intermediate TIFF pages; the final PDF/JPEG is only
+            # kept when delivery failed (for manual retry). Without this,
+            # /tmp/scan2target/scans fills up with orphaned page TIFFs.
+            for tiff in scanned_files:
+                try:
+                    if tiff != final_file and tiff.exists():
+                        tiff.unlink()
+                except OSError as cleanup_error:
+                    logger.warning(f"Failed to remove temp file {tiff}: {cleanup_error}")
+
     def _send_webhook_notification(self, webhook_url: str, job_id: str, status: str, metadata: dict):
         """Send webhook notification with job status."""
         try:

@@ -378,9 +378,16 @@ Starts a scan.
 **Parameters:**
 - `scanner_id` (optional): Scanner ID or "favorite" (default)
 - `target_id` (optional): Target ID or "favorite" (default)
-- `profile` (optional): Scan profile (document, adf, color, photo)
+- `profile` (optional): Scan profile ID or alias
 - `filename` (optional): Custom filename
 - `source` (optional): Scan source (Flatbed, ADF)
+
+**Profiles:** Use any ID returned by `GET /api/v1/homeassistant/profiles`
+(e.g. `document_200_pdf`, `document_adf_200_pdf`, `color_300_pdf`,
+`gray_150_pdf`, `photo_600_jpeg`, plus any custom profile you created in the
+Web UI). Short aliases are also accepted: `document`, `adf`, `color`,
+`photo`, `fast`. Legacy pre-4.0 IDs (`flatbed_*`/`adf_*`) keep working as
+aliases, so existing Home Assistant configs do not need to change.
 
 **Response:**
 ```json
@@ -459,14 +466,40 @@ List of all available scan profiles.
 - Test target connectivity (Test & Save button)
 - Check Active Jobs in Web UI
 
+## Securing the Home Assistant API (optional)
+
+By default the `/api/v1/homeassistant/*` endpoints are open, which is
+convenient on a trusted home network. To require an API key, set:
+
+```bash
+# e.g. in docker-compose.yml or the systemd unit
+SCAN2TARGET_HA_API_KEY=your-secret-key
+```
+
+Then add the key to every REST command:
+
+```yaml
+rest_command:
+  scan_document:
+    url: "http://YOUR_SERVER_IP/api/v1/homeassistant/scan"
+    method: POST
+    content_type: "application/json"
+    headers:
+      X-API-Key: "your-secret-key"
+    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "document"}'
+```
+
+If `SCAN2TARGET_REQUIRE_AUTH=true` is set (and no HA API key is configured),
+the Home Assistant endpoints require a user Bearer token instead.
+
 ## Security Notes
 
 ⚠️ **Important for Production Environments:**
 
 1. **Network Isolation:** Operate Scan2Target only on local network
 2. **Reverse Proxy:** Use HTTPS reverse proxy for internet access
-3. **Authentication:** Enable JWT auth for external access
-4. **API Token:** Use API tokens instead of favorites for external calls
+3. **Authentication:** Set `SCAN2TARGET_REQUIRE_AUTH=true` for external access
+4. **API Key:** Set `SCAN2TARGET_HA_API_KEY` so only Home Assistant can trigger scans
 
 ## Additional Resources
 

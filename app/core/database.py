@@ -99,9 +99,31 @@ class Database:
                     color_mode TEXT NOT NULL,
                     paper_size TEXT NOT NULL,
                     format TEXT NOT NULL,
+                    quality INTEGER DEFAULT 85,
+                    source TEXT DEFAULT 'Flatbed',
+                    batch_scan INTEGER DEFAULT 0,
+                    auto_detect INTEGER DEFAULT 1,
+                    description TEXT DEFAULT '',
+                    is_builtin INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+            # Migrate pre-4.0 scan_profiles tables that lack the extended columns
+            existing_columns = {
+                row[1] for row in cursor.execute("PRAGMA table_info(scan_profiles)").fetchall()
+            }
+            profile_migrations = {
+                "quality": "INTEGER DEFAULT 85",
+                "source": "TEXT DEFAULT 'Flatbed'",
+                "batch_scan": "INTEGER DEFAULT 0",
+                "auto_detect": "INTEGER DEFAULT 1",
+                "description": "TEXT DEFAULT ''",
+                "is_builtin": "INTEGER DEFAULT 0",
+            }
+            for column, definition in profile_migrations.items():
+                if column not in existing_columns:
+                    cursor.execute(f"ALTER TABLE scan_profiles ADD COLUMN {column} {definition}")
             
             # Devices table (unified printers and scanners)
             cursor.execute("""

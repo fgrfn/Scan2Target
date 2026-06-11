@@ -1,10 +1,13 @@
 """Authentication dependencies for FastAPI."""
-from fastapi import Depends, HTTPException, status
+import hmac
+
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 
 from core.auth.models import User
 from core.auth.manager import get_auth_manager
+from core.config.settings import get_settings
 
 
 security = HTTPBearer()
@@ -64,6 +67,40 @@ async def get_current_user_optional(
     """
     if not credentials:
         return None
-    
+
     auth_manager = get_auth_manager()
     return auth_manager.verify_token(credentials.credentials)
+
+
+async def verify_homeassistant_access(
+    x_api_key: Optional[str] = Header(None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+) -> None:
+    """
+    Guard for the Home Assistant endpoints.
+
+    - If SCAN2TARGET_HA_API_KEY is configured, the key must be supplied via
+      the X-API-Key header (or as a Bearer token).
+    - If no key is configured but SCAN2TARGET_REQUIRE_AUTH is enabled, a
+      valid user token is required instead.
+    - Otherwise access is open (default for trusted home networks).
+    """
+    settings = get_settings()
+
+    if settings.ha_api_key:
+        provided = x_api_key or (credentials.credentials if credentials else None)
+        if provided and hmac.compare_digest(provided, settings.ha_api_key):
+            return
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key (X-API-Key header)",
+        )
+
+    if settings.require_auth:
+        token = credentials.credentials if credentials else None
+        if token and get_auth_manager().verify_token(token):
+            return
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )

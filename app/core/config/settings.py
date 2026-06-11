@@ -20,12 +20,20 @@ class Settings(BaseSettings):
     
     # Security
     allowed_subnets: list[str] = []
-    require_auth: bool = False  # Set to True to require authentication
+    require_auth: bool = False  # Set to True to require authentication on all API routes
     jwt_secret: Optional[str] = None  # Auto-generated if not set
     jwt_expiration: int = 3600  # Token expiration in seconds (1 hour)
-    
-    # CORS
-    cors_origins: list[str] = ["*"]  # Tighten in production
+
+    # Home Assistant integration: if set, /api/v1/homeassistant/* requires
+    # this key via the X-API-Key header (or Authorization: Bearer <key>).
+    ha_api_key: Optional[str] = None
+
+    # CORS: comma-separated origins (SCAN2TARGET_CORS_ORIGINS), default open
+    cors_origins: str = "*"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()] or ["*"]
 
     class Config:
         env_prefix = "SCAN2TARGET_"
