@@ -1,111 +1,167 @@
 <script>
   import Card from '../components/ui/Card.svelte';
   import Badge from '../components/ui/Badge.svelte';
-  import SectionCard from '../components/SectionCard.svelte';
   import StatGrid from '../components/StatGrid.svelte';
+  import Icon from '../components/ui/Icon.svelte';
+  import { api } from '../lib/api';
+  import { t } from '../lib/i18n';
+  import { statusTone, statusKey, isActive } from '../lib/status';
+
   export let data;
   export let onNavigate = () => {};
+  export let onNotify = () => {};
 
-  const statusTone = (status) => {
-    if (status === 'completed' || status === 'online') return 'success';
-    if (status === 'failed' || status === 'offline') return 'danger';
-    if (['queued', 'running', 'waiting'].includes(status)) return 'warning';
-    return 'info';
-  };
+  let cancelling = {};
 
   $: overview = data.stats.overview || {};
-  $: active = (data.jobs || []).filter((j) => ['queued', 'running', 'waiting'].includes(j.status));
-  $: recent = (data.history || []).slice(0, 6);
-  $: onlineDevices = (data.devices || []).filter((d) => d.status === 'online').length;
-  $: enabledTargets = (data.targets || []).filter((t) => t.enabled !== false).length;
-  $: success = Number(overview.success_rate || 0);
+  $: active = (data.jobs || []).filter((j) => isActive(j.status));
+  $: recent = (data.history || []).filter((j) => !isActive(j.status)).slice(0, 5);
+  $: devices = data.devices || [];
+  $: onlineDevices = devices.filter((d) => d.status === 'online').length;
+  $: enabledTargets = (data.targets || []).filter((tg) => tg.enabled !== false).length;
   $: kpiCards = [
-    { icon: '⇄', label: 'Total scans', value: overview.total_scans || 0, sub: 'All tracked scan jobs' },
-    { icon: '☀', label: 'Today', value: overview.today_scans || 0, sub: 'Created in the current day' },
-    { icon: '✓', label: 'Success rate', value: `${success}%`, sub: 'Delivery success' },
-    { icon: '▰', label: 'Avg/day', value: overview.average_scans_per_day || 0, sub: 'Long-term workload trend' }
+    { icon: 'devices', label: $t('scannersOnline'), value: `${onlineDevices}/${devices.length}`, sub: $t('scannersOnlineSub') },
+    { icon: 'targets', label: $t('targetsConfigured'), value: enabledTargets, sub: $t('targetsConfiguredSub') },
+    { icon: 'bolt', label: $t('scansToday'), value: overview.today_scans || 0, sub: $t('scansTodaySub') },
+    { icon: 'stats', label: $t('scansTotal'), value: overview.total_scans || 0, sub: $t('scansTotalSub') }
   ];
+
+  function shortId(id) {
+    return String(id || '').slice(0, 8);
+  }
+
+  function deviceName(job) {
+    const device = devices.find((d) => d.id === job.device_id || d.uri === job.device_id);
+    return device?.name || job.device_id || $t('unknown');
+  }
+
+  function formatTime(value) {
+    if (!value) return '—';
+    try {
+      return new Date(value.endsWith('Z') || value.includes('+') ? value : `${value}Z`).toLocaleString();
+    } catch {
+      return value;
+    }
+  }
+
+  async function cancelJob(id) {
+    cancelling = { ...cancelling, [id]: true };
+    try {
+      await api.cancelJob(id);
+      onNotify($t('jobCancelled', { id: shortId(id) }), 'success');
+    } catch (error) {
+      onNotify(error.message, 'error');
+    } finally {
+      cancelling = { ...cancelling, [id]: false };
+    }
+  }
 </script>
 
 <Card variant="hero-card">
   <div class="hero-content">
     <div>
-      <div class="eyebrow">Modern Scan Hub</div>
-      <h2 class="hero-title">Scan. Route. Deliver.</h2>
-      <p class="hero-copy">A cleaner command-center UI for your network scanners with fast actions, live queue state and delivery status at a glance.</p>
+      <div class="eyebrow">{$t('appTagline')}</div>
+      <h2 class="hero-title">{$t('heroTitle')}</h2>
+      <p class="hero-copy">{$t('heroCopy')}</p>
     </div>
-
     <div class="hero-actions">
-      <button class="btn primary" on:click={() => onNavigate('new-scan')}>◉ Start scan</button>
-      <button class="btn ghost" on:click={() => onNavigate('devices')}>▣ Manage devices</button>
-      <button class="btn ghost" on:click={() => onNavigate('targets')}>→ Targets</button>
-    </div>
-
-    <div class="hero-metrics">
-      <div class="hero-metric"><span>Online scanners</span><strong>{onlineDevices}/{data.devices.length || 0}</strong></div>
-      <div class="hero-metric"><span>Active queue</span><strong>{active.length}</strong></div>
-      <div class="hero-metric"><span>Enabled targets</span><strong>{enabledTargets}</strong></div>
+      <button class="btn primary" on:click={() => onNavigate('new-scan')}>
+        <Icon name="scan" size={16} /> {$t('startScanNow')}
+      </button>
+      <button class="btn ghost" on:click={() => onNavigate('devices')}>
+        <Icon name="devices" size={16} /> {$t('goDevices')}
+      </button>
+      <button class="btn ghost" on:click={() => onNavigate('targets')}>
+        <Icon name="targets" size={16} /> {$t('goTargets')}
+      </button>
     </div>
   </div>
 </Card>
+
+{#if active.length > 0}
+  <Card title={$t('activeScans')} subtitle={$t('activeScansSub', { n: active.length })} variant="active-card">
+    <ul class="clean-list">
+      {#each active as job (job.id)}
+        <li class="list-row">
+          <div class="row gap center">
+            <span class="pulse-dot" aria-hidden="true"></span>
+            <div>
+              <strong>{deviceName(job)}</strong>
+              <p class="muted small">{job.target_id || '—'} · {shortId(job.id)}</p>
+            </div>
+          </div>
+          <div class="row gap center">
+            <Badge tone={statusTone(job.status)} text={$t(statusKey(job.status))} />
+            <button class="btn ghost small-btn" disabled={cancelling[job.id]} on:click={() => cancelJob(job.id)}>
+              <Icon name="x" size={14} /> {$t('cancelJob')}
+            </button>
+          </div>
+        </li>
+      {/each}
+    </ul>
+  </Card>
+{/if}
 
 <StatGrid cards={kpiCards} />
 
 <section class="grid cols-2">
-  <SectionCard title="Live queue" subtitle={`${active.length} job${active.length === 1 ? '' : 's'} waiting or running`}>
-    {#if active.length === 0}
-      <div class="list-row"><div><strong>No active scans</strong><p class="muted small">Everything is calm. Start a new scan when ready.</p></div><Badge tone="success" text="idle" /></div>
-    {/if}
-    <ul class="clean-list">
-      {#each active.slice(0, 5) as job}
-        <li class="list-row">
-          <div>
-            <strong>{job.device_id || job.id}</strong>
-            <p class="muted small">{job.target_id || 'No target'} · {job.id}</p>
-          </div>
-          <Badge tone={statusTone(job.status)} text={job.status} />
-        </li>
-      {/each}
-    </ul>
-    {#if active.length > 5}
-      <button class="btn ghost top-gap" on:click={() => onNavigate('active-scans')}>Show all queue items</button>
-    {/if}
-  </SectionCard>
-
-  <SectionCard title="Workflow health" subtitle="Scanners, targets and delivery pipeline">
-    <div class="stat-grid">
-      <div class="stat-row">
-        <div><strong>Scanner readiness</strong><div class="stat-track"><div class="stat-fill" style={`width:${data.devices.length ? (onlineDevices / data.devices.length) * 100 : 0}%`}></div></div></div>
-        <Badge tone={onlineDevices ? 'success' : 'warning'} text={`${onlineDevices}/${data.devices.length || 0}`} />
+  <Card title={$t('scannerStatus')} subtitle={$t('scannerStatusSub')}>
+    {#if devices.length === 0}
+      <div class="empty-state">
+        <Icon name="devices" size={28} />
+        <strong>{$t('noDevicesYet')}</strong>
+        <p class="muted small">{$t('noDevicesYetHint')}</p>
+        <button class="btn primary" on:click={() => onNavigate('devices')}>{$t('goDevices')}</button>
       </div>
-      <div class="stat-row">
-        <div><strong>Target coverage</strong><div class="stat-track"><div class="stat-fill" style={`width:${data.targets.length ? (enabledTargets / data.targets.length) * 100 : 0}%`}></div></div></div>
-        <Badge tone={enabledTargets ? 'success' : 'warning'} text={`${enabledTargets}/${data.targets.length || 0}`} />
-      </div>
-      <div class="stat-row">
-        <div><strong>Delivery success</strong><div class="stat-track"><div class="stat-fill" style={`width:${Math.min(100, Math.max(0, success))}%`}></div></div></div>
-        <Badge tone={success >= 90 ? 'success' : success >= 60 ? 'warning' : 'danger'} text={`${success}%`} />
-      </div>
-    </div>
-  </SectionCard>
-</section>
-
-<Card title="Recent activity" subtitle="Latest scans and delivery state">
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>ID</th><th>Status</th><th>Device</th><th>Target</th><th>Created</th></tr></thead>
-      <tbody>
-        {#if recent.length === 0}<tr><td colspan="5" class="muted">No history yet.</td></tr>{/if}
-        {#each recent as item}
-          <tr>
-            <td class="id-cell">{item.id}</td>
-            <td><Badge tone={statusTone(item.status)} text={item.status} /></td>
-            <td>{item.device_id || '-'}</td>
-            <td>{item.target_id || '-'}</td>
-            <td>{item.created_at || '-'}</td>
-          </tr>
+    {:else}
+      <ul class="clean-list">
+        {#each devices as d (d.id)}
+          <li class="list-row">
+            <div class="row gap center">
+              {#if d.is_favorite}<span class="fav-star" title={$t('favorite')}><Icon name="star" size={14} filled /></span>{/if}
+              <div>
+                <strong>{d.name}</strong>
+                <p class="muted small truncate">{d.model || d.connection_type || d.uri}</p>
+              </div>
+            </div>
+            <Badge tone={statusTone(d.status)} text={$t(statusKey(d.status || 'unknown'))} />
+          </li>
         {/each}
-      </tbody>
-    </table>
-  </div>
-</Card>
+      </ul>
+    {/if}
+  </Card>
+
+  <Card title={$t('recentJobs')} subtitle={$t('recentJobsSub')}>
+    {#if recent.length === 0}
+      <div class="empty-state">
+        <Icon name="history" size={28} />
+        <strong>{$t('noHistoryYet')}</strong>
+        <p class="muted small">{$t('noHistoryYetHint')}</p>
+        <button class="btn primary" on:click={() => onNavigate('new-scan')}>{$t('startScanNow')}</button>
+      </div>
+    {:else}
+      <ul class="clean-list">
+        {#each recent as job (job.id)}
+          <li class="list-row">
+            <div class="row gap center">
+              <img
+                class="job-thumb"
+                src={api.jobThumbnailUrl(job.id)}
+                alt={$t('thumbnail')}
+                loading="lazy"
+                on:error={(e) => (e.target.style.display = 'none')}
+              />
+              <div>
+                <strong>{deviceName(job)}</strong>
+                <p class="muted small">{job.target_id || '—'} · {formatTime(job.created_at)}</p>
+                {#if job.message}<p class="muted small warn-text">{job.message}</p>{/if}
+              </div>
+            </div>
+            <Badge tone={statusTone(job.status)} text={$t(statusKey(job.status))} />
+          </li>
+        {/each}
+      </ul>
+      <button class="btn ghost top-gap" on:click={() => onNavigate('history')}>{$t('history')} →</button>
+    {/if}
+  </Card>
+</section>

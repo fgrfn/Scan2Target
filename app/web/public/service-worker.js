@@ -1,6 +1,6 @@
 // Service Worker for Scan2Target PWA
 // v3: modern UI refresh; network-first for UI/assets so old builds do not stick.
-const CACHE_NAME = 'scan2target-modern-v3';
+const CACHE_NAME = 'scan2target-v4';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
