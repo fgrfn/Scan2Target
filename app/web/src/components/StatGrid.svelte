@@ -1,4 +1,5 @@
 <script>
+  import Icon from './ui/Icon.svelte';
   export let cards = [];
 </script>
 
@@ -6,7 +7,7 @@
   {#each cards as card}
     <article class="stat-card">
       <div class="stat-card-head">
-        <div class="stat-icon" aria-hidden="true">{card.icon}</div>
+        <div class="stat-icon" aria-hidden="true"><Icon name={card.icon || 'dot'} /></div>
         <div class="stat-meta">
           <div class="stat-label">{card.label}</div>
           {#if card.sub}

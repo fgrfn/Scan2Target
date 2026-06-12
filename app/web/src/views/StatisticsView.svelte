@@ -1,6 +1,8 @@
 <script>
   import Card from '../components/ui/Card.svelte';
   import Badge from '../components/ui/Badge.svelte';
+  import { t } from '../lib/i18n';
+
   export let data;
 
   $: timeline = [...(data.stats.timeline || [])].reverse();
@@ -12,9 +14,9 @@
 </script>
 
 <section class="grid cols-2">
-  <Card title="Scan timeline" subtitle="Last 30 days of scan activity.">
+  <Card title={$t('timelineTitle')} subtitle={$t('timelineSub')}>
     <div class="bars">
-      {#if timeline.length === 0}<p class="muted">No timeline data yet.</p>{/if}
+      {#if timeline.length === 0}<p class="muted">{$t('noTimelineData')}</p>{/if}
       {#each timeline as day}
         <div class="bar-group" title={`${day.date}: ${day.total}`}>
           <div class="bar" style={`height:${Math.max(3, (day.total / maxTimeline) * 100)}%`}></div>
@@ -24,9 +26,9 @@
     </div>
   </Card>
 
-  <Card title="Hourly distribution" subtitle="When scans are started throughout the day.">
+  <Card title={$t('hourlyTitle')} subtitle={$t('hourlySub')}>
     <div class="bars">
-      {#if hourly.length === 0}<p class="muted">No hourly data yet.</p>{/if}
+      {#if hourly.length === 0}<p class="muted">{$t('noHourlyData')}</p>{/if}
       {#each hourly as h}
         <div class="bar-group" title={`${h.hour}:00 → ${h.count}`}>
           <div class="bar info" style={`height:${Math.max(3, (h.count / maxHourly) * 100)}%`}></div>
@@ -38,9 +40,9 @@
 </section>
 
 <section class="grid cols-2">
-  <Card title="Scanner performance" subtitle="Total scans and success by device.">
+  <Card title={$t('scannerPerf')} subtitle={$t('scannerPerfSub')}>
     <div class="stat-grid">
-      {#if scanners.length === 0}<p class="muted">No scanner performance data yet.</p>{/if}
+      {#if scanners.length === 0}<p class="muted">{$t('noScannerPerf')}</p>{/if}
       {#each scanners as row}
         <div class="stat-row">
           <div>
@@ -53,9 +55,9 @@
     </div>
   </Card>
 
-  <Card title="Target performance" subtitle="Delivery success by destination.">
+  <Card title={$t('targetPerf')} subtitle={$t('targetPerfSub')}>
     <div class="stat-grid">
-      {#if targets.length === 0}<p class="muted">No target performance data yet.</p>{/if}
+      {#if targets.length === 0}<p class="muted">{$t('noTargetPerf')}</p>{/if}
       {#each targets as row}
         <div class="stat-row">
           <div>
