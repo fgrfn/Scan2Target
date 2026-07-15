@@ -1,42 +1,57 @@
-"""Configuration loading and secrets handling."""
+"""Configuration loading and security-sensitive defaults."""
 from __future__ import annotations
+
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Runtime settings loaded from ``SCAN2TARGET_*`` environment variables."""
+
     # Database
-    database_url: str = "sqlite:////app/scan2target.db"
-    database_path: str = "/app/scan2target.db"
-    
+    database_url: str = "sqlite:////data/db/scan2target.db"
+    database_path: str = "/data/db/scan2target.db"
+
     # Paths
-    data_dir: Path = Path("/data/scan2target")
-    secret_key_path: Path = Path("/etc/scan2target/secret.key")
-    
+    data_dir: Path = Path("/data")
+    secret_key_path: Path = Path("/data/auth/encryption.key")
+
     # Security
     allowed_subnets: list[str] = []
-    require_auth: bool = False  # Set to True to require authentication on all API routes
-    jwt_secret: Optional[str] = None  # Auto-generated if not set
-    jwt_expiration: int = 3600  # Token expiration in seconds (1 hour)
+    require_auth: bool = True
+    jwt_secret: Optional[str] = None
+    jwt_expiration: int = 3600
+    cors_origins: str = ""
+    allow_private_webhooks: bool = False
 
-    # Home Assistant integration: if set, /api/v1/homeassistant/* requires
-    # this key via the X-API-Key header (or Authorization: Bearer <key>).
+    # Request limits
+    max_request_size_mb: int = 100
+    max_batch_page_mb: int = 20
+    max_batch_pages: int = 100
+
+    # Home Assistant integration
     ha_api_key: Optional[str] = None
 
-    # CORS: comma-separated origins (SCAN2TARGET_CORS_ORIGINS), default open
-    cors_origins: str = "*"
+    model_config = SettingsConfigDict(
+        env_prefix="SCAN2TARGET_",
+        env_file=".env",
+        extra="ignore",
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()] or ["*"]
+        """Return explicitly configured browser origins.
 
-    class Config:
-        env_prefix = "SCAN2TARGET_"
-        env_file = ".env"
+        The bundled Web UI is same-origin and does not require CORS. Keeping the
+        default empty avoids combining wildcard origins with credentials.
+        """
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Get application settings singleton."""
+    """Get the process-wide settings instance."""
     return Settings()
