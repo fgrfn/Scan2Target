@@ -34,7 +34,7 @@ function persistSettings(settings) {
   }
 }
 
-const TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'];
+const TERMINAL_STATUSES = ['completed', 'delivery_failed', 'failed', 'cancelled'];
 
 function createAppStore() {
   const store = writable({

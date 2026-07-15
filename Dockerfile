@@ -1,80 +1,54 @@
 # Multi-stage Dockerfile for Scan2Target
-# Stage 1: Build frontend
 FROM node:20-slim AS frontend-builder
-
 WORKDIR /app/web
-
-# Copy package files
 COPY app/web/package*.json ./
-
-# Install dependencies
 RUN npm ci
-
-# Copy frontend source
 COPY app/web/ ./
-
-# Build frontend
 RUN npm run build
 
-# Stage 2: Build final image
 FROM python:3.12-slim
-
-# Avoid debconf warnings during build
 ENV DEBIAN_FRONTEND=noninteractive
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     avahi-daemon \
     avahi-utils \
     dbus \
     sane-utils \
     sane-airscan \
     smbclient \
-    ssh \
+    openssh-client \
     sshpass \
     imagemagick \
     libsane1 \
     libsane-dev \
     curl \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+RUN groupadd --system --gid 10001 scan2target \
+    && useradd --system --uid 10001 --gid scan2target --home-dir /app --shell /usr/sbin/nologin scan2target \
+    && (usermod -aG scanner,lp scan2target 2>/dev/null || true)
+
 WORKDIR /app
-
-# Copy Python requirements
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code directly to /app
 COPY app/ ./
-
-# Copy built frontend from builder stage
 COPY --from=frontend-builder /app/web/dist ./web/dist
 
-# Create necessary directories
-RUN mkdir -p /data/scans /data/db /tmp/scan2target/scans
+RUN mkdir -p /data/scans /data/db /data/auth /data/logs /var/log/scan2target /tmp/scan2target/scans \
+    && chown -R scan2target:scan2target /app /data /var/log/scan2target /tmp/scan2target
 
-# Copy and set up entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV SCAN2TARGET_DATA_DIR=/data
-ENV SCAN2TARGET_DATABASE_PATH=/data/db/scan2target.db
-ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    SCAN2TARGET_DATA_DIR=/data \
+    SCAN2TARGET_DATABASE_PATH=/data/db/scan2target.db \
+    SCAN2TARGET_RUN_USER=scan2target
 
-# Expose port
 EXPOSE 8000
-
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+    CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=5).raise_for_status()" || exit 1
 
-# Set PYTHONPATH to /app for module resolution
-ENV PYTHONPATH=/app
-
-# Use entrypoint script to start Avahi and application
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

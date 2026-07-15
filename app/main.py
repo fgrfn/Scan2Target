@@ -19,6 +19,7 @@ if str(APP_DIR) not in sys.path:
 
 from api import auth, devices, history, homeassistant, maintenance, profiles, scan, stats, targets, websocket
 from core.config.settings import get_settings
+from core.delivery.retry import get_delivery_retry_service
 from core.init_db import init_database
 from core.logging_config import setup_logging
 from core.scanning.health import get_health_monitor
@@ -29,8 +30,6 @@ logger = logging.getLogger(__name__)
 
 
 class NoCacheStaticFiles(StaticFiles):
-    """Static files variant that prevents stale Web UI assets."""
-
     async def get_response(self, path: str, scope):
         response = await super().get_response(path, scope)
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
@@ -40,7 +39,6 @@ class NoCacheStaticFiles(StaticFiles):
 
 
 def no_cache_file(path: Path, media_type: str | None = None) -> FileResponse:
-    """Return a file response with strict no-cache headers."""
     response = FileResponse(str(path), media_type=media_type)
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
@@ -49,7 +47,6 @@ def no_cache_file(path: Path, media_type: str | None = None) -> FileResponse:
 
 
 def get_version() -> str:
-    """Read version from the repository VERSION file."""
     version_file = Path(__file__).parent.parent / "VERSION"
     try:
         return version_file.read_text().strip()
@@ -60,45 +57,42 @@ def get_version() -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize persistent state and scanner background services."""
-    logger.info("=" * 60)
-    logger.info("Starting Scan2Target...")
-    logger.info("=" * 60)
-
+    """Initialize persistent state and background services."""
+    logger.info("Starting Scan2Target")
     register_main_loop(asyncio.get_running_loop())
     init_database()
+
+    retry_service = get_delivery_retry_service()
+    await retry_service.start()
 
     health_check_interval = int(os.getenv("SCAN2TARGET_HEALTH_CHECK_INTERVAL", "60"))
     health_monitor = get_health_monitor(check_interval=health_check_interval)
     await health_monitor.start()
-    logger.info("Health monitor started (interval: %ss)", health_check_interval)
 
     async def safe_scanner_init():
         try:
-            logger.info("Background task: starting scanner initialization")
             await asyncio.to_thread(devices.init_scanner_cache)
-            logger.info("Background task: scanner initialization completed")
         except Exception as exc:
             logger.error("Background scanner initialization failed: %s", exc, exc_info=True)
 
-    scanner_task = asyncio.create_task(safe_scanner_init())
+    scanner_task = asyncio.create_task(safe_scanner_init(), name="scanner-initialization")
     logger.info("Scan2Target is ready")
-
-    yield
-
-    logger.info("Shutting down Scan2Target...")
-    if not scanner_task.done():
-        scanner_task.cancel()
-        try:
-            await scanner_task
-        except asyncio.CancelledError:
-            logger.info("Scanner discovery task cancelled")
-    await health_monitor.stop()
-    logger.info("Scan2Target stopped")
+    try:
+        yield
+    finally:
+        logger.info("Shutting down Scan2Target")
+        if not scanner_task.done():
+            scanner_task.cancel()
+            try:
+                await scanner_task
+            except asyncio.CancelledError:
+                pass
+        await health_monitor.stop()
+        await retry_service.stop()
+        logger.info("Scan2Target stopped")
 
 
 def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
     app = FastAPI(
         title="Scan2Target",
         version=get_version(),
@@ -106,7 +100,6 @@ def create_app() -> FastAPI:
         redirect_slashes=False,
     )
     settings = get_settings()
-
     origins = settings.cors_origin_list
     app.add_middleware(
         CORSMiddleware,
@@ -125,9 +118,7 @@ def create_app() -> FastAPI:
                 if int(content_length) > max_bytes:
                     return JSONResponse(
                         status_code=413,
-                        content={
-                            "detail": f"Request body exceeds {settings.max_request_size_mb} MB"
-                        },
+                        content={"detail": f"Request body exceeds {settings.max_request_size_mb} MB"},
                     )
             except ValueError:
                 return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
@@ -145,10 +136,7 @@ def create_app() -> FastAPI:
     if settings.require_auth:
         from core.auth.manager import get_auth_manager
 
-        auth_exempt_prefixes = (
-            "/api/v1/auth/",
-            "/api/v1/homeassistant/",
-        )
+        auth_exempt_prefixes = ("/api/v1/auth/", "/api/v1/homeassistant/")
         auth_exempt_paths = ("/health", "/api/v1/version")
 
         @app.middleware("http")
@@ -169,8 +157,6 @@ def create_app() -> FastAPI:
                         headers={"WWW-Authenticate": "Bearer"},
                     )
             return await call_next(request)
-
-        logger.info("API authentication is enforced")
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(scan.router, prefix="/api/v1/scan", tags=["scan"])
@@ -197,66 +183,46 @@ def create_app() -> FastAPI:
 
     web_dist = Path(__file__).parent / "web" / "dist"
     web_dev = Path(__file__).parent / "web" / "index.html"
-
     if web_dist.exists():
         app.mount("/assets", NoCacheStaticFiles(directory=str(web_dist / "assets")), name="assets")
 
         @app.get("/service-worker.js", include_in_schema=False)
         async def serve_service_worker():
-            sw_file = web_dist / "service-worker.js"
-            if not sw_file.exists():
+            path = web_dist / "service-worker.js"
+            if not path.exists():
                 raise HTTPException(status_code=404, detail="Service worker not found")
-            return no_cache_file(sw_file, media_type="application/javascript")
+            return no_cache_file(path, "application/javascript")
 
         @app.get("/manifest.json", include_in_schema=False)
         async def serve_manifest():
-            manifest_file = web_dist / "manifest.json"
-            if not manifest_file.exists():
+            path = web_dist / "manifest.json"
+            if not path.exists():
                 raise HTTPException(status_code=404, detail="Manifest not found")
-            return no_cache_file(manifest_file, media_type="application/manifest+json")
+            return no_cache_file(path, "application/manifest+json")
 
         @app.get("/icon-192.png", include_in_schema=False)
         async def serve_icon_192():
-            icon_file = web_dist / "icon-192.png"
-            if not icon_file.exists():
-                raise HTTPException(status_code=404, detail="Icon not found")
-            return no_cache_file(icon_file, media_type="image/png")
+            return no_cache_file(web_dist / "icon-192.png", "image/png")
 
         @app.get("/icon-96.png", include_in_schema=False)
         async def serve_icon_96():
-            icon_file = web_dist / "icon-96.png"
-            if not icon_file.exists():
-                raise HTTPException(status_code=404, detail="Icon not found")
-            return no_cache_file(icon_file, media_type="image/png")
+            return no_cache_file(web_dist / "icon-96.png", "image/png")
 
         @app.get("/")
+        @app.get("/mobile")
         async def serve_root():
             return no_cache_file(web_dist / "index.html")
-
-        @app.get("/mobile")
-        async def serve_mobile():
-            return no_cache_file(web_dist / "index.html")
-
     elif web_dev.exists():
         app.mount("/src", NoCacheStaticFiles(directory=str(web_dev.parent / "src")), name="src")
 
         @app.get("/")
+        @app.get("/mobile")
         async def serve_root():
             return no_cache_file(web_dev)
-
-        @app.get("/mobile")
-        async def serve_mobile():
-            return no_cache_file(web_dev)
-
     else:
         @app.get("/")
         async def serve_root():
-            return {
-                "message": "Scan2Target API",
-                "docs": "/docs",
-                "health": "/health",
-                "note": "Web UI not found. Run 'cd app/web && npm run build' or 'npm run dev'",
-            }
+            return {"message": "Scan2Target API", "docs": "/docs", "health": "/health"}
 
     return app
 
