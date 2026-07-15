@@ -1,38 +1,35 @@
 """Scan2Target FastAPI application entrypoint."""
+from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from pathlib import Path
 import asyncio
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-# Ensure local app modules are importable regardless of how uvicorn is started
-# e.g. from repository root via `uvicorn app.main:app` under systemd.
 APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
-from core.logging_config import setup_logging
-from api import scan, targets, auth, history, devices, maintenance, websocket, stats, homeassistant, profiles
+from api import auth, devices, history, homeassistant, maintenance, profiles, scan, stats, targets, websocket
 from core.config.settings import get_settings
 from core.init_db import init_database
+from core.logging_config import setup_logging
 from core.scanning.health import get_health_monitor
 from core.websocket import register_main_loop
 
-
-# Initialize logging first
 setup_logging()
 logger = logging.getLogger(__name__)
 
 
 class NoCacheStaticFiles(StaticFiles):
-    """StaticFiles variant that prevents stale Web UI assets after redesign deploys."""
+    """Static files variant that prevents stale Web UI assets."""
 
     async def get_response(self, path: str, scope):
         response = await super().get_response(path, scope)
@@ -43,7 +40,7 @@ class NoCacheStaticFiles(StaticFiles):
 
 
 def no_cache_file(path: Path, media_type: str | None = None) -> FileResponse:
-    """Return a FileResponse with strict no-cache headers for the Web UI shell."""
+    """Return a file response with strict no-cache headers."""
     response = FileResponse(str(path), media_type=media_type)
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
@@ -52,66 +49,50 @@ def no_cache_file(path: Path, media_type: str | None = None) -> FileResponse:
 
 
 def get_version() -> str:
-    """Read version from VERSION file."""
+    """Read version from the repository VERSION file."""
     version_file = Path(__file__).parent.parent / "VERSION"
     try:
         return version_file.read_text().strip()
-    except OSError as e:
-        logger.warning(f"Could not read VERSION file ({version_file}): {e}")
+    except OSError as exc:
+        logger.warning("Could not read VERSION file (%s): %s", version_file, exc)
         return "0.0.0"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan events."""
+    """Initialize persistent state and scanner background services."""
     logger.info("=" * 60)
     logger.info("Starting Scan2Target...")
     logger.info("=" * 60)
 
-    # Register the main event loop so worker threads can broadcast
-    # job updates over WebSocket (live progress in the Web UI).
     register_main_loop(asyncio.get_running_loop())
-
     init_database()
-    logger.info("Database initialized")
 
-    # Start health monitor FIRST for automatic scanner status checks
     health_check_interval = int(os.getenv("SCAN2TARGET_HEALTH_CHECK_INTERVAL", "60"))
     health_monitor = get_health_monitor(check_interval=health_check_interval)
     await health_monitor.start()
-    logger.info(f"Health monitor started (interval: {health_check_interval}s)")
-    logger.info("Note: Using 15s intervals for first 5 minutes to detect scanners quickly")
-
-    # Initialize scanner cache in background (non-blocking)
-    logger.info("Starting scanner discovery in background...")
+    logger.info("Health monitor started (interval: %ss)", health_check_interval)
 
     async def safe_scanner_init():
-        """Wrapper für Scanner-Discovery mit Error-Handling."""
         try:
-            logger.info("Background task: Starting scanner initialization...")
+            logger.info("Background task: starting scanner initialization")
             await asyncio.to_thread(devices.init_scanner_cache)
-            logger.info("Background task: Scanner initialization completed successfully")
-        except Exception as e:
-            logger.error(f"Background task: Scanner initialization failed: {e}", exc_info=True)
+            logger.info("Background task: scanner initialization completed")
+        except Exception as exc:
+            logger.error("Background scanner initialization failed: %s", exc, exc_info=True)
 
     scanner_task = asyncio.create_task(safe_scanner_init())
-
-    logger.info("=" * 60)
-    logger.info("Scan2Target is ready!")
-    logger.info("=" * 60)
+    logger.info("Scan2Target is ready")
 
     yield
 
     logger.info("Shutting down Scan2Target...")
-
     if not scanner_task.done():
-        logger.info("Cancelling scanner discovery task...")
         scanner_task.cancel()
         try:
             await scanner_task
         except asyncio.CancelledError:
             logger.info("Scanner discovery task cancelled")
-
     await health_monitor.stop()
     logger.info("Scan2Target stopped")
 
@@ -124,48 +105,73 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         redirect_slashes=False,
     )
-
     settings = get_settings()
 
+    origins = settings.cors_origin_list
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origin_list,  # SCAN2TARGET_CORS_ORIGINS, default ["*"]
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=origins,
+        allow_credentials=bool(origins),
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-API-Key"],
     )
 
+    @app.middleware("http")
+    async def enforce_request_size(request: Request, call_next):
+        max_bytes = settings.max_request_size_mb * 1024 * 1024
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > max_bytes:
+                    return JSONResponse(
+                        status_code=413,
+                        content={
+                            "detail": f"Request body exceeds {settings.max_request_size_mb} MB"
+                        },
+                    )
+            except ValueError:
+                return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
+        return await call_next(request)
+
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        return response
+
     if settings.require_auth:
-        from fastapi.responses import JSONResponse
         from core.auth.manager import get_auth_manager
 
-        # Paths that stay reachable without a session token. The Home
-        # Assistant routes have their own guard (API key / token).
-        AUTH_EXEMPT_PREFIXES = (
+        auth_exempt_prefixes = (
             "/api/v1/auth/",
             "/api/v1/homeassistant/",
-            "/api/v1/ws",
         )
-        AUTH_EXEMPT_PATHS = ("/health", "/api/v1/version")
+        auth_exempt_paths = ("/health", "/api/v1/version")
 
         @app.middleware("http")
-        async def enforce_auth(request, call_next):
+        async def enforce_auth(request: Request, call_next):
             path = request.url.path
             needs_auth = (
                 path.startswith("/api/")
-                and path not in AUTH_EXEMPT_PATHS
-                and not any(path.startswith(p) for p in AUTH_EXEMPT_PREFIXES)
+                and path not in auth_exempt_paths
+                and not any(path.startswith(prefix) for prefix in auth_exempt_prefixes)
             )
             if needs_auth and request.method != "OPTIONS":
                 header = request.headers.get("authorization", "")
                 token = header[7:] if header.lower().startswith("bearer ") else None
                 if not token or not get_auth_manager().verify_token(token):
-                    return JSONResponse(status_code=401, content={"detail": "Authentication required"})
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Authentication required"},
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
             return await call_next(request)
 
-        logger.info("API authentication is ENFORCED (SCAN2TARGET_REQUIRE_AUTH=true)")
+        logger.info("API authentication is enforced")
 
-    # API routes
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(scan.router, prefix="/api/v1/scan", tags=["scan"])
     app.include_router(profiles.router, prefix="/api/v1/profiles", tags=["profiles"])
@@ -177,7 +183,6 @@ def create_app() -> FastAPI:
     app.include_router(stats.router, prefix="/api/v1/stats", tags=["stats"])
     app.include_router(homeassistant.router, prefix="/api/v1/homeassistant", tags=["homeassistant"])
 
-    # Serve thumbnails from temp directory
     thumbnail_dir = Path("/tmp/scan2target/scans")
     thumbnail_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/thumbnails", StaticFiles(directory=str(thumbnail_dir)), name="thumbnails")
@@ -188,15 +193,12 @@ def create_app() -> FastAPI:
 
     @app.get("/api/v1/version", tags=["info"])
     async def version():
-        """Get application version."""
         return {"version": get_version()}
 
-    # Serve Web UI
     web_dist = Path(__file__).parent / "web" / "dist"
     web_dev = Path(__file__).parent / "web" / "index.html"
 
     if web_dist.exists():
-        # Production: serve built assets. No-cache is intentional to avoid stale PWA/UI bundles.
         app.mount("/assets", NoCacheStaticFiles(directory=str(web_dist / "assets")), name="assets")
 
         @app.get("/service-worker.js", include_in_schema=False)
@@ -233,11 +235,9 @@ def create_app() -> FastAPI:
 
         @app.get("/mobile")
         async def serve_mobile():
-            # Legacy mobile UI removed; always use the current unified WebUI.
             return no_cache_file(web_dist / "index.html")
 
     elif web_dev.exists():
-        # Development: serve from web directory
         app.mount("/src", NoCacheStaticFiles(directory=str(web_dev.parent / "src")), name="src")
 
         @app.get("/")
@@ -246,7 +246,6 @@ def create_app() -> FastAPI:
 
         @app.get("/mobile")
         async def serve_mobile():
-            # Legacy mobile UI removed; always use the current unified WebUI.
             return no_cache_file(web_dev)
 
     else:
