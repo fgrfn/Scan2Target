@@ -55,6 +55,11 @@ async function request(path, options = {}) {
 
 export const api = {
   // Auth
+  getSetupStatus: () => request('/auth/setup-status'),
+  setup: (username, password, email = null) => request('/auth/setup', {
+    method: 'POST',
+    body: JSON.stringify({ username, password, email: email || null })
+  }),
   login: (username, password) => request('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password })
