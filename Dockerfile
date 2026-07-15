@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN groupadd --system --gid 10001 scan2target \
     && useradd --system --uid 10001 --gid scan2target --home-dir /app --shell /usr/sbin/nologin scan2target \
-    && usermod -aG scanner,lp scan2target 2>/dev/null || true
+    && (usermod -aG scanner,lp scan2target 2>/dev/null || true)
 
 WORKDIR /app
 COPY requirements.txt .
@@ -34,8 +34,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./
 COPY --from=frontend-builder /app/web/dist ./web/dist
 
-RUN mkdir -p /data/scans /data/db /data/auth /data/logs /tmp/scan2target/scans \
-    && chown -R scan2target:scan2target /app /data /tmp/scan2target
+RUN mkdir -p /data/scans /data/db /data/auth /data/logs /var/log/scan2target /tmp/scan2target/scans \
+    && chown -R scan2target:scan2target /app /data /var/log/scan2target /tmp/scan2target
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
