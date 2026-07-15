@@ -1,0 +1,21 @@
+# Optional hardening overlay for network scanners.
+# Start with:
+# docker compose -f docker-compose.yml -f docker-compose.hardened.yml up -d
+services:
+  scan2target:
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=512m
+      - /run:rw,nosuid,nodev,noexec,size=32m
+    cap_drop:
+      - ALL
+    cap_add:
+      # Required only during entrypoint startup for dbus/Avahi and ownership.
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+      - KILL
+      - NET_RAW
+    security_opt:
+      - no-new-privileges:true
