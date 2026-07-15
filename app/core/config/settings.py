@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     max_batch_page_mb: int = 20
     max_batch_pages: int = 100
 
+    # Persistent delivery retry queue
+    retry_poll_interval: int = 15
+    retry_base_delay: int = 30
+    retry_max_delay: int = 3600
+    delivery_max_retries: int = 5
+
     # Home Assistant integration
     ha_api_key: Optional[str] = None
 
@@ -43,11 +49,7 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        """Return explicitly configured browser origins.
-
-        The bundled Web UI is same-origin and does not require CORS. Keeping the
-        default empty avoids combining wildcard origins with credentials.
-        """
+        """Return explicitly configured browser origins."""
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
