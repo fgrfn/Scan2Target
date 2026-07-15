@@ -6,51 +6,42 @@ services:
     image: scan2target:latest
     container_name: scan2target
     restart: unless-stopped
-    
+
     volumes:
-      # Persistent data storage
       - scan2target-data:/data
-      # Persistent log files
       - scan2target-logs:/var/log/scan2target
-      # Scanner device access (if using USB scanner)
+      # USB scanner access (optional):
       # - /dev/bus/usb:/dev/bus/usb
-    
+
     # devices:
-      # Grant access to USB devices for scanners
       # - /dev/bus/usb
-    
+
     environment:
-      # Application settings
       - SCAN2TARGET_DATA_DIR=${SCAN2TARGET_DATA_DIR:-/data}
       - SCAN2TARGET_DATABASE_PATH=${SCAN2TARGET_DATABASE_PATH:-/data/db/scan2target.db}
       - SCAN2TARGET_LOG_DIR=${SCAN2TARGET_LOG_DIR:-/var/log/scan2target}
-      
-      # Scanner health monitoring
       - SCAN2TARGET_HEALTH_CHECK_INTERVAL=${SCAN2TARGET_HEALTH_CHECK_INTERVAL:-60}
       - SCAN2TARGET_SCANNER_CHECK_INTERVAL=${SCAN2TARGET_SCANNER_CHECK_INTERVAL:-30}
-      
-      # Security settings (CHANGE THESE!)
-      - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY:-changeme-generate-a-secure-key}
+
+      # No insecure fallback is provided. Create .env and generate this value
+      # with: openssl rand -base64 48
+      - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY:?Set SCAN2TARGET_SECRET_KEY in .env}
+      - SCAN2TARGET_JWT_SECRET=${SCAN2TARGET_JWT_SECRET:-}
       - SCAN2TARGET_REQUIRE_AUTH=${SCAN2TARGET_REQUIRE_AUTH:-true}
-      
-      # Optional: SMTP settings for email targets
-      # - SMTP_SERVER=${SMTP_SERVER:-}
-      # - SMTP_PORT=${SMTP_PORT:-587}
-      # - SMTP_USERNAME=${SMTP_USERNAME:-}
-      # - SMTP_PASSWORD=${SMTP_PASSWORD:-}
-    
-    # Host network mode is required for:
-    # - Scanner discovery via mDNS/Avahi
-    # - Network scanner access (eSCL/AirScan)
-    # - Direct USB scanner access
-    # Note: Application will be accessible on port 8000
+      - SCAN2TARGET_HA_API_KEY=${SCAN2TARGET_HA_API_KEY:-}
+      - SCAN2TARGET_CORS_ORIGINS=${SCAN2TARGET_CORS_ORIGINS:-}
+      - SCAN2TARGET_ALLOW_PRIVATE_WEBHOOKS=${SCAN2TARGET_ALLOW_PRIVATE_WEBHOOKS:-false}
+      - SCAN2TARGET_MAX_REQUEST_SIZE_MB=${SCAN2TARGET_MAX_REQUEST_SIZE_MB:-100}
+      - SCAN2TARGET_MAX_BATCH_PAGE_MB=${SCAN2TARGET_MAX_BATCH_PAGE_MB:-20}
+      - SCAN2TARGET_MAX_BATCH_PAGES=${SCAN2TARGET_MAX_BATCH_PAGES:-100}
+
+    # Host networking is required for mDNS/AirScan discovery.
     network_mode: host
-    
-    # Privileged mode may be needed for USB scanner access
-    # privileged: true
-    
+
+    # privileged: true  # May be needed for some USB scanners.
+
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5).raise_for_status()"]
       interval: 30s
       timeout: 10s
       retries: 3
