@@ -123,7 +123,6 @@ function createAppStore() {
     });
   };
 
-  // --- WebSocket live updates with auto-reconnect ---
   let ws = null;
   let reconnectDelay = 1000;
   let reconnectTimer = null;
@@ -140,8 +139,10 @@ function createAppStore() {
 
   const connectWebSocket = () => {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const token = getToken();
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
     try {
-      ws = new WebSocket(`${proto}://${window.location.host}/api/v1/ws`);
+      ws = new WebSocket(`${proto}://${window.location.host}/api/v1/ws${query}`);
     } catch {
       scheduleReconnect();
       return;
@@ -182,7 +183,20 @@ function createAppStore() {
     connectWebSocket();
   };
 
-  // Global 401 handling: show the login overlay.
+  const reconnectWebSocket = () => {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    reconnectDelay = 1000;
+    try {
+      ws?.close();
+    } catch {
+      // already closed
+    }
+    setTimeout(connectWebSocket, 0);
+  };
+
   setUnauthorizedHandler(() => {
     update((s) => (s.authRequired ? s : { ...s, authRequired: true }));
   });
@@ -205,6 +219,7 @@ function createAppStore() {
     loadCore,
     loadStats,
     startWebSocket,
+    reconnectWebSocket,
     applyJobUpdate,
     isWsConnected: () => get(store).wsConnected,
     activeJobCount: () => get(store).jobs.filter((j) => isActive(j.status)).length,
@@ -212,6 +227,7 @@ function createAppStore() {
     hasToken: () => Boolean(getToken()),
     logout: () => {
       setToken(null);
+      reconnectWebSocket();
       update((s) => ({ ...s, authRequired: false }));
     },
     replaceJobs: (jobs) => update((s) => ({ ...s, jobs, lastUpdated: Date.now() })),

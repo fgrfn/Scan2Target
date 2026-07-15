@@ -1,205 +1,201 @@
-"""Authentication utilities - JWT, password hashing."""
+"""Authentication utilities for signed tokens and password hashing."""
 from __future__ import annotations
-from datetime import datetime, timedelta
-from typing import Optional
-import secrets
-import logging
+
+import base64
 import hashlib
 import hmac
-import base64
 import json
+import logging
+import os
+import secrets
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional
 
 from core.auth.models import User, UserRepository
+from core.config.settings import get_settings
 from core.database import get_db
 
 logger = logging.getLogger(__name__)
+_PASSWORD_ITERATIONS = 310_000
+_LEGACY_PASSWORD_ITERATIONS = 100_000
+_PLACEHOLDER_SECRETS = {"changeme", "changeme-generate-a-secure-key", "your-secret-key"}
 
 
 class AuthManager:
-    """
-    Authentication manager with JWT tokens and password hashing.
-    
-    Uses HMAC-SHA256 for tokens and bcrypt-style hashing for passwords.
-    """
-    
-    def __init__(self, secret_key: str = None):
-        self.secret_key = secret_key or self._generate_secret()
+    """Authentication manager with persistent HMAC tokens and PBKDF2 hashes."""
+
+    def __init__(self, secret_key: str | None = None):
+        self.settings = get_settings()
+        self.secret_key = secret_key or self._load_or_create_secret()
         self.user_repo = UserRepository()
         self.db = get_db()
-    
-    def _generate_secret(self) -> str:
-        """Generate a random secret key."""
-        return secrets.token_urlsafe(32)
-    
+        self.cleanup_expired_sessions()
+
+    def _load_or_create_secret(self) -> str:
+        """Load a stable JWT secret from config or a protected data file."""
+        configured = self.settings.jwt_secret or os.getenv("SCAN2TARGET_SECRET_KEY")
+        if configured and configured.strip().lower() not in _PLACEHOLDER_SECRETS:
+            return configured.strip()
+        if configured:
+            logger.error("Ignoring insecure placeholder JWT secret")
+
+        secret_file = Path(self.settings.data_dir) / "auth" / "jwt.secret"
+        if secret_file.exists():
+            secret = secret_file.read_text(encoding="utf-8").strip()
+            if secret:
+                return secret
+
+        secret_file.parent.mkdir(parents=True, exist_ok=True)
+        secret = secrets.token_urlsafe(48)
+        secret_file.write_text(secret, encoding="utf-8")
+        secret_file.chmod(0o600)
+        logger.warning("Generated persistent JWT secret at %s", secret_file)
+        return secret
+
     def hash_password(self, password: str) -> str:
-        """Hash a password using PBKDF2-SHA256."""
+        """Hash a password using versioned PBKDF2-SHA256."""
         salt = secrets.token_bytes(16)
-        hash_obj = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
-        # Store as salt:hash in base64
-        return base64.b64encode(salt).decode() + ':' + base64.b64encode(hash_obj).decode()
-    
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), salt, _PASSWORD_ITERATIONS
+        )
+        return "$".join(
+            (
+                "pbkdf2_sha256",
+                str(_PASSWORD_ITERATIONS),
+                base64.b64encode(salt).decode(),
+                base64.b64encode(digest).decode(),
+            )
+        )
+
     def verify_password(self, password: str, password_hash: str) -> bool:
-        """Verify a password against its hash."""
+        """Verify current versioned hashes and legacy ``salt:hash`` values."""
         try:
-            salt_b64, hash_b64 = password_hash.split(':')
+            if password_hash.startswith("pbkdf2_sha256$"):
+                _, iterations_raw, salt_b64, hash_b64 = password_hash.split("$", 3)
+                iterations = int(iterations_raw)
+            else:
+                salt_b64, hash_b64 = password_hash.split(":", 1)
+                iterations = _LEGACY_PASSWORD_ITERATIONS
+
             salt = base64.b64decode(salt_b64)
             expected_hash = base64.b64decode(hash_b64)
-            
-            hash_obj = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
-            return hmac.compare_digest(hash_obj, expected_hash)
-        except Exception:
+            digest = hashlib.pbkdf2_hmac(
+                "sha256", password.encode(), salt, iterations
+            )
+            return hmac.compare_digest(digest, expected_hash)
+        except (ValueError, TypeError):
             return False
-    
-    def create_token(self, user: User, expires_in: int = 3600) -> str:
-        """
-        Create a JWT-style token for a user.
-        
-        Args:
-            user: User object
-            expires_in: Token expiration time in seconds (default 1 hour)
-        
-        Returns:
-            Signed token string
-        """
-        expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-        
+
+    def create_token(self, user: User, expires_in: int | None = None) -> str:
+        """Create and persist a signed session token."""
+        lifetime = expires_in or self.settings.jwt_expiration
+        expires_at = datetime.utcnow() + timedelta(seconds=lifetime)
         payload = {
-            'user_id': user.id,
-            'username': user.username,
-            'is_admin': user.is_admin,
-            'exp': expires_at.timestamp()
+            "user_id": user.id,
+            "username": user.username,
+            "is_admin": user.is_admin,
+            "exp": expires_at.timestamp(),
+            "nonce": secrets.token_urlsafe(12),
         }
-        
-        # Create token: base64(payload) + '.' + signature
-        payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+        payload_b64 = base64.urlsafe_b64encode(
+            json.dumps(payload, separators=(",", ":")).encode()
+        ).decode()
         signature = hmac.new(
-            self.secret_key.encode(),
-            payload_b64.encode(),
-            hashlib.sha256
+            self.secret_key.encode(), payload_b64.encode(), hashlib.sha256
         ).hexdigest()
-        
         token = f"{payload_b64}.{signature}"
-        
-        # Store token in sessions table
+
         with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
+            conn.execute(
+                """
                 INSERT INTO sessions (token, user_id, expires_at, created_at)
                 VALUES (?, ?, ?, ?)
-            """, (token, user.id, expires_at.isoformat(), datetime.utcnow().isoformat()))
-        
+                """,
+                (token, user.id, expires_at.isoformat(), datetime.utcnow().isoformat()),
+            )
         return token
-    
+
     def verify_token(self, token: str) -> Optional[User]:
-        """
-        Verify and decode a token.
-        
-        Returns:
-            User object if token is valid, None otherwise
-        """
+        """Verify signature, expiry, session state and user state."""
         try:
-            # Split token
-            payload_b64, signature = token.split('.')
-            
-            # Verify signature
+            payload_b64, signature = token.split(".", 1)
             expected_sig = hmac.new(
-                self.secret_key.encode(),
-                payload_b64.encode(),
-                hashlib.sha256
+                self.secret_key.encode(), payload_b64.encode(), hashlib.sha256
             ).hexdigest()
-            
             if not hmac.compare_digest(signature, expected_sig):
                 return None
-            
-            # Decode payload
+
             payload = json.loads(base64.urlsafe_b64decode(payload_b64).decode())
-            
-            # Check expiration
-            if datetime.utcnow().timestamp() > payload['exp']:
+            if datetime.utcnow().timestamp() > float(payload["exp"]):
                 return None
-            
-            # Check if token is revoked
+
             with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT revoked FROM sessions WHERE token = ?",
-                    (token,)
-                )
-                row = cursor.fetchone()
-                if not row or row['revoked']:
+                row = conn.execute(
+                    "SELECT revoked, expires_at FROM sessions WHERE token = ?", (token,)
+                ).fetchone()
+                if not row or row["revoked"]:
                     return None
-            
-            # Get user
-            user = self.user_repo.get_by_id(payload['user_id'])
-            if not user or not user.is_active:
-                return None
-            
-            return user
-            
-        except Exception as e:
-            logger.error(f"Token verification error: {e}", exc_info=True)
+                if datetime.fromisoformat(row["expires_at"]) <= datetime.utcnow():
+                    return None
+
+            user = self.user_repo.get_by_id(int(payload["user_id"]))
+            return user if user and user.is_active else None
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
             return None
-    
+
     def revoke_token(self, token: str) -> bool:
-        """Revoke a token (logout)."""
-        try:
-            with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "UPDATE sessions SET revoked = 1 WHERE token = ?",
-                    (token,)
-                )
-                return cursor.rowcount > 0
-        except Exception:
-            return False
-    
+        """Revoke a token during logout."""
+        with self.db.get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE sessions SET revoked = 1 WHERE token = ?", (token,)
+            )
+            return cursor.rowcount > 0
+
+    def cleanup_expired_sessions(self) -> int:
+        """Remove expired session rows so the SQLite table cannot grow forever."""
+        with self.db.get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM sessions WHERE expires_at <= ?",
+                (datetime.utcnow().isoformat(),),
+            )
+            return cursor.rowcount
+
+    def setup_required(self) -> bool:
+        """Return whether the first administrator still needs to be created."""
+        return self.user_repo.count_users() == 0
+
     def login(self, username: str, password: str) -> Optional[tuple[User, str]]:
-        """
-        Authenticate user and create token.
-        
-        Returns:
-            (User, token) tuple if successful, None otherwise
-        """
+        """Authenticate a user and return a new session token."""
         result = self.user_repo.get_by_username(username)
         if not result:
             return None
-        
         user, password_hash = result
-        
-        if not user.is_active:
+        if not user.is_active or not self.verify_password(password, password_hash):
             return None
-        
-        if not self.verify_password(password, password_hash):
-            return None
-        
-        # Update last login
         self.user_repo.update_last_login(user.id)
-        
-        # Create token
-        token = self.create_token(user)
-        
-        return user, token
-    
-    def register(self, username: str, password: str, email: str = None, is_admin: bool = False) -> User:
-        """
-        Register a new user.
-        
-        Raises:
-            ValueError: If username already exists
-        """
+        return user, self.create_token(user)
+
+    def register(
+        self,
+        username: str,
+        password: str,
+        email: str | None = None,
+        is_admin: bool = False,
+    ) -> User:
+        """Register a user after route-level authorization and validation."""
         if self.user_repo.user_exists(username):
             raise ValueError(f"Username '{username}' already exists")
-        
-        password_hash = self.hash_password(password)
-        return self.user_repo.create(username, password_hash, email, is_admin)
+        return self.user_repo.create(
+            username, self.hash_password(password), email, is_admin
+        )
 
 
-# Global auth manager instance
-_auth_manager = None
+_auth_manager: AuthManager | None = None
 
 
 def get_auth_manager() -> AuthManager:
-    """Get or create the global auth manager instance."""
+    """Get or create the process-wide authentication manager."""
     global _auth_manager
     if _auth_manager is None:
         _auth_manager = AuthManager()

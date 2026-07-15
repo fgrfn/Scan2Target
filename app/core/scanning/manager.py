@@ -1,176 +1,124 @@
-"""Scanning orchestration and backend abstraction."""
+"""Scanning orchestration and cancellable SANE process execution."""
 from __future__ import annotations
-from typing import List
-import uuid
-import subprocess
-import re
-import os
-import tempfile
+
+import asyncio
+import json
 import logging
+import re
+import subprocess
+import tempfile
+import threading
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import List
+
+import requests
 
 from core.jobs.manager import JobManager
 from core.jobs.models import JobRecord, JobStatus
+from core.scanning.process_registry import (
+    ScanCancelledError,
+    get_process_registry,
+    run_cancellable,
+)
 from core.scanning.profiles import get_profile_repository
 from core.targets.manager import TargetManager
+from core.validation import sanitize_filename_prefix, validate_webhook_url
 from core.worker import get_worker
 
 logger = logging.getLogger(__name__)
 
 
 class ScannerManager:
-    """High-level entrypoint for scan operations."""
+    """Discover scanners and orchestrate scan, conversion and delivery jobs."""
+
+    _locks_guard = threading.Lock()
+    _device_locks: dict[str, threading.Lock] = {}
+
+    @classmethod
+    def _device_lock(cls, device_id: str) -> threading.Lock:
+        with cls._locks_guard:
+            return cls._device_locks.setdefault(device_id, threading.Lock())
 
     def list_devices(self) -> List[dict]:
-        """
-        Discover SANE scanners (USB, network eSCL/AirScan).
-        
-        Uses 'airscan-discover' to find eSCL scanners (more reliable than scanimage -L).
-        Supports both USB SANE backends and eSCL (AirScan) for network scanners.
-        
-        Filters duplicate devices by preferring:
-        1. eSCL (AirScan) network scanners (most reliable)
-        2. USB scanners (direct connection)
-        3. Other network protocols
-        """
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        devices = []
-        device_groups = {}  # Group by normalized name to detect duplicates
-        
-        logger.debug("Starting scanner discovery...")
-        
+        """Discover eSCL/AirScan devices and prefer network endpoints."""
+        devices: list[dict] = []
+        device_groups: dict[str, list[dict]] = {}
         try:
-            # Use airscan-discover instead of scanimage -L (more reliable)
-            logger.debug("Running airscan-discover...")
             result = subprocess.run(
-                ['airscan-discover'],
+                ["airscan-discover"],
                 capture_output=True,
                 text=True,
-                encoding='utf-8',
-                errors='replace',
-                timeout=15
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
             )
-            
-            logger.debug(f"airscan-discover return code: {result.returncode}")
-            
-            if result.returncode == 0:
-                logger.debug(f"airscan-discover output:\n{result.stdout}")
-                
-                # Parse airscan-discover output
-                # Format: "HP ENVY 6400 series [059A50] = http://10.10.30.146:8080/eSCL/, eSCL"
-                in_devices_section = False
-                
-                for line in result.stdout.strip().split('\n'):
-                    line = line.strip()
-                    
-                    if line == '[devices]':
-                        in_devices_section = True
-                        continue
-                    
-                    if not in_devices_section or not line or line.startswith('['):
-                        continue
-                    
-                    # Parse device line: "HP ENVY 6400 series [059A50] = http://..., eSCL"
-                    if '=' in line:
-                        logger.debug(f"Parsing device line: {line}")
-                        name_part, url_part = line.split('=', 1)
-                        name_part = name_part.strip()
-                        url_part = url_part.strip()
-                        
-                        # Extract URL and protocol
-                        parts = url_part.split(',')
-                        url = parts[0].strip()
-                        protocol = parts[1].strip() if len(parts) > 1 else 'Unknown'
-                        
-                        # Extract device name and serial
-                        name_match = re.match(r'(.+?)\s*\[([^\]]+)\]', name_part)
-                        if name_match:
-                            device_name = name_match.group(1).strip()
-                            serial = name_match.group(2).strip()
-                        else:
-                            device_name = name_part
-                            serial = None
-                        
-                        # Determine device type and priority
-                        device_type = 'Unknown'
-                        priority = 99
-                        
-                        if protocol == 'eSCL':
-                            if '127.0.0.1' in url or '::1' in url or 'USB' in name_part:
-                                device_type = 'eSCL (USB)'
-                                priority = 2
-                            else:
-                                device_type = 'eSCL (Network)'
-                                priority = 1
-                        elif protocol == 'WSD':
-                            device_type = 'WSD (Network)'
-                            priority = 3
-                        
-                        # Build SANE device ID for airscan
-                        # Format: airscan:escl:Device Name:URL
-                        device_id = f"airscan:escl:{device_name.replace(' ', '_')}:{url}"
-                        
-                        logger.debug(f"Found scanner: {device_name} (ID: {device_id}, Type: {device_type})\")")
-                        
-                        # Use base name for grouping (without serial)
-                        base_name = device_name
-                        
-                        # Group by base name
-                        if base_name not in device_groups:
-                            device_groups[base_name] = []
-                        
-                        device_groups[base_name].append({
-                            'id': device_id,
-                            'name': f"{device_name} [{serial}]" if serial else device_name,
-                            'type': device_type,
-                            'priority': priority,
-                            'supported': True
-                        })
-                
-                # For each device group, keep only the best option
-                for base_name, group_devices in device_groups.items():
-                    # Sort by priority (lower = better)
-                    group_devices.sort(key=lambda d: d['priority'])
-                    
-                    # Keep the best device (lowest priority number)
-                    best_device = group_devices[0]
-                    
-                    # If we have both USB and Network, keep both but mark preference
-                    has_usb = any(d['priority'] == 2 for d in group_devices)
-                    has_network = any(d['priority'] == 1 for d in group_devices)
-                    
-                    if has_usb and has_network:
-                        # Keep one USB and one Network option
-                        usb_device = next((d for d in group_devices if d['priority'] == 2), None)
-                        network_device = next((d for d in group_devices if d['priority'] == 1), None)
-                        
-                        if network_device:
-                            network_device['name'] = f"{base_name} (Network - Recommended)"
-                            devices.append(network_device)
-                        if usb_device:
-                            usb_device['name'] = f"{base_name} (USB)"
-                            devices.append(usb_device)
-                    else:
-                        # Only one connection type available
-                        devices.append(best_device)
-                
-                logger.info(f"airscan-discover found {len(devices)} scanner(s)")
-                        
-        except Exception as e:
-            logger.error(f"Error discovering scanners with airscan-discover: {e}", exc_info=True)
-            # airscan-discover not installed or not accessible
-        
-        logger.info(f"Scanner discovery complete: {len(devices)} device(s) found")
+            if result.returncode != 0:
+                logger.warning("airscan-discover failed: %s", result.stderr.strip())
+                return []
+
+            in_devices_section = False
+            for raw_line in result.stdout.splitlines():
+                line = raw_line.strip()
+                if line == "[devices]":
+                    in_devices_section = True
+                    continue
+                if not in_devices_section or not line or line.startswith("[") or "=" not in line:
+                    continue
+
+                name_part, url_part = (part.strip() for part in line.split("=", 1))
+                parts = [part.strip() for part in url_part.split(",")]
+                url = parts[0]
+                protocol = parts[1] if len(parts) > 1 else "Unknown"
+                match = re.match(r"(.+?)\s*\[([^\]]+)\]", name_part)
+                device_name = match.group(1).strip() if match else name_part
+                serial = match.group(2).strip() if match else None
+
+                if protocol == "eSCL":
+                    is_usb = "127.0.0.1" in url or "::1" in url or "USB" in name_part
+                    device_type = "eSCL (USB)" if is_usb else "eSCL (Network)"
+                    priority = 2 if is_usb else 1
+                elif protocol == "WSD":
+                    device_type = "WSD (Network)"
+                    priority = 3
+                else:
+                    device_type = protocol
+                    priority = 99
+
+                device_id = f"airscan:escl:{device_name.replace(' ', '_')}:{url}"
+                device_groups.setdefault(device_name, []).append(
+                    {
+                        "id": device_id,
+                        "name": f"{device_name} [{serial}]" if serial else device_name,
+                        "type": device_type,
+                        "priority": priority,
+                        "supported": True,
+                    }
+                )
+
+            for base_name, group in device_groups.items():
+                group.sort(key=lambda item: item["priority"])
+                network = next((item for item in group if item["priority"] == 1), None)
+                usb = next((item for item in group if item["priority"] == 2), None)
+                if network and usb:
+                    network["name"] = f"{base_name} (Network - Recommended)"
+                    usb["name"] = f"{base_name} (USB)"
+                    devices.extend((network, usb))
+                else:
+                    devices.append(group[0])
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            logger.warning("Scanner discovery unavailable: %s", exc)
+        except Exception as exc:
+            logger.error("Scanner discovery failed: %s", exc, exc_info=True)
+
+        logger.info("Scanner discovery completed: %s device(s)", len(devices))
         return devices
 
     def list_profiles(self) -> List[dict]:
-        """Return available scan profiles (DB-backed, see core.scanning.profiles)."""
         return get_profile_repository().list()
 
     def resolve_profile(self, profile_id: str | None) -> dict:
-        """Resolve a profile ID or alias to a full profile dict."""
         return get_profile_repository().resolve(profile_id)
 
     def start_scan(
@@ -180,514 +128,315 @@ class ScannerManager:
         target_id: str,
         filename_prefix: str | None,
         source: str | None = None,
-        webhook_url: str | None = None
+        webhook_url: str | None = None,
     ) -> str:
-        """
-        Start a scan job in the background.
-        
-        Creates job and submits to background worker for async execution.
-        Optionally sends webhook notification on completion.
-        """
+        """Create and submit a scan job."""
         job_id = str(uuid.uuid4())
-        job_manager = JobManager()
-        job_manager.create_job(
+        JobManager().create_job(
             job_id=job_id,
             job_type="scan",
             device_id=device_id,
             target_id=target_id,
             status=JobStatus.queued,
         )
-        
-        # Submit to background worker for async execution
-        worker = get_worker()
-        
+
+        safe_prefix = sanitize_filename_prefix(filename_prefix, "scan")
+        safe_webhook = validate_webhook_url(webhook_url) if webhook_url else None
+
         async def scan_task():
-            """Async wrapper for scan execution."""
-            import asyncio
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(
-                None, 
-                self._execute_scan, 
-                job_id, device_id, profile_id, target_id, filename_prefix, source, webhook_url
+                None,
+                self._execute_scan,
+                job_id,
+                device_id,
+                profile_id,
+                target_id,
+                safe_prefix,
+                source,
+                safe_webhook,
             )
-        
-        worker.submit_task(job_id, scan_task)
-            
+
+        get_worker().submit_task(job_id, scan_task)
         return job_id
-    
+
     def _execute_scan(
         self,
         job_id: str,
         device_id: str,
         profile_id: str,
         target_id: str,
-        filename_prefix: str | None,
+        filename_prefix: str,
         source_override: str | None = None,
-        webhook_url: str | None = None
-    ):
-        """
-        Execute the actual scan using scanimage.
-        Supports multi-page scanning (ADF), automatic document detection, and webhook notifications.
-        """
+        webhook_url: str | None = None,
+    ) -> None:
         job_manager = JobManager()
-        scanned_files = []
-        final_file = None
-        thumbnail_file = None
+        registry = get_process_registry()
+        scanned_files: list[Path] = []
+        final_file: Path | None = None
+        thumbnail_file: Path | None = None
+        device_lock = self._device_lock(device_id)
+
+        if not device_lock.acquire(blocking=False):
+            self._fail_job(job_manager, job_id, "Scanner is already processing another job")
+            raise RuntimeError("Scanner is busy")
 
         try:
-            # Update job status
+            registry.ensure_not_cancelled(job_id)
             job = job_manager.get_job(job_id)
             if job:
                 job.status = JobStatus.running
+                job.message = None
                 job_manager.update_job(job)
 
-            # Resolve profile (accepts canonical IDs and aliases, e.g. from Home Assistant)
             profile = self.resolve_profile(profile_id)
-
-            logger.info(f"Starting scan with profile: {profile}")
-
-            # Create temp output file
-            output_dir = Path(tempfile.gettempdir()) / 'scan2target' / 'scans'
+            output_dir = Path(tempfile.gettempdir()) / "scan2target" / "scans"
             output_dir.mkdir(parents=True, exist_ok=True)
+            source = source_override or profile.get("source", "Flatbed")
+            batch_scan = bool(profile.get("batch_scan"))
 
-            prefix = filename_prefix or 'scan'
-            output_format = profile['format']
-            batch_scan = profile.get('batch_scan', False)
-            source = source_override or profile.get('source', 'Flatbed')
-
-            page_num = 1
-            
-            # For ADF batch scans, use scanimage --batch mode to scan all pages at once
-            if batch_scan and source == 'ADF':
-                logger.info(f"Using --batch mode for ADF scanning")
-                batch_pattern = output_dir / f"{prefix}_{job_id}_page%03d.tiff"
-                
-                # Build scanimage command with --batch
-                cmd = [
-                    'scanimage',
-                    '--device-name', device_id,
-                    '--resolution', str(profile['dpi']),
-                    '--mode', profile['color_mode'],
-                    '--format', 'tiff',
-                    '--source', source,
-                    '--batch=' + str(batch_pattern)
-                ]
-                
-                logger.debug(f"Executing batch scan command: {' '.join(cmd)}")
-                logger.debug(f"Output pattern: {batch_pattern}")
-                
-                try:
-                    result = subprocess.run(
-                        cmd,
-                        capture_output=True,
-                        text=True,
-                        timeout=300  # 5 minutes for batch scanning
-                    )
-                    
-                    if result.returncode != 0:
-                        error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
-                        logger.error(f"Batch scan error: {error_msg}")
-                        raise Exception(f"Batch scan failed: {error_msg}")
-                    
-                    # Find all scanned files matching the pattern
-                    scanned_files = sorted(output_dir.glob(f"{prefix}_{job_id}_page*.tiff"))
-                    
-                    if not scanned_files:
-                        raise Exception("No pages were scanned in batch mode")
-                    
-                    logger.info(f"Batch scan completed: {len(scanned_files)} page(s)")
-                    for idx, tiff_file in enumerate(scanned_files, 1):
-                        file_size = tiff_file.stat().st_size
-                        logger.debug(f"  Page {idx}: {tiff_file} ({file_size} bytes)")
-                    
-                    # Generate thumbnail from first page
-                    try:
-                        thumbnail_file = output_dir / f"{prefix}_{job_id}_thumb.jpg"
-                        subprocess.run(
-                            [
-                                'convert',
-                                str(scanned_files[0]),
-                                '-thumbnail', '400x400>',
-                                '-quality', '80',
-                                str(thumbnail_file)
-                            ],
-                            capture_output=True,
-                            timeout=10
-                        )
-                        if thumbnail_file.exists():
-                            logger.debug(f"Thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
-                    except Exception as e:
-                        logger.warning(f"Warning: Failed to generate thumbnail: {e}")
-                        
-                except subprocess.TimeoutExpired:
-                    raise Exception("Batch scan timeout after 5 minutes")
-            
-            # For single page or manual multi-page scanning
+            if batch_scan and source and source.lower().startswith("adf"):
+                scanned_files = self._scan_adf_batch(
+                    job_id, device_id, profile, source, output_dir, filename_prefix
+                )
             else:
-                # Multi-page scanning loop (for manual page-by-page)
-                while True:
-                    # Scan to TIFF first (most compatible)
-                    if batch_scan:
-                        tiff_file = output_dir / f"{prefix}_{job_id}_page{page_num:03d}.tiff"
-                    else:
-                        tiff_file = output_dir / f"{prefix}_{job_id}.tiff"
-                
-                    # Build scanimage command
-                    cmd = [
-                        'scanimage',
-                        '--device-name', device_id,
-                        '--resolution', str(profile['dpi']),
-                        '--mode', profile['color_mode'],
-                        '--format', 'tiff'
-                    ]
-                    
-                    # Add source if supported (ADF vs Flatbed)
-                    if source and source != 'Flatbed':
-                        cmd.extend(['--source', source])
-                    
-                    # Note: Don't use --batch-prompt for ADF as it's interactive
-                    # Instead, we scan one page at a time and stop when we get an error
-                    
-                    logger.debug(f"Executing scan command (page {page_num}): {' '.join(cmd)}")
-                    logger.debug(f"Output file: {tiff_file}")
-                    
-                    # Execute scan
-                    try:
-                        with open(tiff_file, 'wb') as f:
-                            result = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=False, timeout=120)
-                        
-                        if result.returncode != 0:
-                            # Check if ADF is empty (normal end of batch scan)
-                            error_msg = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
-                            
-                            # Common ADF empty messages
-                            adf_empty_indicators = [
-                                'out of documents',
-                                'no documents',
-                                'document feeder is empty',
-                                'adf empty',
-                                'no more pages',
-                                'end of document',
-                                'error during device i/o',  # HP scanners return this when ADF is empty
-                                'device i/o error'
-                            ]
-                            
-                            if batch_scan and any(indicator in error_msg.lower() for indicator in adf_empty_indicators):
-                                logger.info(f"ADF empty (detected: '{error_msg}'), batch scan complete.")
-                                # Check if a file was created before the error
-                                if tiff_file.exists():
-                                    file_size = tiff_file.stat().st_size
-                                    if file_size > 0:
-                                        logger.debug(f"Page {page_num} was partially scanned before ADF empty: {tiff_file} ({file_size} bytes)")
-                                        scanned_files.append(tiff_file)
-                                        logger.info(f"Total pages scanned: {len(scanned_files)}")
-                                    else:
-                                        logger.warning(f"Page {page_num} file is empty, removing")
-                                        tiff_file.unlink()
-                                        logger.info(f"Total pages scanned: {len(scanned_files)}")
-                                else:
-                                    logger.warning(f"No file created for page {page_num}")
-                                    logger.info(f"Total pages scanned: {len(scanned_files)}")
-                                break
-                            
-                            logger.error(f"Scan failed: {error_msg}")
-                            raise Exception(f"scanimage failed: {error_msg}")
-                        
-                        file_size = tiff_file.stat().st_size if tiff_file.exists() else 0
-                        
-                        # Check if file is actually empty (sometimes scan "succeeds" but creates empty file)
-                        if file_size == 0:
-                            logger.info(f"Page {page_num}: Empty file, assuming ADF is empty")
-                            tiff_file.unlink()
-                            if batch_scan and page_num > 1:
-                                logger.info(f"ADF empty, batch scan complete. Scanned {page_num - 1} pages.")
-                                break
-                            else:
-                                raise Exception("Scanner returned empty file")
-                        
-                        logger.info(f"Page {page_num} scanned successfully: {tiff_file} ({file_size} bytes)")
-                        scanned_files.append(tiff_file)
-                        
-                    except subprocess.TimeoutExpired:
-                        logger.warning(f"Scan timeout on page {page_num}")
-                        if batch_scan and page_num > 1:
-                            logger.info(f"Assuming ADF is empty. Scanned {page_num - 1} pages.")
-                            break
-                        raise Exception("Scan timeout")
-                    
-                    # Generate thumbnail immediately after first page scan (for live preview)
-                    if page_num == 1:
-                        try:
-                            thumbnail_file = output_dir / f"{prefix}_{job_id}_thumb.jpg"
-                            subprocess.run(
-                                [
-                                    'convert',
-                                    str(tiff_file),
-                                    '-thumbnail', '400x400>',
-                                    '-quality', '80',
-                                    str(thumbnail_file)
-                                ],
-                                capture_output=True,
-                                timeout=10
-                            )
-                            if thumbnail_file.exists():
-                                logger.debug(f"Live preview thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
-                        except Exception as e:
-                            logger.warning(f"Warning: Failed to generate live preview thumbnail: {e}")
-                    
-                    # If not batch mode, stop after first page
-                    if not batch_scan:
-                        break
-                    
-                    page_num += 1
-                    
-                    # Safety limit for batch scanning
-                    if page_num > 100:
-                        logger.warning("Warning: Reached 100-page limit for batch scanning")
-                        break
-            
-            if not scanned_files:
-                raise Exception("No pages were scanned successfully")
-            
-            logger.info(f"Scan completed: {len(scanned_files)} page(s)")
-            
-            # Convert TIFF(s) to requested format
-            final_file = None
-            if output_format == 'pdf':
-                pdf_file = output_dir / f"{prefix}_{job_id}.pdf"
-                logger.info(f"Converting {len(scanned_files)} TIFF(s) to PDF: {pdf_file}")
-                
-                # Get quality setting from profile (default 85)
-                quality = str(profile.get('quality', 85))
-                
-                # Use ImageMagick convert with compression
-                # For multi-page PDFs, all TIFF files are combined into one PDF
-                convert_cmd = ['convert']
-                
-                # Add all TIFF files as input
-                for tiff in scanned_files:
-                    convert_cmd.append(str(tiff))
-                
-                # Add compression settings
-                convert_cmd.extend([
-                    '-compress', 'JPEG',
-                    '-quality', quality,
-                    '-density', str(profile['dpi']),
-                ])
-                
-                # For grayscale, add additional compression
-                if profile['color_mode'] == 'Gray':
-                    convert_cmd.extend(['-colorspace', 'Gray'])
-                
-                # Add output file
-                convert_cmd.append(str(pdf_file))
-                
-                logger.debug(f"PDF conversion command: {' '.join(convert_cmd)}")
-                
-                convert_result = subprocess.run(
-                    convert_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=180  # Longer timeout for multi-page
-                )
-                
-                if convert_result.returncode == 0 and pdf_file.exists():
-                    total_tiff_size = sum(f.stat().st_size for f in scanned_files)
-                    pdf_size = pdf_file.stat().st_size
-                    ratio = (1 - pdf_size / total_tiff_size) * 100 if total_tiff_size > 0 else 0
-                    logger.info(f"PDF conversion successful: {pdf_file}")
-                    logger.info(f"  Pages: {len(scanned_files)}")
-                    logger.info(f"  Size: {pdf_size:,} bytes (saved {ratio:.1f}%)")
-                    
-                    # Remove TIFF files after successful conversion
-                    for tiff in scanned_files:
-                        tiff.unlink()
-                    
-                    final_file = pdf_file
-                else:
-                    logger.warning(f"Warning: PDF conversion failed: {convert_result.stderr}")
-                    # Keep first TIFF file as fallback
-                    final_file = scanned_files[0] if scanned_files else None
-            elif output_format == 'jpeg':
-                # JPEG only supports single page, use first page
-                tiff_file = scanned_files[0]
-                jpeg_file = output_dir / f"{prefix}_{job_id}.jpg"
-                logger.info(f"Converting TIFF to JPEG: {jpeg_file}")
-                
-                if len(scanned_files) > 1:
-                    logger.warning(f"Warning: JPEG format only supports single page, using page 1 of {len(scanned_files)}")
-                
-                # Get quality setting from profile (default 90)
-                quality = str(profile.get('quality', 90))
-                
-                convert_result = subprocess.run(
-                    ['convert', str(tiff_file), '-quality', quality, str(jpeg_file)],
-                    capture_output=True,
-                    text=True,
-                    timeout=60
-                )
-                
-                if convert_result.returncode == 0 and jpeg_file.exists():
-                    tiff_size = tiff_file.stat().st_size
-                    jpeg_size = jpeg_file.stat().st_size
-                    ratio = (1 - jpeg_size / tiff_size) * 100 if tiff_size > 0 else 0
-                    logger.info(f"JPEG conversion successful: {jpeg_file}")
-                    logger.info(f"  Size: {jpeg_size:,} bytes (saved {ratio:.1f}%)")
-                    
-                    # Remove TIFF files
-                    for tiff in scanned_files:
-                        tiff.unlink()
-                    
-                    final_file = jpeg_file
-                else:
-                    logger.warning(f"Warning: JPEG conversion failed: {convert_result.stderr}")
-                    final_file = tiff_file
-            
-            # Generate thumbnail preview from the final file
-            try:
-                thumbnail_file = output_dir / f"{prefix}_{job_id}_thumb.jpg"
-                subprocess.run(
-                    [
-                        'convert',
-                        str(final_file) + '[0]',  # First page only
-                        '-thumbnail', '400x400>',
-                        '-quality', '80',
-                        str(thumbnail_file)
-                    ],
-                    capture_output=True,
-                    timeout=10
-                )
-                if thumbnail_file.exists():
-                    logger.debug(f"Thumbnail generated: {thumbnail_file} ({thumbnail_file.stat().st_size} bytes)")
-            except Exception as e:
-                logger.warning(f"Warning: Failed to generate thumbnail: {e}")
+                scanned_files = [
+                    self._scan_single_page(
+                        job_id, device_id, profile, source, output_dir, filename_prefix
+                    )
+                ]
 
-            # Record scan result on the job (still running until delivery is done)
+            registry.ensure_not_cancelled(job_id)
+            final_file = self._convert_output(
+                job_id, scanned_files, profile, output_dir, filename_prefix
+            )
+            thumbnail_file = self._create_thumbnail(
+                job_id, final_file, output_dir, filename_prefix
+            )
+
             job = job_manager.get_job(job_id)
             if job:
                 job.file_path = str(final_file)
-                if thumbnail_file and thumbnail_file.exists():
-                    job.thumbnail_path = str(thumbnail_file)
+                job.thumbnail_path = str(thumbnail_file) if thumbnail_file else None
                 job_manager.update_job(job)
 
-            logger.info(f"Delivering scan to target: {target_id}")
+            registry.ensure_not_cancelled(job_id)
+            TargetManager().deliver(target_id, str(final_file), {"job_id": job_id})
+            registry.ensure_not_cancelled(job_id)
 
-            # Deliver to target
-            try:
-                TargetManager().deliver(target_id, str(final_file), {'job_id': job_id})
-                
-                # Update job status to completed
-                job = job_manager.get_job(job_id)
-                if job:
-                    job.status = JobStatus.completed
-                    job.message = None
-                    job_manager.update_job(job)
-                
-                logger.info(f"✓ Scan job {job_id} completed successfully")
-                
-                # Clean up local files after successful upload
-                try:
-                    if final_file.exists():
-                        final_file.unlink()
-                        logger.debug(f"✓ Deleted scan file: {final_file}")
-                    
-                    # Keep thumbnail for preview in UI (small file ~10-50KB)
-                    # Thumbnails can be cleaned up separately with a cron job if needed
-                    
-                except Exception as cleanup_error:
-                    logger.warning(f"Warning: Failed to delete scan file: {cleanup_error}")
-                
-            except Exception as delivery_error:
-                logger.warning(f"⚠️ Delivery failed for job {job_id}: {delivery_error}")
-                
-                # Mark job as completed but with delivery failure
-                job = job_manager.get_job(job_id)
-                if job:
-                    job.status = JobStatus.completed  # Scan was successful
-                    job.message = f"Upload failed: {str(delivery_error)}"
-                    job_manager.update_job(job)
-                
-                logger.warning(f"⚠️ Scan completed but delivery failed. File kept locally for retry: {final_file}")
-                # Don't raise - scan was successful, just delivery failed
-                # File is kept for manual retry
-            
-            # Send webhook notification if configured
+            job = job_manager.get_job(job_id)
+            if job and job.status != JobStatus.cancelled:
+                job.status = JobStatus.completed
+                job.message = None
+                job_manager.update_job(job)
+
+            if final_file.exists():
+                final_file.unlink()
             if webhook_url:
                 self._send_webhook_notification(
                     webhook_url,
                     job_id,
-                    'completed',
+                    "completed",
                     {
-                        'pages': len(scanned_files),
-                        'file_size': final_file.stat().st_size if final_file else 0,
-                        'format': output_format,
-                        'profile': profile_id,
-                        'thumbnail': str(thumbnail_file) if thumbnail_file and thumbnail_file.exists() else None
-                    }
+                        "pages": len(scanned_files),
+                        "format": profile.get("format"),
+                        "profile": profile_id,
+                    },
                 )
-            
-        except Exception as e:
-            logger.error(f"Scan error for job {job_id}: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            # Update job status to failed
+        except ScanCancelledError:
             job = job_manager.get_job(job_id)
             if job:
-                job.status = JobStatus.failed
-                job.message = str(e)
+                job.status = JobStatus.cancelled
+                job.message = "Scan cancelled by user"
                 job_manager.update_job(job)
-            
-            # Send webhook notification for failure
+            logger.info("Scan job %s cancelled", job_id)
+        except Exception as exc:
+            logger.error("Scan job %s failed: %s", job_id, exc, exc_info=True)
+            self._fail_job(job_manager, job_id, str(exc))
             if webhook_url:
                 self._send_webhook_notification(
-                    webhook_url,
-                    job_id,
-                    'failed',
-                    {'error': str(e)}
+                    webhook_url, job_id, "failed", {"error": str(exc)}
                 )
-
             raise
         finally:
-            # Always remove intermediate TIFF pages; the final PDF/JPEG is only
-            # kept when delivery failed (for manual retry). Without this,
-            # /tmp/scan2target/scans fills up with orphaned page TIFFs.
-            for tiff in scanned_files:
-                try:
-                    if tiff != final_file and tiff.exists():
-                        tiff.unlink()
-                except OSError as cleanup_error:
-                    logger.warning(f"Failed to remove temp file {tiff}: {cleanup_error}")
+            for path in scanned_files:
+                if path != final_file:
+                    path.unlink(missing_ok=True)
+            registry.finish(job_id)
+            device_lock.release()
 
-    def _send_webhook_notification(self, webhook_url: str, job_id: str, status: str, metadata: dict):
-        """Send webhook notification with job status."""
-        try:
-            import json
-            import urllib.request
-            
-            payload = {
-                'job_id': job_id,
-                'status': status,
-                'timestamp': subprocess.run(['date', '-Iseconds'], capture_output=True, text=True).stdout.strip(),
-                'metadata': metadata
-            }
-            
-            logger.info(f"Sending webhook notification to {webhook_url}")
-            
-            req = urllib.request.Request(
-                webhook_url,
-                data=json.dumps(payload).encode('utf-8'),
-                headers={'Content-Type': 'application/json'},
-                method='POST'
+    @staticmethod
+    def _fail_job(job_manager: JobManager, job_id: str, message: str) -> None:
+        job = job_manager.get_job(job_id)
+        if job and job.status != JobStatus.cancelled:
+            job.status = JobStatus.failed
+            job.message = message
+            job_manager.update_job(job)
+
+    def _scan_adf_batch(
+        self,
+        job_id: str,
+        device_id: str,
+        profile: dict,
+        source: str,
+        output_dir: Path,
+        prefix: str,
+    ) -> list[Path]:
+        pattern = output_dir / f"{prefix}_{job_id}_page%03d.tiff"
+        cmd = [
+            "scanimage",
+            "--device-name",
+            device_id,
+            "--resolution",
+            str(profile["dpi"]),
+            "--mode",
+            profile["color_mode"],
+            "--format",
+            "tiff",
+            "--source",
+            source,
+            f"--batch={pattern}",
+        ]
+        result = run_cancellable(
+            job_id, cmd, capture_output=True, text=True, timeout=300
+        )
+        if result.returncode != 0:
+            raise RuntimeError((result.stderr or result.stdout or "ADF scan failed").strip())
+        pages = sorted(output_dir.glob(f"{prefix}_{job_id}_page*.tiff"))
+        pages = [page for page in pages if page.stat().st_size > 0]
+        if not pages:
+            raise RuntimeError("No pages were scanned")
+        return pages[:100]
+
+    def _scan_single_page(
+        self,
+        job_id: str,
+        device_id: str,
+        profile: dict,
+        source: str | None,
+        output_dir: Path,
+        prefix: str,
+    ) -> Path:
+        tiff_file = output_dir / f"{prefix}_{job_id}.tiff"
+        cmd = [
+            "scanimage",
+            "--device-name",
+            device_id,
+            "--resolution",
+            str(profile["dpi"]),
+            "--mode",
+            profile["color_mode"],
+            "--format",
+            "tiff",
+        ]
+        if source and source != "Flatbed":
+            cmd.extend(["--source", source])
+        with tiff_file.open("wb") as output:
+            result = run_cancellable(
+                job_id,
+                cmd,
+                stdout=output,
+                stderr=subprocess.PIPE,
+                timeout=120,
             )
-            
-            with urllib.request.urlopen(req, timeout=10) as response:
-                logger.info(f"Webhook notification sent successfully: {response.status}")
-        except Exception as e:
-            logger.warning(f"Warning: Failed to send webhook notification: {e}")
+        if result.returncode != 0:
+            error = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
+            raise RuntimeError(f"scanimage failed: {error}")
+        if not tiff_file.exists() or tiff_file.stat().st_size == 0:
+            raise RuntimeError("Scanner returned an empty file")
+        return tiff_file
+
+    def _convert_output(
+        self,
+        job_id: str,
+        scanned_files: list[Path],
+        profile: dict,
+        output_dir: Path,
+        prefix: str,
+    ) -> Path:
+        output_format = str(profile.get("format", "pdf")).lower()
+        if output_format == "pdf":
+            output = output_dir / f"{prefix}_{job_id}.pdf"
+            cmd = ["convert", *map(str, scanned_files), "-compress", "JPEG"]
+            cmd.extend(["-quality", str(profile.get("quality", 85))])
+            cmd.extend(["-density", str(profile.get("dpi", 200))])
+            if profile.get("color_mode") == "Gray":
+                cmd.extend(["-colorspace", "Gray"])
+            cmd.append(str(output))
+            result = run_cancellable(
+                job_id, cmd, capture_output=True, text=True, timeout=180
+            )
+            if result.returncode != 0 or not output.exists():
+                raise RuntimeError(f"PDF conversion failed: {result.stderr or result.stdout}")
+            return output
+
+        if output_format in {"jpeg", "jpg"}:
+            output = output_dir / f"{prefix}_{job_id}.jpg"
+            result = run_cancellable(
+                job_id,
+                [
+                    "convert",
+                    str(scanned_files[0]),
+                    "-quality",
+                    str(profile.get("quality", 90)),
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode != 0 or not output.exists():
+                raise RuntimeError(f"JPEG conversion failed: {result.stderr or result.stdout}")
+            return output
+
+        return scanned_files[0]
+
+    def _create_thumbnail(
+        self, job_id: str, final_file: Path, output_dir: Path, prefix: str
+    ) -> Path | None:
+        thumbnail = output_dir / f"{prefix}_{job_id}_thumb.jpg"
+        result = run_cancellable(
+            job_id,
+            [
+                "convert",
+                f"{final_file}[0]",
+                "-thumbnail",
+                "400x400>",
+                "-quality",
+                "80",
+                str(thumbnail),
+            ],
+            capture_output=True,
+            timeout=15,
+        )
+        if result.returncode == 0 and thumbnail.exists():
+            return thumbnail
+        logger.warning("Thumbnail generation failed for %s", job_id)
+        return None
+
+    def _send_webhook_notification(
+        self, webhook_url: str, job_id: str, status: str, metadata: dict
+    ) -> None:
+        """Send a non-redirecting, validated status webhook."""
+        try:
+            safe_url = validate_webhook_url(webhook_url)
+            response = requests.post(
+                safe_url,
+                json={
+                    "job_id": job_id,
+                    "status": status,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "metadata": metadata,
+                },
+                timeout=10,
+                allow_redirects=False,
+            )
+            response.raise_for_status()
+        except Exception as exc:
+            logger.warning("Webhook notification failed: %s", exc)
 
     def list_jobs(self) -> List[JobRecord]:
         return JobManager().list_jobs(job_type="scan")
 
-    def get_job(self, job_id: str) -> JobRecord:
+    def get_job(self, job_id: str) -> JobRecord | None:
         return JobManager().get_job(job_id)

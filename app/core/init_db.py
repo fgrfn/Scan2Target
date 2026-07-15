@@ -1,36 +1,31 @@
 """Database initialization and default data."""
 import logging
-from core.database import get_db
+
 from core.auth.manager import get_auth_manager
+from core.database import get_db
 
 logger = logging.getLogger(__name__)
 
 
 def init_database():
-    """Initialize database with schema and default data."""
-    # Schema is auto-created by Database class
-    db = get_db()
-    
-    # Create default admin user if no users exist
+    """Initialize the schema and idempotent built-in data."""
+    # Schema is created by Database. Instantiating it here makes startup errors
+    # explicit before background scanner discovery begins.
+    get_db()
+
     auth_manager = get_auth_manager()
-    
-    if not auth_manager.user_repo.user_exists("admin"):
-        logger.info("Creating default admin user...")
-        auth_manager.register(
-            username="admin",
-            password="admin",  # CHANGE THIS IN PRODUCTION!
-            email="admin@scan2target.local",
-            is_admin=True
+    if auth_manager.setup_required():
+        logger.warning(
+            "No users configured. Open the Web UI to create the first administrator."
         )
-        logger.warning("✓ Default admin user created: username='admin', password='admin'")
-        logger.warning("  ⚠️  CHANGE THE DEFAULT PASSWORD IMMEDIATELY!")
-    
-    # Seed/refresh built-in scan profiles (idempotent)
+    else:
+        logger.info("Authentication database initialized")
+
     from core.scanning.profiles import get_profile_repository
+
     get_profile_repository().seed_defaults()
-    logger.info("✓ Built-in scan profiles seeded")
-    
-    logger.info("✓ Database initialized successfully")
+    logger.info("Built-in scan profiles seeded")
+    logger.info("Database initialized successfully")
 
 
 if __name__ == "__main__":

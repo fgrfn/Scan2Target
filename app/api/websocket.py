@@ -1,6 +1,10 @@
 """WebSocket API endpoint for real-time updates."""
 import logging
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from core.auth.manager import get_auth_manager
+from core.config.settings import get_settings
 from core.websocket import get_connection_manager
 
 logger = logging.getLogger(__name__)
@@ -9,51 +13,32 @@ router = APIRouter()
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint for real-time job and scanner updates.
-    
-    Connect to: ws://localhost/api/v1/ws
-    
-    Message types received:
-    - job_update: Job status changes
-    - scanner_update: Scanner availability changes
-    
-    Example message:
-    {
-        "type": "job_update",
-        "data": {
-            "id": "job-uuid",
-            "status": "completed",
-            "device_id": "scanner_1",
-            "target_id": "target_1",
-            ...
-        }
-    }
-    """
+    """Stream real-time updates to authenticated Web UI clients."""
+    settings = get_settings()
+    if settings.require_auth:
+        token = websocket.query_params.get("token")
+        if not token or not get_auth_manager().verify_token(token):
+            await websocket.close(code=4401, reason="Authentication required")
+            return
+
     manager = get_connection_manager()
     client_id = f"client_{id(websocket)}"
-    
     await manager.connect(websocket, client_id)
-    
+
     try:
-        # Send initial connection confirmation
-        await websocket.send_json({
-            "type": "connected",
-            "message": "WebSocket connection established",
-            "client_id": client_id
-        })
-        
-        # Keep connection alive and handle incoming messages
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "message": "WebSocket connection established",
+                "client_id": client_id,
+            }
+        )
         while True:
-            # Wait for messages from client (like ping/pong)
             data = await websocket.receive_text()
-            
-            # Echo back for ping/pong
             if data == "ping":
                 await websocket.send_json({"type": "pong"})
-    
     except WebSocketDisconnect:
         await manager.disconnect(websocket, client_id)
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+    except Exception as exc:
+        logger.error("WebSocket error: %s", exc)
         await manager.disconnect(websocket, client_id)
