@@ -30,6 +30,11 @@ class ProcessRegistry:
             if self._processes.get(job_id) is process:
                 self._processes.pop(job_id, None)
 
+    def has_active_process(self, job_id: str) -> bool:
+        with self._lock:
+            process = self._processes.get(job_id)
+            return process is not None and process.poll() is None
+
     def cancel(self, job_id: str) -> bool:
         """Mark a job cancelled and terminate its active process if present."""
         with self._lock:
