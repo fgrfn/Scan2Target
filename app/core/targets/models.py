@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AdapterConfig(BaseModel):
@@ -24,7 +24,7 @@ class SFTPConfig(AdapterConfig):
     username: str = "root"
     password: str = ""
     remote_path: str = "."
-    strict_host_key_checking: bool = True
+    strict_host_key_checking: bool = False
 
 
 class EmailConfig(AdapterConfig):
