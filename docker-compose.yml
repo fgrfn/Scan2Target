@@ -14,7 +14,7 @@ services:
       # - /dev/bus/usb:/dev/bus/usb
 
     # devices:
-      # - /dev/bus/usb
+    #   - /dev/bus/usb
 
     environment:
       - SCAN2TARGET_DATA_DIR=${SCAN2TARGET_DATA_DIR:-/data}
@@ -23,8 +23,6 @@ services:
       - SCAN2TARGET_HEALTH_CHECK_INTERVAL=${SCAN2TARGET_HEALTH_CHECK_INTERVAL:-60}
       - SCAN2TARGET_SCANNER_CHECK_INTERVAL=${SCAN2TARGET_SCANNER_CHECK_INTERVAL:-30}
 
-      # No insecure fallback is provided. Create .env and generate this value
-      # with: openssl rand -base64 48
       - SCAN2TARGET_SECRET_KEY=${SCAN2TARGET_SECRET_KEY:?Set SCAN2TARGET_SECRET_KEY in .env}
       - SCAN2TARGET_JWT_SECRET=${SCAN2TARGET_JWT_SECRET:-}
       - SCAN2TARGET_REQUIRE_AUTH=${SCAN2TARGET_REQUIRE_AUTH:-true}
@@ -34,9 +32,16 @@ services:
       - SCAN2TARGET_MAX_REQUEST_SIZE_MB=${SCAN2TARGET_MAX_REQUEST_SIZE_MB:-100}
       - SCAN2TARGET_MAX_BATCH_PAGE_MB=${SCAN2TARGET_MAX_BATCH_PAGE_MB:-20}
       - SCAN2TARGET_MAX_BATCH_PAGES=${SCAN2TARGET_MAX_BATCH_PAGES:-100}
+      - SCAN2TARGET_DELIVERY_MAX_RETRIES=${SCAN2TARGET_DELIVERY_MAX_RETRIES:-5}
+      - SCAN2TARGET_RETRY_POLL_INTERVAL=${SCAN2TARGET_RETRY_POLL_INTERVAL:-15}
+      - SCAN2TARGET_RETRY_BASE_DELAY=${SCAN2TARGET_RETRY_BASE_DELAY:-30}
+      - SCAN2TARGET_RETRY_MAX_DELAY=${SCAN2TARGET_RETRY_MAX_DELAY:-3600}
 
     # Host networking is required for mDNS/AirScan discovery.
     network_mode: host
+
+    security_opt:
+      - no-new-privileges:true
 
     # privileged: true  # May be needed for some USB scanners.
 
