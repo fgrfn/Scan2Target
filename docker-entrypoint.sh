@@ -7,10 +7,10 @@ if [ ! -f /app/main.py ]; then
 fi
 
 RUN_USER="${SCAN2TARGET_RUN_USER:-scan2target}"
-mkdir -p /run/dbus /run/avahi-daemon /data/scans /data/db /data/auth /data/logs /tmp/scan2target/scans
+mkdir -p /run/dbus /run/avahi-daemon /data/scans /data/db /data/auth /data/logs /var/log/scan2target /tmp/scan2target/scans
 
 if [ "$(id -u)" = "0" ]; then
-    chown -R "$RUN_USER:$RUN_USER" /data /tmp/scan2target
+    chown -R "$RUN_USER:$RUN_USER" /data /var/log/scan2target /tmp/scan2target
 
     rm -f /run/dbus/pid /run/avahi-daemon/pid /run/avahi-daemon/socket
     pkill -x avahi-daemon 2>/dev/null || true
