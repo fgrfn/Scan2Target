@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 import logging
 import subprocess
 import tempfile
 import uuid
 from io import BytesIO
 from pathlib import Path
-from typing import List
+from typing import List, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
@@ -55,6 +56,7 @@ class BatchScanRequest(BaseModel):
     target_id: str = Field(min_length=1, max_length=128)
     filename_prefix: str | None = Field(default=None, max_length=128)
     page_urls: List[str] = Field(min_length=1, max_length=100)
+    output_format: Literal["pdf", "jpeg"] = "pdf"
 
     @field_validator("filename_prefix")
     @classmethod
@@ -71,6 +73,15 @@ class ScanPageRequest(BaseModel):
     device_id: str = Field(min_length=1, max_length=512)
     profile_id: str = Field(min_length=1, max_length=128)
     source: str | None = Field(default=None, max_length=64)
+
+
+class CapturePagesRequest(ScanPageRequest):
+    batch: bool = False
+
+
+class CapturePagesResponse(BaseModel):
+    pages: List[str]
+    count: int
 
 
 class PreviewScanRequest(BaseModel):
@@ -252,6 +263,25 @@ async def scan_single_page(payload: ScanPageRequest):
             page_file.unlink(missing_ok=True)
 
 
+@router.post("/capture-pages", response_model=CapturePagesResponse)
+async def capture_pages(payload: CapturePagesRequest):
+    """Capture one flatbed page or a complete ADF stack for the guided UI."""
+    device = _get_scanner(payload.device_id)
+    try:
+        pages = await asyncio.to_thread(
+            ScannerManager().capture_pages,
+            device.uri,
+            payload.profile_id,
+            payload.source,
+            payload.batch,
+        )
+        return CapturePagesResponse(pages=pages, count=len(pages))
+    except RuntimeError as exc:
+        detail = str(exc) or "Page capture failed"
+        status = 409 if "busy" in detail.lower() else 500
+        raise HTTPException(status_code=status, detail=detail) from exc
+
+
 @router.post("/batch", response_model=ScanJobResponse)
 async def start_batch_scan(payload: BatchScanRequest):
     """Combine validated page images into one PDF and upload it."""
@@ -261,7 +291,8 @@ async def start_batch_scan(payload: BatchScanRequest):
     temp_dir = Path(tempfile.gettempdir()) / "scan2target_batch" / batch_id
     temp_dir.mkdir(parents=True, exist_ok=False)
     prefix = sanitize_filename_prefix(payload.filename_prefix, "batch_scan")
-    pdf_file = temp_dir / f"{prefix}_{batch_id}.pdf"
+    suffix = "jpg" if payload.output_format == "jpeg" and len(payload.page_urls) == 1 else "pdf"
+    output_file = temp_dir / f"{prefix}_{batch_id}.{suffix}"
     delivered = False
     job_id = str(uuid.uuid4())
     job_manager = JobManager()
@@ -286,20 +317,24 @@ async def start_batch_scan(payload: BatchScanRequest):
 
         quality = int(profile.get("quality", 85))
         dpi = float(profile.get("dpi", 200))
-        images[0].save(
-            pdf_file,
-            save_all=True,
-            append_images=images[1:],
-            resolution=dpi,
-            quality=quality,
-        )
+        if suffix == "jpg":
+            images[0].save(output_file, format="JPEG", quality=quality, dpi=(dpi, dpi))
+        else:
+            images[0].save(
+                output_file,
+                save_all=True,
+                append_images=images[1:],
+                resolution=dpi,
+                quality=quality,
+            )
 
         job = job_manager.get_job(job_id)
         if job:
-            job.file_path = str(pdf_file)
+            job.file_path = str(output_file)
+            job.metadata.update({"pages": len(images), "format": suffix})
             job_manager.update_job(job)
 
-        TargetManager().deliver(payload.target_id, str(pdf_file), {"job_id": job_id})
+        TargetManager().deliver(payload.target_id, str(output_file), {"job_id": job_id})
         delivered = True
         job = job_manager.get_job(job_id)
         if job:
@@ -326,6 +361,6 @@ async def start_batch_scan(payload: BatchScanRequest):
         for image in images:
             image.close()
         if delivered:
-            pdf_file.unlink(missing_ok=True)
+            output_file.unlink(missing_ok=True)
         if temp_dir.exists() and not any(temp_dir.iterdir()):
             temp_dir.rmdir()

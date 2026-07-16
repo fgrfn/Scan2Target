@@ -1,269 +1,69 @@
 <script>
-  import Card from '../components/ui/Card.svelte';
-  import Badge from '../components/ui/Badge.svelte';
+  import { onMount } from 'svelte';
   import Icon from '../components/ui/Icon.svelte';
-  import { api } from '../lib/api';
-  import { t, lang } from '../lib/i18n';
+  import { api, setToken } from '../lib/api';
   import { appStore } from '../stores/app';
-
+  import { lang } from '../lib/i18n';
   export let settings;
   export let version = '';
-  export let lastUpdated = null;
   export let profiles = [];
+  export let authConfig = { enabled: true };
   export let onChange = () => {};
   export let onNotify = () => {};
-  export let onProfilesChanged = () => {};
+  export let onAuthChanged = () => {};
 
-  $: updatedText = lastUpdated ? new Date(lastUpdated).toLocaleString() : $t('notSynced');
-
-  // --- Profile management ---
-  let profileForm = null; // null = closed
-  let editingProfileId = null;
-
-  function blankProfile() {
-    return {
-      id: '',
-      name: '',
-      dpi: 300,
-      color_mode: 'Gray',
-      paper_size: 'A4',
-      format: 'pdf',
-      quality: 85,
-      source: 'Flatbed',
-      batch_scan: false,
-      auto_detect: true,
-      description: ''
-    };
-  }
-
-  function openCreateProfile() {
-    editingProfileId = null;
-    profileForm = blankProfile();
-  }
-
-  function openEditProfile(profile) {
-    editingProfileId = profile.id;
-    profileForm = { ...profile };
-  }
-
-  async function saveProfile() {
-    try {
-      if (editingProfileId) await api.updateProfile(editingProfileId, profileForm);
-      else await api.createProfile(profileForm);
-      profileForm = null;
-      editingProfileId = null;
-      await onProfilesChanged();
-      onNotify($t('profileSaved'), 'success');
-    } catch (error) {
-      onNotify(error.message, 'error');
-    }
-  }
-
-  async function deleteProfile(id) {
-    try {
-      await api.deleteProfile(id);
-      await onProfilesChanged();
-      onNotify($t('profileDeleted'), 'success');
-    } catch (error) {
-      onNotify(error.message, 'error');
-    }
-  }
-
-  // --- Home Assistant helper ---
+  let account = { username: '', email: '', current_password: '', new_password: '' };
+  let savingAccount = false;
   let haOpen = false;
-  let haProfile = 'document_200_pdf';
+  let haProfile = '';
+  $: if (!haProfile && profiles.length) haProfile = profiles[0].id;
+  $: c = $lang === 'de' ? {
+    interface: 'Oberfläche', interfaceLead: 'Sprache und Darstellung auf diesem Gerät.', language: 'Sprache', theme: 'Darstellung', system: 'System', light: 'Hell', dark: 'Dunkel',
+    account: 'Anmeldung', accountLead: 'Das einzelne Administratorkonto verwalten oder den Anmeldeschutz deaktivieren.', enabled: 'Anmeldung erforderlich', user: 'Benutzername', email: 'E-Mail', current: 'Aktuelles Passwort', next: 'Neues Passwort (optional)', save: 'Konto aktualisieren', saved: 'Konto aktualisiert', authSaved: 'Anmeldeeinstellung gespeichert', logout: 'Abmelden',
+    ha: 'Home Assistant', haLead: 'Die bestehende Scan-API für Taster und Automationen.', show: 'Beispiel anzeigen', hide: 'Beispiel ausblenden', copy: 'Kopieren', copied: 'Kopiert', version: 'Version', live: 'Betrieb', online: 'Online'
+  } : {
+    interface: 'Interface', interfaceLead: 'Language and appearance on this device.', language: 'Language', theme: 'Appearance', system: 'System', light: 'Light', dark: 'Dark',
+    account: 'Sign-in', accountLead: 'Manage the single administrator account or disable sign-in protection.', enabled: 'Require sign-in', user: 'Username', email: 'Email', current: 'Current password', next: 'New password (optional)', save: 'Update account', saved: 'Account updated', authSaved: 'Sign-in setting saved', logout: 'Log out',
+    ha: 'Home Assistant', haLead: 'The existing scan API for buttons and automations.', show: 'Show example', hide: 'Hide example', copy: 'Copy', copied: 'Copied', version: 'Version', live: 'Operation', online: 'Online'
+  };
+  $: snippet = `rest_command:\n  scan_document:\n    url: "${window.location.origin}/api/v1/homeassistant/scan"\n    method: POST\n    content_type: "application/json"\n    payload: '{"scanner_id":"favorite","target_id":"favorite","profile":"${haProfile}"}'`;
 
-  $: haSnippet = [
-    'rest_command:',
-    '  scan_document:',
-    `    url: "${window.location.origin}/api/v1/homeassistant/scan"`,
-    '    method: POST',
-    '    content_type: "application/json"',
-    `    payload: '{"scanner_id": "favorite", "target_id": "favorite", "profile": "${haProfile}"}'`
-  ].join('\n');
-
-  async function copySnippet() {
+  async function toggleAuth(enabled) {
+    try { await api.setAuthConfig(enabled); await onAuthChanged(); onNotify(c.authSaved, 'success'); }
+    catch (error) { onNotify(error.message, 'error'); }
+  }
+  async function updateAccount() {
+    savingAccount = true;
     try {
-      await navigator.clipboard.writeText(haSnippet);
-      onNotify($t('copied'), 'success');
-    } catch {
-      onNotify($t('copyFailed'), 'error');
-    }
+      const result = await api.updateAccount({ ...account, email: account.email || null, new_password: account.new_password || null });
+      setToken(result.access_token); account.current_password = ''; account.new_password = ''; onNotify(c.saved, 'success'); appStore.reconnectWebSocket();
+    } catch (error) { onNotify(error.message, 'error'); }
+    finally { savingAccount = false; }
   }
-
-  // --- Auth ---
-  const loggedIn = appStore.hasToken();
-
-  function logout() {
-    appStore.logout();
-    onNotify($t('loggedOut'), 'success');
-  }
+  async function logout() { await appStore.logout(); onNotify(c.logout, 'success'); }
+  async function copySnippet() { try { await navigator.clipboard.writeText(snippet); onNotify(c.copied, 'success'); } catch (error) { onNotify(error.message, 'error'); } }
+  onMount(async () => {
+    if (!appStore.hasToken()) return;
+    try { const user = await api.getMe(); account.username = user.username || ''; account.email = user.email || ''; }
+    catch { /* Account details stay editable manually if the session expired. */ }
+  });
 </script>
 
-<section class="grid cols-2">
-  <Card title={$t('uiPrefs')} subtitle={$t('uiPrefsSub')}>
-    <div class="field-label">{$t('languageLabel')}</div>
-    <div class="segmented inline">
-      <button class:active={$lang === 'en'} on:click={() => lang.set('en')}>English</button>
-      <button class:active={$lang === 'de'} on:click={() => lang.set('de')}>Deutsch</button>
-    </div>
+<div class="settings-grid">
+  <section class="settings-card"><div class="settings-heading"><span class="settings-icon"><Icon name="settings" /></span><div><h2>{c.interface}</h2><p>{c.interfaceLead}</p></div></div>
+    <div class="setting-row"><span>{c.language}</span><div class="choice-pills compact"><button class:active={$lang === 'de'} on:click={() => lang.set('de')}>Deutsch</button><button class:active={$lang === 'en'} on:click={() => lang.set('en')}>English</button></div></div>
+    <div class="setting-row"><span>{c.theme}</span><select value={settings.theme} on:change={(event) => onChange({ theme: event.currentTarget.value })}><option value="system">{c.system}</option><option value="light">{c.light}</option><option value="dark">{c.dark}</option></select></div>
+  </section>
 
-    <label class="checkbox-line top-gap">
-      <input type="checkbox" checked={settings.autoRefresh} on:change={(e) => onChange({ autoRefresh: e.target.checked })} />
-      {$t('autoRefreshLabel')}
-    </label>
-    <label class="checkbox-line">
-      <input type="checkbox" checked={settings.compactTables} on:change={(e) => onChange({ compactTables: e.target.checked })} />
-      {$t('compactTablesLabel')}
-    </label>
+  <section class="settings-card"><div class="settings-heading"><span class="settings-icon"><Icon name="logout" /></span><div><h2>{c.account}</h2><p>{c.accountLead}</p></div></div>
+    <label class="switch-row"><span>{c.enabled}</span><input type="checkbox" checked={authConfig.enabled} on:change={(event) => toggleAuth(event.currentTarget.checked)} /></label>
+    {#if appStore.hasToken()}<form class="account-form" on:submit|preventDefault={updateAccount}><div class="form-grid"><label>{c.user}<input bind:value={account.username} minlength="3" required /></label><label>{c.email}<input type="email" bind:value={account.email} /></label><label>{c.current}<input type="password" bind:value={account.current_password} required /></label><label>{c.next}<input type="password" bind:value={account.new_password} minlength={account.new_password ? 12 : null} /></label></div><div class="flow-actions"><button type="button" class="btn secondary" on:click={logout}>{c.logout}</button><button class="btn primary" disabled={savingAccount}>{c.save}</button></div></form>{/if}
+  </section>
 
-    {#if loggedIn}
-      <div class="top-gap">
-        <button class="btn ghost" on:click={logout}><Icon name="logout" size={16} /> {$t('logoutBtn')}</button>
-      </div>
-    {/if}
-  </Card>
+  <section class="settings-card full"><div class="settings-heading"><span class="settings-icon"><Icon name="bolt" /></span><div><h2>{c.ha}</h2><p>{c.haLead}</p></div></div>
+    <button class="btn secondary" on:click={() => haOpen = !haOpen}>{haOpen ? c.hide : c.show}</button>
+    {#if haOpen}<div class="ha-config"><select bind:value={haProfile}>{#each profiles as profile}<option value={profile.id}>{profile.name}</option>{/each}</select><pre>{snippet}</pre><button class="btn secondary" on:click={copySnippet}><Icon name="copy" size={15} />{c.copy}</button></div>{/if}
+  </section>
 
-  <Card title={$t('systemInfo')} subtitle={$t('systemInfoSub')}>
-    <div class="resource-meta">
-      <div class="meta-box"><span>{$t('versionLabel')}</span><strong>{version || $t('unknown')}</strong></div>
-      <div class="meta-box"><span>{$t('lastUpdate')}</span><strong>{updatedText}</strong></div>
-      <div class="meta-box"><span>{$t('cacheStrategy')}</span><strong>{$t('networkFirst')}</strong></div>
-    </div>
-  </Card>
-</section>
-
-<Card title={$t('profileMgmt')} subtitle={$t('profileMgmtSub')}>
-  <div slot="actions">
-    <button class="btn primary" on:click={openCreateProfile}><Icon name="plus" size={16} /> {$t('newProfileBtn')}</button>
-  </div>
-
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>{$t('name')}</th>
-          <th>{$t('idLabel')}</th>
-          <th>DPI</th>
-          <th>{$t('pfColorMode')}</th>
-          <th>{$t('pfFormat')}</th>
-          <th>{$t('pfSource')}</th>
-          <th></th>
-          <th>{$t('actions')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each profiles as p (p.id)}
-          <tr>
-            <td><strong>{p.name}</strong>{#if p.description}<p class="muted small">{p.description}</p>{/if}</td>
-            <td class="id-cell">{p.id}</td>
-            <td>{p.dpi}</td>
-            <td>{p.color_mode}</td>
-            <td>{(p.format || '').toUpperCase()}</td>
-            <td>{p.source}{#if p.batch_scan} · ADF{/if}</td>
-            <td><Badge tone={p.is_builtin ? 'info' : 'neutral'} text={p.is_builtin ? $t('builtinBadge') : $t('customBadge')} /></td>
-            <td>
-              <div class="row gap">
-                <button class="btn ghost small-btn" on:click={() => openEditProfile(p)}><Icon name="edit" size={14} /></button>
-                {#if !p.is_builtin}
-                  <button class="btn danger small-btn" on:click={() => deleteProfile(p.id)}><Icon name="trash" size={14} /></button>
-                {/if}
-              </div>
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
-</Card>
-
-<Card title={$t('haTitle')} subtitle={$t('haSub')}>
-  <button class="btn ghost" on:click={() => (haOpen = !haOpen)}>
-    <Icon name="bolt" size={16} /> {haOpen ? $t('haHide') : $t('haShow')}
-  </button>
-
-  {#if haOpen}
-    <div class="top-gap">
-      <p class="muted small">{$t('haIntro')}</p>
-      <label>{$t('haProfileLabel')}
-        <select bind:value={haProfile}>
-          {#each profiles as p (p.id)}
-            <option value={p.id}>{p.name}</option>
-          {/each}
-        </select>
-      </label>
-      <div class="code-block top-gap">
-        <pre>{haSnippet}</pre>
-        <button class="btn ghost small-btn code-copy" on:click={copySnippet}>
-          <Icon name="copy" size={14} /> {$t('copy')}
-        </button>
-      </div>
-      <p class="muted small">{$t('haUsage')}</p>
-    </div>
-  {/if}
-</Card>
-
-{#if profileForm}
-  <div class="dialog-backdrop">
-    <div class="dialog wide">
-      <h3>{editingProfileId ? $t('editProfileTitle') : $t('createProfileTitle')}</h3>
-
-      <div class="grid cols-2">
-        <label>{$t('pfId')}
-          <input bind:value={profileForm.id} placeholder={$t('pfIdPlaceholder')} disabled={Boolean(editingProfileId)} />
-        </label>
-        <label>{$t('pfName')} <input bind:value={profileForm.name} /></label>
-      </div>
-      {#if !editingProfileId}<p class="muted small">{$t('pfIdHint')}</p>{/if}
-
-      <div class="grid cols-2">
-        <label>{$t('pfDpi')} <input type="number" min="50" max="1200" bind:value={profileForm.dpi} /></label>
-        <label>{$t('pfQuality')} <input type="number" min="10" max="100" bind:value={profileForm.quality} /></label>
-      </div>
-
-      <div class="grid cols-2">
-        <label>{$t('pfColorMode')}
-          <select bind:value={profileForm.color_mode}>
-            <option value="Color">{$t('colorColor')}</option>
-            <option value="Gray">{$t('colorGray')}</option>
-            <option value="Lineart">{$t('colorLineart')}</option>
-          </select>
-        </label>
-        <label>{$t('pfFormat')}
-          <select bind:value={profileForm.format}>
-            <option value="pdf">PDF</option>
-            <option value="jpeg">JPEG</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="grid cols-2">
-        <label>{$t('pfSource')}
-          <select bind:value={profileForm.source}>
-            <option value="Flatbed">{$t('sourceFlatbed')}</option>
-            <option value="ADF">{$t('sourceADF')}</option>
-          </select>
-        </label>
-        <label>{$t('pfPaperSize')}
-          <select bind:value={profileForm.paper_size}>
-            <option value="A4">A4</option>
-            <option value="A5">A5</option>
-            <option value="Letter">Letter</option>
-            <option value="Legal">Legal</option>
-          </select>
-        </label>
-      </div>
-
-      <label class="checkbox-line"><input type="checkbox" bind:checked={profileForm.batch_scan} /> {$t('pfBatch')}</label>
-      <label class="checkbox-line"><input type="checkbox" bind:checked={profileForm.auto_detect} /> {$t('pfAutoDetect')}</label>
-      <label>{$t('pfDescription')} <input bind:value={profileForm.description} /></label>
-
-      <div class="row gap top-gap">
-        <button class="btn ghost" on:click={() => (profileForm = null)}>{$t('cancel')}</button>
-        <button class="btn primary" disabled={!profileForm.name || (!editingProfileId && !profileForm.id)} on:click={saveProfile}>
-          {$t('save')}
-        </button>
-      </div>
-    </div>
-  </div>
-{/if}
+  <section class="settings-card full system-strip"><div><span>{c.version}</span><strong>{version || '—'}</strong></div><div><span>{c.live}</span><strong class="online"><i></i>{c.online}</strong></div></section>
+</div>

@@ -190,6 +190,31 @@ class AuthManager:
             username, self.hash_password(password), email, is_admin
         )
 
+    def update_account(
+        self,
+        user: User,
+        current_password: str,
+        username: str,
+        email: str | None,
+        new_password: str | None = None,
+    ) -> tuple[User, str]:
+        """Verify and update the operator account, rotating all sessions."""
+        current = self.user_repo.get_by_username(user.username)
+        if not current or not self.verify_password(current_password, current[1]):
+            raise ValueError("Current password is incorrect")
+        existing = self.user_repo.get_by_username(username)
+        if existing and existing[0].id != user.id:
+            raise ValueError(f"Username '{username}' already exists")
+        updated = self.user_repo.update_account(
+            int(user.id),
+            username,
+            email,
+            self.hash_password(new_password) if new_password else None,
+        )
+        with self.db.get_connection() as conn:
+            conn.execute("UPDATE sessions SET revoked = 1 WHERE user_id = ?", (user.id,))
+        return updated, self.create_token(updated)
+
 
 _auth_manager: AuthManager | None = None
 

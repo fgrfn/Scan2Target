@@ -18,6 +18,7 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 from api import auth, devices, history, homeassistant, maintenance, profiles, scan, stats, targets, websocket
+from core.config.runtime import get_runtime_config
 from core.config.settings import get_settings
 from core.delivery.retry import get_delivery_retry_service
 from core.init_db import init_database
@@ -133,30 +134,30 @@ def create_app() -> FastAPI:
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         return response
 
-    if settings.require_auth:
-        from core.auth.manager import get_auth_manager
+    from core.auth.manager import get_auth_manager
 
-        auth_exempt_prefixes = ("/api/v1/auth/", "/api/v1/homeassistant/")
-        auth_exempt_paths = ("/health", "/api/v1/version")
+    auth_exempt_prefixes = ("/api/v1/auth/", "/api/v1/homeassistant/")
+    auth_exempt_paths = ("/health", "/api/v1/version")
 
-        @app.middleware("http")
-        async def enforce_auth(request: Request, call_next):
-            path = request.url.path
-            needs_auth = (
-                path.startswith("/api/")
-                and path not in auth_exempt_paths
-                and not any(path.startswith(prefix) for prefix in auth_exempt_prefixes)
-            )
-            if needs_auth and request.method != "OPTIONS":
-                header = request.headers.get("authorization", "")
-                token = header[7:] if header.lower().startswith("bearer ") else None
-                if not token or not get_auth_manager().verify_token(token):
-                    return JSONResponse(
-                        status_code=401,
-                        content={"detail": "Authentication required"},
-                        headers={"WWW-Authenticate": "Bearer"},
-                    )
-            return await call_next(request)
+    @app.middleware("http")
+    async def enforce_auth(request: Request, call_next):
+        path = request.url.path
+        needs_auth = (
+            get_runtime_config().auth_enabled
+            and path.startswith("/api/")
+            and path not in auth_exempt_paths
+            and not any(path.startswith(prefix) for prefix in auth_exempt_prefixes)
+        )
+        if needs_auth and request.method != "OPTIONS":
+            header = request.headers.get("authorization", "")
+            token = header[7:] if header.lower().startswith("bearer ") else None
+            if not token or not get_auth_manager().verify_token(token):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Authentication required"},
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        return await call_next(request)
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(scan.router, prefix="/api/v1/scan", tags=["scan"])

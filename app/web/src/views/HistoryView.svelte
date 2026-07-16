@@ -1,156 +1,50 @@
 <script>
-  import Card from '../components/ui/Card.svelte';
-  import Badge from '../components/ui/Badge.svelte';
-  import StatGrid from '../components/StatGrid.svelte';
   import Icon from '../components/ui/Icon.svelte';
   import { api } from '../lib/api';
-  import { t } from '../lib/i18n';
-  import { statusTone, statusKey } from '../lib/status';
-
+  import { lang } from '../lib/i18n';
   export let data;
   export let onHistory = () => {};
   export let onNotify = () => {};
-
   let query = '';
-  let status = 'all';
-
-  $: history = data.history || [];
-  $: filtered = history.filter((item) => {
-    const q = query.trim().toLowerCase();
-    const matchQuery =
-      !q ||
-      String(item.id || '').toLowerCase().includes(q) ||
-      String(item.device_id || '').toLowerCase().includes(q) ||
-      String(item.target_id || '').toLowerCase().includes(q) ||
-      String(item.message || '').toLowerCase().includes(q);
-    const matchStatus = status === 'all' || item.status === status;
-    return matchQuery && matchStatus;
+  let filter = 'all';
+  $: c = $lang === 'de'
+    ? { search: 'Scans durchsuchen', all: 'Alle', attention: 'Offen', success: 'Erfolgreich', today: 'Heute', yesterday: 'Gestern', older: 'Älter', empty: 'Keine passenden Scans.', retry: 'Erneut senden', remove: 'Löschen', pages: 'Seiten', unknown: 'Unbenannter Scan' }
+    : { search: 'Search scans', all: 'All', attention: 'Attention', success: 'Successful', today: 'Today', yesterday: 'Yesterday', older: 'Older', empty: 'No matching scans.', retry: 'Retry delivery', remove: 'Delete', pages: 'pages', unknown: 'Unnamed scan' };
+  $: items = [...(data.jobs || []), ...(data.history || [])].filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index);
+  $: filtered = items.filter((item) => {
+    const status = String(item.status || '').toLowerCase();
+    const matchesFilter = filter === 'all' || (filter === 'attention' ? ['failed','delivery_failed','running','queued','waiting'].includes(status) : status === 'completed');
+    const haystack = `${item.id} ${item.device_id} ${item.target_id} ${item.message} ${item.metadata?.filename_prefix || ''}`.toLowerCase();
+    return matchesFilter && haystack.includes(query.trim().toLowerCase());
+  }).sort((a, b) => {
+    const priority = (value) => ['failed','delivery_failed','running','queued','waiting'].includes(String(value.status).toLowerCase()) ? 1 : 0;
+    return priority(b) - priority(a) || new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
-  $: kpiCards = [
-    { icon: 'history', label: $t('recordsTotal'), value: history.length, sub: $t('recordsTotalSub') },
-    { icon: 'check', label: $t('completedCount'), value: history.filter((i) => i.status === 'completed').length, sub: $t('completedCountSub') },
-    { icon: 'alert', label: $t('failedCount'), value: history.filter((i) => i.status === 'failed').length, sub: $t('failedCountSub') },
-    { icon: 'page', label: $t('filteredCount'), value: filtered.length, sub: $t('filteredCountSub') }
-  ];
+  $: groups = groupItems(filtered);
 
-  function shortId(id) {
-    return String(id || '').slice(0, 8);
+  function dateOf(item) { const raw = item.created_at || item.updated_at; return raw ? new Date(raw.endsWith?.('Z') || raw.includes?.('+') ? raw : `${raw}Z`) : new Date(0); }
+  function groupItems(list) {
+    const result = { today: [], yesterday: [], older: [] };
+    const now = new Date(); const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    list.forEach((item) => { const date = dateOf(item); (date >= today ? result.today : date >= yesterday ? result.yesterday : result.older).push(item); });
+    return result;
   }
-
-  function formatTime(value) {
-    if (!value) return '—';
-    try {
-      return new Date(value.endsWith('Z') || value.includes('+') ? value : `${value}Z`).toLocaleString();
-    } catch {
-      return value;
-    }
-  }
-
-  function canRetry(item) {
-    return item.status === 'failed' || (item.message || '').toLowerCase().includes('upload failed');
-  }
-
-  async function refresh() {
-    onHistory(await api.getHistory());
-  }
-
-  async function clearCompleted() {
-    try {
-      await api.clearHistory();
-      await refresh();
-      onNotify($t('historyCleared'), 'success');
-    } catch (error) {
-      onNotify(error.message, 'error');
-    }
-  }
-
-  async function del(id) {
-    try {
-      await api.deleteHistoryJob(id);
-      await refresh();
-      onNotify($t('deletedRecord', { id: shortId(id) }), 'success');
-    } catch (error) {
-      onNotify(error.message, 'error');
-    }
-  }
-
-  async function retry(id) {
-    try {
-      await api.retryUpload(id);
-      await refresh();
-      onNotify($t('retryRequested', { id: shortId(id) }), 'success');
-    } catch (error) {
-      onNotify(error.message, 'error');
-    }
-  }
+  function tone(status) { status = String(status).toLowerCase(); return status === 'completed' ? 'success' : ['failed','delivery_failed'].includes(status) ? 'danger' : 'active'; }
+  function title(item) { return item.metadata?.filename_prefix || item.metadata?.filename || c.unknown; }
+  async function refresh() { onHistory(await api.getHistory()); }
+  async function retry(id) { try { await api.retryUpload(id); await refresh(); onNotify(c.retry, 'success'); } catch (error) { onNotify(error.message, 'error'); } }
+  async function remove(id) { try { await api.deleteHistoryJob(id); await refresh(); onNotify(c.remove, 'success'); } catch (error) { onNotify(error.message, 'error'); } }
 </script>
 
-<StatGrid cards={kpiCards} />
+<div class="history-tools"><div class="search-box"><Icon name="scan" size={17} /><input bind:value={query} placeholder={c.search} /></div><div class="choice-pills compact"><button class:active={filter === 'all'} on:click={() => filter = 'all'}>{c.all}</button><button class:active={filter === 'attention'} on:click={() => filter = 'attention'}>{c.attention}</button><button class:active={filter === 'success'} on:click={() => filter = 'success'}>{c.success}</button></div></div>
 
-<Card title={$t('historyTitle')} subtitle={$t('historySub')}>
-  <div class="row gap wrap">
-    <input class="search" bind:value={query} placeholder={$t('searchPlaceholder')} />
-    <select bind:value={status}>
-      <option value="all">{$t('allStatuses')}</option>
-      {#each ['completed', 'failed', 'running', 'queued', 'cancelled'] as s}
-        <option value={s}>{$t(`status_${s}`)}</option>
+{#if !filtered.length}<div class="empty-state"><Icon name="history" size={28} />{c.empty}</div>{/if}
+{#each [['today', c.today], ['yesterday', c.yesterday], ['older', c.older]] as group}
+  {#if groups[group[0]].length}
+    <section class="history-group"><h2>{group[1]}</h2><div class="history-list">
+      {#each groups[group[0]] as item (item.id)}
+        <article class="history-card"><div class="history-thumb"><img src={api.jobThumbnailUrl(item.id)} alt="" on:error={(event) => event.currentTarget.classList.add('hidden')} /><Icon name="page" size={22} /></div><div class="history-copy"><div><strong>{title(item)}</strong><span class="status-chip {tone(item.status)}">{String(item.status || '').replace('_', ' ')}</span></div><p>{dateOf(item).toLocaleString()} · {item.target_id || '—'}{#if item.metadata?.pages} · {item.metadata.pages} {c.pages}{/if}</p>{#if item.message}<small>{item.message}</small>{/if}</div><div class="history-actions">{#if ['failed','delivery_failed'].includes(String(item.status).toLowerCase())}<button class="btn secondary" on:click={() => retry(item.id)}><Icon name="upload" size={15} />{c.retry}</button>{/if}<button class="icon-button danger-text" title={c.remove} on:click={() => remove(item.id)}><Icon name="trash" size={16} /></button></div></article>
       {/each}
-    </select>
-    <button class="btn ghost" on:click={refresh}><Icon name="refresh" size={14} /> {$t('refreshData')}</button>
-    <button class="btn danger" on:click={clearCompleted}><Icon name="trash" size={14} /> {$t('clearCompleted')}</button>
-  </div>
-
-  <div class="table-wrap top-gap">
-    <table>
-      <thead>
-        <tr>
-          <th>{$t('thumbnail')}</th>
-          <th>{$t('idLabel')}</th>
-          <th>Status</th>
-          <th>{$t('device')}</th>
-          <th>{$t('target')}</th>
-          <th>{$t('created')}</th>
-          <th>{$t('actions')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#if filtered.length === 0}
-          <tr><td colspan="7" class="muted">{$t('noRecords')}</td></tr>
-        {/if}
-        {#each filtered as item (item.id)}
-          <tr>
-            <td>
-              <img
-                class="job-thumb"
-                src={api.jobThumbnailUrl(item.id)}
-                alt={$t('thumbnail')}
-                loading="lazy"
-                on:error={(e) => (e.target.style.display = 'none')}
-              />
-            </td>
-            <td class="id-cell" title={item.id}>{shortId(item.id)}</td>
-            <td>
-              <Badge tone={statusTone(item.status)} text={$t(statusKey(item.status))} />
-              {#if item.message}<p class="muted small warn-text">{item.message}</p>{/if}
-            </td>
-            <td class="truncate">{item.device_id || '—'}</td>
-            <td>{item.target_id || '—'}</td>
-            <td>{formatTime(item.created_at)}</td>
-            <td>
-              <div class="row gap">
-                {#if canRetry(item)}
-                  <button class="btn ghost small-btn" on:click={() => retry(item.id)}>
-                    <Icon name="upload" size={14} /> {$t('retryUpload')}
-                  </button>
-                {/if}
-                <button class="btn danger small-btn" on:click={() => del(item.id)}>
-                  <Icon name="trash" size={14} />
-                </button>
-              </div>
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
-</Card>
+    </div></section>
+  {/if}
+{/each}

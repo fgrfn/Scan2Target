@@ -1,67 +1,16 @@
 <script>
   import Icon from '../ui/Icon.svelte';
-  import { t } from '../../lib/i18n';
-
+  import { lang } from '../../lib/i18n';
   export let pages = [];
-  export let current = 'dashboard';
+  export let current = 'scan';
   export let wsConnected = false;
   export let onNavigate = () => {};
-
-  const labelKeys = {
-    dashboard: 'dashboard',
-    'new-scan': 'newScan',
-    history: 'history',
-    devices: 'devices',
-    targets: 'targets',
-    statistics: 'statistics',
-    settings: 'settings'
-  };
-
-  $: scanPages = pages.filter((p) => p.group === 'scan');
-  $: managePages = pages.filter((p) => p.group === 'manage');
+  $: labels = $lang === 'de' ? { scan: 'Scannen', history: 'Verlauf', manage: 'Verwalten', settings: 'Einstellungen', ready: 'Bereit', offline: 'Offline' } : { scan: 'Scan', history: 'History', manage: 'Manage', settings: 'Settings', ready: 'Ready', offline: 'Offline' };
 </script>
-
 <aside class="sidebar">
-  <div class="brand-card">
-    <div class="logo-mark">S2</div>
-    <div class="brand-text">
-      <div class="logo-title">{$t('appName')}</div>
-      <div class="logo-subtitle">{$t('appTagline')}</div>
-    </div>
-  </div>
-
-  <div>
-    <div class="sidebar-section-label">{$t('navScan')}</div>
-    <nav aria-label={$t('navScan')}>
-      {#each scanPages as item}
-        <button class="nav-item" class:item-active={item.id === current} on:click={() => onNavigate(item.id)}>
-          <span class="nav-icon"><Icon name={item.icon} /></span>
-          <span class="nav-label">{$t(labelKeys[item.id] || item.id)}</span>
-          <span class="nav-dot" aria-hidden="true"></span>
-        </button>
-      {/each}
-    </nav>
-  </div>
-
-  <div>
-    <div class="sidebar-section-label">{$t('navManage')}</div>
-    <nav aria-label={$t('navManage')}>
-      {#each managePages as item}
-        <button class="nav-item" class:item-active={item.id === current} on:click={() => onNavigate(item.id)}>
-          <span class="nav-icon"><Icon name={item.icon} /></span>
-          <span class="nav-label">{$t(labelKeys[item.id] || item.id)}</span>
-          <span class="nav-dot" aria-hidden="true"></span>
-        </button>
-      {/each}
-    </nav>
-  </div>
-
-  <div class="sidebar-footer">
-    <div class="mini-panel">
-      <div class="mini-panel-row">
-        <span>{wsConnected ? $t('liveConnectedHint') : $t('liveDisconnectedHint')}</span>
-        <span class="status-dot" class:offline={!wsConnected}></span>
-      </div>
-    </div>
-  </div>
+  <button class="brand" on:click={() => onNavigate('scan')}><span class="logo-mark">S2</span><span><strong>Scan2Target</strong><small>Scan appliance</small></span></button>
+  <nav aria-label="Main navigation">
+    {#each pages as item}<button class:active={current === item.id} on:click={() => onNavigate(item.id)}><Icon name={item.icon} /><span>{labels[item.id]}</span></button>{/each}
+  </nav>
+  <div class="sidebar-status"><span class:offline={!wsConnected}></span>{wsConnected ? labels.ready : labels.offline}</div>
 </aside>

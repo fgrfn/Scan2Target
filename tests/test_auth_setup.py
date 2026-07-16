@@ -12,11 +12,13 @@ def _build_client(tmp_path, monkeypatch):
 
     from core.config.settings import get_settings
     import core.auth.manager as auth_manager_module
+    import core.config.runtime as runtime_module
     import core.database as database_module
 
     get_settings.cache_clear()
     database_module._db_instance = None
     auth_manager_module._auth_manager = None
+    runtime_module._runtime_config = None
 
     from api.auth import router, _login_failures
 
@@ -73,3 +75,43 @@ def test_jwt_secret_survives_auth_manager_recreation(tmp_path, monkeypatch):
 
     auth_manager_module._auth_manager = None
     assert auth_manager_module.get_auth_manager().verify_token(token) is not None
+
+
+def test_admin_can_manage_account_and_runtime_auth(tmp_path, monkeypatch):
+    client, _ = _build_client(tmp_path, monkeypatch)
+    created = client.post(
+        "/api/v1/auth/setup",
+        json={"username": "admin", "password": "SecurePassword123", "email": None},
+    )
+    token = created.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert client.get("/api/v1/auth/config").json()["enabled"] is True
+    disabled = client.put(
+        "/api/v1/auth/config", json={"enabled": False}, headers=headers
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["enabled"] is False
+
+    updated = client.patch(
+        "/api/v1/auth/account",
+        json={
+            "current_password": "SecurePassword123",
+            "username": "operator",
+            "email": "operator@example.invalid",
+            "new_password": "EvenSaferPassword456",
+        },
+        headers=headers,
+    )
+    assert updated.status_code == 200
+    rotated = updated.json()["access_token"]
+    assert rotated != token
+    assert updated.json()["user"]["username"] == "operator"
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": "SecurePassword123"},
+    ).status_code == 401
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "operator", "password": "EvenSaferPassword456"},
+    ).status_code == 200
