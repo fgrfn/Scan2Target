@@ -104,3 +104,27 @@ class UserRepository:
         with self.db.get_connection() as conn:
             row = conn.execute("SELECT COUNT(*) AS count FROM users").fetchone()
             return int(row['count'])
+
+    def update_account(
+        self,
+        user_id: int,
+        username: str,
+        email: str | None,
+        password_hash: str | None = None,
+    ) -> User:
+        """Update the single operator account and optionally its password."""
+        with self.db.get_connection() as conn:
+            if password_hash:
+                conn.execute(
+                    "UPDATE users SET username = ?, email = ?, password_hash = ? WHERE id = ?",
+                    (username, email, password_hash, user_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET username = ?, email = ? WHERE id = ?",
+                    (username, email, user_id),
+                )
+        user = self.get_by_id(user_id)
+        if not user:
+            raise ValueError("User not found")
+        return user

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import re
 import shutil
@@ -10,9 +11,11 @@ import tempfile
 import threading
 import uuid
 from pathlib import Path
+from io import BytesIO
 from typing import List
 
 import requests
+from PIL import Image
 
 from core.config.settings import get_settings
 from core.delivery.retry import get_delivery_retry_service
@@ -109,6 +112,75 @@ class ScannerManager:
 
     def list_jobs(self) -> List[JobRecord]:
         return JobManager().list_jobs(job_type="scan")
+
+    def capture_pages(
+        self,
+        device_id: str,
+        profile_id: str,
+        source: str | None = None,
+        batch: bool = False,
+    ) -> list[str]:
+        """Capture browser-editable JPEG pages without creating a delivery job."""
+        device_lock = self._device_lock(device_id)
+        if not device_lock.acquire(blocking=False):
+            raise RuntimeError("Scanner is busy")
+
+        work_dir = Path(tempfile.mkdtemp(prefix="scan2target-capture-"))
+        try:
+            profile = self.resolve_profile(profile_id)
+            scan_source = source or profile.get("source", "Flatbed")
+            common = [
+                "scanimage",
+                "--device-name",
+                device_id,
+                "--resolution",
+                str(profile.get("dpi", 200)),
+                "--mode",
+                str(profile.get("color_mode", "Gray")),
+                "--format",
+                "tiff",
+            ]
+            if scan_source:
+                common.extend(["--source", scan_source])
+
+            if batch:
+                pattern = work_dir / "page%03d.tiff"
+                result = subprocess.run(
+                    [*common, f"--batch={pattern}"],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+                files = [path for path in sorted(work_dir.glob("page*.tiff")) if path.stat().st_size]
+            else:
+                page = work_dir / "page001.tiff"
+                with page.open("wb") as output:
+                    result = subprocess.run(common, stdout=output, stderr=subprocess.PIPE, timeout=120)
+                files = [page] if page.exists() and page.stat().st_size else []
+
+            if result.returncode != 0:
+                error = result.stderr or result.stdout or b"Scan failed"
+                if isinstance(error, bytes):
+                    error = error.decode("utf-8", errors="replace")
+                raise RuntimeError(str(error).strip())
+            if not files:
+                raise RuntimeError("No pages were scanned")
+
+            pages: list[str] = []
+            for path in files[:100]:
+                with Image.open(path) as image:
+                    output = BytesIO()
+                    image.convert("RGB").save(
+                        output,
+                        format="JPEG",
+                        quality=int(profile.get("quality", 85)),
+                    )
+                encoded = base64.b64encode(output.getvalue()).decode("ascii")
+                pages.append(f"data:image/jpeg;base64,{encoded}")
+            return pages
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+            device_lock.release()
 
     def get_job(self, job_id: str) -> JobRecord | None:
         return JobManager().get_job(job_id)

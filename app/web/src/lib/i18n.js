@@ -673,9 +673,10 @@ const dictionaries = { en, de };
 const persisted = (() => {
   try {
     const value = localStorage.getItem('scan2target_lang');
-    return value === 'de' || value === 'en' ? value : 'en';
+    if (value === 'de' || value === 'en') return value;
+    return navigator.language?.toLowerCase().startsWith('de') ? 'de' : 'en';
   } catch {
-    return 'en';
+    return typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('de') ? 'de' : 'en';
   }
 })();
 

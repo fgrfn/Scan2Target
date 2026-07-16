@@ -64,6 +64,17 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ username, password })
   }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
+  getAuthConfig: () => request('/auth/config'),
+  getMe: () => request('/auth/me'),
+  setAuthConfig: (enabled) => request('/auth/config', {
+    method: 'PUT',
+    body: JSON.stringify({ enabled })
+  }),
+  updateAccount: (payload) => request('/auth/account', {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  }),
 
   getVersion: () => request('/version'),
 
@@ -96,6 +107,7 @@ export const api = {
   startScan: (payload) => request('/scan/start', { method: 'POST', body: JSON.stringify(payload) }),
   scanPreview: (payload) => request('/scan/preview', { method: 'POST', body: JSON.stringify(payload) }),
   scanPage: (payload) => request('/scan/page', { method: 'POST', body: JSON.stringify(payload) }),
+  capturePages: (payload) => request('/scan/capture-pages', { method: 'POST', body: JSON.stringify(payload) }),
   startBatchScan: (payload) => request('/scan/batch', { method: 'POST', body: JSON.stringify(payload) }),
   getJobs: () => request('/scan/jobs'),
   cancelJob: (id) => request(`/scan/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),

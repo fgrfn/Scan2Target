@@ -3,24 +3,21 @@ import { api, setToken, getToken, setUnauthorizedHandler } from '../lib/api';
 import { isActive } from '../lib/status';
 
 export const pages = [
-  { id: 'dashboard', icon: 'dashboard', group: 'scan' },
-  { id: 'new-scan', icon: 'scan', group: 'scan' },
-  { id: 'history', icon: 'history', group: 'scan' },
-  { id: 'devices', icon: 'devices', group: 'manage' },
-  { id: 'targets', icon: 'targets', group: 'manage' },
-  { id: 'statistics', icon: 'stats', group: 'manage' },
-  { id: 'settings', icon: 'settings', group: 'manage' }
+  { id: 'scan', icon: 'scan' },
+  { id: 'history', icon: 'history' },
+  { id: 'manage', icon: 'devices' },
+  { id: 'settings', icon: 'settings' }
 ];
 
 const SETTINGS_KEY = 'scan2target_settings';
 
 function loadSettings() {
-  const defaults = { autoRefresh: true, compactTables: false };
+  const defaults = { autoRefresh: true, compactTables: false, theme: 'system' };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return defaults;
     const parsed = JSON.parse(raw);
-    return { autoRefresh: parsed.autoRefresh !== false, compactTables: parsed.compactTables === true };
+    return { ...defaults, ...parsed, autoRefresh: parsed.autoRefresh !== false, compactTables: parsed.compactTables === true };
   } catch {
     return defaults;
   }
@@ -38,7 +35,7 @@ const TERMINAL_STATUSES = ['completed', 'delivery_failed', 'failed', 'cancelled'
 
 function createAppStore() {
   const store = writable({
-    page: 'dashboard',
+    page: 'scan',
     version: '',
     devices: [],
     targets: [],
@@ -51,6 +48,7 @@ function createAppStore() {
     toast: null,
     wsConnected: false,
     authRequired: false,
+    authConfig: { enabled: true, setup_required: false },
     settings: loadSettings()
   });
   const { subscribe, update } = store;
@@ -63,6 +61,18 @@ function createAppStore() {
       update((s) => ({ ...s, version: payload?.version || s.version }));
     } catch {
       // Version is non-critical for the UI.
+    }
+  };
+
+  const loadAuthConfig = async () => {
+    try {
+      const authConfig = await api.getAuthConfig();
+      update((s) => ({ ...s, authConfig }));
+      if (authConfig.enabled && authConfig.setup_required) {
+        update((s) => ({ ...s, authRequired: true }));
+      }
+    } catch {
+      // The login overlay is still raised by protected API calls when required.
     }
   };
 
@@ -212,11 +222,13 @@ function createAppStore() {
     notify,
     clearToast: () => update((s) => ({ ...s, toast: null })),
     refreshAll: async () => {
+      await loadAuthConfig();
       await loadVersion();
       await loadCore();
       await loadStats();
     },
     loadCore,
+    loadAuthConfig,
     loadStats,
     startWebSocket,
     reconnectWebSocket,
@@ -225,7 +237,8 @@ function createAppStore() {
     activeJobCount: () => get(store).jobs.filter((j) => isActive(j.status)).length,
     setAuthRequired: (value) => update((s) => ({ ...s, authRequired: value })),
     hasToken: () => Boolean(getToken()),
-    logout: () => {
+    logout: async () => {
+      try { await api.logout(); } catch { /* token is cleared locally either way */ }
       setToken(null);
       reconnectWebSocket();
       update((s) => ({ ...s, authRequired: false }));

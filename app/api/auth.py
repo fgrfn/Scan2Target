@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from core.auth.dependencies import get_current_admin_user, get_current_user
 from core.auth.manager import get_auth_manager
 from core.auth.models import User
+from core.config.runtime import get_runtime_config
 
 router = APIRouter()
 security = HTTPBearer()
@@ -47,6 +48,22 @@ class UserResponse(BaseModel):
 
 class SetupStatusResponse(BaseModel):
     setup_required: bool
+
+
+class AuthConfigResponse(BaseModel):
+    enabled: bool
+    setup_required: bool
+
+
+class AuthConfigUpdate(BaseModel):
+    enabled: bool
+
+
+class AccountUpdateRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    username: str = Field(min_length=3, max_length=64)
+    email: str | None = Field(default=None, max_length=254)
+    new_password: str | None = Field(default=None, min_length=12, max_length=256)
 
 
 def _validate_new_credentials(payload: RegisterRequest) -> None:
@@ -102,6 +119,53 @@ def _token_response(user: User, token: str) -> TokenResponse:
 async def setup_status():
     """Report whether a fresh installation needs its first administrator."""
     return SetupStatusResponse(setup_required=get_auth_manager().setup_required())
+
+
+@router.get("/config", response_model=AuthConfigResponse)
+async def auth_config():
+    return AuthConfigResponse(
+        enabled=get_runtime_config().auth_enabled,
+        setup_required=get_auth_manager().setup_required(),
+    )
+
+
+@router.put("/config", response_model=AuthConfigResponse)
+async def update_auth_config(
+    payload: AuthConfigUpdate,
+    _admin: User = Depends(get_current_admin_user),
+):
+    get_runtime_config().set_auth_enabled(payload.enabled)
+    return AuthConfigResponse(
+        enabled=get_runtime_config().auth_enabled,
+        setup_required=get_auth_manager().setup_required(),
+    )
+
+
+@router.patch("/account", response_model=TokenResponse)
+async def update_account(
+    payload: AccountUpdateRequest,
+    current_user: User = Depends(get_current_admin_user),
+):
+    candidate = RegisterRequest(
+        username=payload.username,
+        password=payload.new_password or payload.current_password,
+        email=payload.email,
+    )
+    if payload.new_password:
+        _validate_new_credentials(candidate)
+    elif not _USERNAME_RE.fullmatch(payload.username):
+        raise HTTPException(status_code=422, detail="Invalid username")
+    try:
+        user, token = get_auth_manager().update_account(
+            current_user,
+            payload.current_password,
+            payload.username,
+            payload.email,
+            payload.new_password,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _token_response(user, token)
 
 
 @router.post("/setup", response_model=TokenResponse, status_code=201)
