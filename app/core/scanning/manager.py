@@ -119,6 +119,7 @@ class ScannerManager:
         profile_id: str,
         source: str | None = None,
         batch: bool = False,
+        cancellation_id: str | None = None,
     ) -> list[str]:
         """Capture browser-editable JPEG pages without creating a delivery job."""
         device_lock = self._device_lock(device_id)
@@ -145,20 +146,38 @@ class ScannerManager:
 
             if batch:
                 pattern = work_dir / "page%03d.tiff"
-                result = subprocess.run(
-                    [*common, f"--batch={pattern}"],
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
+                command = [*common, f"--batch={pattern}"]
+                result = (
+                    run_cancellable(
+                        cancellation_id,
+                        command,
+                        capture_output=True,
+                        text=True,
+                        timeout=300,
+                    )
+                    if cancellation_id
+                    else subprocess.run(command, capture_output=True, text=True, timeout=300)
                 )
                 files = [path for path in sorted(work_dir.glob("page*.tiff")) if path.stat().st_size]
             else:
                 page = work_dir / "page001.tiff"
                 with page.open("wb") as output:
-                    result = subprocess.run(common, stdout=output, stderr=subprocess.PIPE, timeout=120)
+                    result = (
+                        run_cancellable(
+                            cancellation_id,
+                            common,
+                            stdout=output,
+                            stderr=subprocess.PIPE,
+                            timeout=120,
+                        )
+                        if cancellation_id
+                        else subprocess.run(
+                            common, stdout=output, stderr=subprocess.PIPE, timeout=120
+                        )
+                    )
                 files = [page] if page.exists() and page.stat().st_size else []
 
-            if result.returncode != 0:
+            if result.returncode != 0 and not (batch and files):
                 error = result.stderr or result.stdout or b"Scan failed"
                 if isinstance(error, bytes):
                     error = error.decode("utf-8", errors="replace")
@@ -181,6 +200,8 @@ class ScannerManager:
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)
             device_lock.release()
+            if cancellation_id:
+                get_process_registry().finish(cancellation_id)
 
     def get_job(self, job_id: str) -> JobRecord | None:
         return JobManager().get_job(job_id)

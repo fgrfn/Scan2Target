@@ -17,7 +17,19 @@ APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
-from api import auth, devices, history, homeassistant, maintenance, profiles, scan, stats, targets, websocket
+from api import (
+    auth,
+    devices,
+    history,
+    homeassistant,
+    maintenance,
+    profiles,
+    scan,
+    scan_sessions,
+    stats,
+    targets,
+    websocket,
+)
 from core.config.runtime import get_runtime_config
 from core.config.settings import get_settings
 from core.delivery.retry import get_delivery_retry_service
@@ -161,6 +173,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(scan.router, prefix="/api/v1/scan", tags=["scan"])
+    app.include_router(scan_sessions.router, prefix="/api/v1/scan", tags=["scan-sessions"])
     app.include_router(profiles.router, prefix="/api/v1/profiles", tags=["profiles"])
     app.include_router(devices.router, prefix="/api/v1/devices", tags=["devices"])
     app.include_router(targets.router, prefix="/api/v1/targets", tags=["targets"])

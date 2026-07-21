@@ -17,7 +17,7 @@ Migration = tuple[int, str, Callable[[sqlite3.Connection], None]]
 class Database:
     """SQLite connection manager with transactional schema migrations."""
 
-    LATEST_SCHEMA_VERSION = 3
+    LATEST_SCHEMA_VERSION = 4
 
     def __init__(self, db_path: str = "scan2target.db"):
         self.db_path = Path(db_path)
@@ -63,6 +63,7 @@ class Database:
             (1, "baseline schema", self._migration_baseline),
             (2, "persistent delivery retries", self._migration_delivery_retries),
             (3, "delivery attempt audit log", self._migration_delivery_attempts),
+            (4, "persistent scan sessions", self._migration_scan_sessions),
         ]
         pending = [migration for migration in migrations if migration[0] > current]
         if not pending:
@@ -231,6 +232,40 @@ class Database:
             """
         )
 
+    def _migration_scan_sessions(self, conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS scan_sessions (
+                id TEXT PRIMARY KEY,
+                device_id TEXT NOT NULL,
+                device_uri TEXT NOT NULL,
+                profile_id TEXT NOT NULL,
+                target_id TEXT,
+                source TEXT NOT NULL,
+                capture_mode TEXT NOT NULL,
+                status TEXT NOT NULL,
+                options_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS scan_session_pages (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                file_path TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (session_id) REFERENCES scan_sessions(id) ON DELETE CASCADE,
+                UNIQUE(session_id, position)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_scan_sessions_status_updated
+                ON scan_sessions(status, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_scan_session_pages_order
+                ON scan_session_pages(session_id, position);
+            """
+        )
+
     def create_backup(self, label: str = "manual") -> Path:
         """Create a consistent SQLite backup and return its path."""
         safe_label = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in label)[:40]
@@ -281,7 +316,14 @@ class Database:
 
     def export_json(self) -> Path:
         """Export non-secret application data for diagnostics and migration."""
-        tables = ["jobs", "delivery_attempts", "devices", "scan_profiles"]
+        tables = [
+            "jobs",
+            "delivery_attempts",
+            "devices",
+            "scan_profiles",
+            "scan_sessions",
+            "scan_session_pages",
+        ]
         payload: dict[str, list[dict]] = {}
         with self.get_connection() as conn:
             for table in tables:
