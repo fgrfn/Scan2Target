@@ -63,6 +63,14 @@ Scan2Target is a web-based scan server for Linux systems, Raspberry Pi, and virt
 7. **Job Tracking**: Core/Jobs records status transitions (queued → running → completed/failed/cancelled) and stores metadata (scanner, profile, target, file path/URL). All timestamps stored as UTC. Jobs can be cancelled via `POST /api/v1/history/{id}/cancel` which stops the background task and updates status.
 8. **UI Feedback**: Clients poll `GET /api/v1/scan/jobs/{id}` or receive WebSocket events for progress. Frontend converts UTC timestamps to browser local time. Active scans show cancel button for immediate termination.
 
+### Guided Multi-Page Workflow
+1. `POST /api/v1/scan/sessions` creates a persistent SQLite session and a private directory below `/data/scan-sessions`.
+2. `POST /api/v1/scan/sessions/{id}/capture` stores one page in interactive mode or a complete ADF stack in automatic mode. Only authenticated thumbnail blobs are sent to the browser.
+3. Page rotation, deletion and ordering are persisted immediately. An active `scanimage` process is registered under the session ID and can be terminated by deleting the session.
+4. `GET /api/v1/scan/sessions` restores unfinished sessions after a browser or service restart. Sessions expire after `SCAN2TARGET_SCAN_SESSION_TTL_HOURS`.
+5. `POST /api/v1/scan/sessions/{id}/finalize` applies optional contrast/margin optimization and blank-page removal, creates one PDF, and optionally runs OCRmyPDF for deskewed searchable PDF/A-2 output.
+6. The resulting file enters the persistent delivery retry queue; temporary session pages are removed only after the delivery job has been created.
+
 ### Print Workflow
 1. **User Action**: Upload PDF/JPEG/PNG, choose printer and options.
 2. **API**: `POST /api/v1/print` stores the file (temp) and submits to CUPS via Core/Printing.
@@ -81,6 +89,12 @@ Scan2Target is a web-based scan server for Linux systems, Raspberry Pi, and virt
 - `GET /api/v1/scan/devices` — list discovered scanners and capabilities.
 - `GET /api/v1/scan/profiles` — list predefined scan profiles.
 - `POST /api/v1/scan/start` — start a scan with device/profile/target selection.
+- `GET /api/v1/scan/sessions` — list resumable multi-page sessions.
+- `POST /api/v1/scan/sessions` — create a persistent multi-page session.
+- `POST /api/v1/scan/sessions/{id}/capture` — capture one page or one ADF stack.
+- `PUT /api/v1/scan/sessions/{id}/pages` — persist page ordering.
+- `DELETE /api/v1/scan/sessions/{id}` — cancel the session and active scanner process.
+- `POST /api/v1/scan/sessions/{id}/finalize` — optimize, OCR, create and deliver the PDF.
 - `GET /api/v1/scan/jobs` — list scan jobs.
 - `GET /api/v1/scan/jobs/{id}` — job status & result link.
 - `GET /api/v1/printers` — list printers & status.
@@ -135,6 +149,7 @@ POST /api/v1/print
   - `ScanProfile`: id, dpi, color_mode, paper_size, format.
   - `Target`: id, type (local, smb, sftp, email, paperless_folder, paperless_api, webhook), config blob (encrypted fields for credentials), enabled flag.
   - `Job`: id, type (scan/print), device_id, target_id (scan), printer_id (print), file_path/url, status (queued/running/completed/failed/cancelled), timestamps, logs.
+  - `ScanSession`: id, scanner/profile/source, interactive or automatic capture mode, status, ordered server-side pages and timestamps.
 
 ## Security Model
 - **Auth:** Session or JWT tokens; password hashing via `argon2` or `bcrypt`; HTTPS recommended behind Caddy/nginx; optional IP allowlist enforced per request.
@@ -151,4 +166,4 @@ POST /api/v1/print
 - **Observability:** Health endpoint, metrics hook (e.g., Prometheus exporter) optional.
 
 ## Future Extensions
-- OCR sidecar service; cloud storage targets; hardware button support via GPIO; multi-tenant user roles.
+- Cloud storage targets; hardware button support via GPIO; multi-tenant user roles.

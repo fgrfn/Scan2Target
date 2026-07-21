@@ -18,6 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     sshpass \
     imagemagick \
+    ghostscript \
+    ocrmypdf \
+    tesseract-ocr \
+    tesseract-ocr-deu \
+    tesseract-ocr-eng \
     libsane1 \
     libsane-dev \
     curl \

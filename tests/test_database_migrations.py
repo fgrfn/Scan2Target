@@ -36,10 +36,17 @@ def test_legacy_database_is_backed_up_and_migrated(tmp_path):
     with database.get_connection() as migrated:
         version = migrated.execute("PRAGMA user_version").fetchone()[0]
         columns = {row[1] for row in migrated.execute("PRAGMA table_info(jobs)")}
+        tables = {
+            row[0]
+            for row in migrated.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
         legacy = migrated.execute("SELECT id, status FROM jobs WHERE id = 'legacy'").fetchone()
 
     assert version == Database.LATEST_SCHEMA_VERSION
     assert {"thumbnail_path", "retry_count", "next_retry_at", "metadata_json"} <= columns
+    assert {"scan_sessions", "scan_session_pages"} <= tables
     assert tuple(legacy) == ("legacy", "completed")
     assert database.list_backups()
     assert database.integrity_check()["ok"] is True

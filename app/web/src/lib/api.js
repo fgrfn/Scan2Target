@@ -53,6 +53,28 @@ async function request(path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+async function requestBlob(path) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (res.status === 401) {
+    if (unauthorizedHandler) unauthorizedHandler();
+    throw new Error('Unauthorized');
+  }
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      detail = data.detail || detail;
+    } catch {
+      // Ignore parse errors
+    }
+    throw new Error(detail);
+  }
+  return res.blob();
+}
+
 export const api = {
   // Auth
   getSetupStatus: () => request('/auth/setup-status'),
@@ -109,6 +131,16 @@ export const api = {
   scanPage: (payload) => request('/scan/page', { method: 'POST', body: JSON.stringify(payload) }),
   capturePages: (payload) => request('/scan/capture-pages', { method: 'POST', body: JSON.stringify(payload) }),
   startBatchScan: (payload) => request('/scan/batch', { method: 'POST', body: JSON.stringify(payload) }),
+  listScanSessions: () => request('/scan/sessions'),
+  createScanSession: (payload) => request('/scan/sessions', { method: 'POST', body: JSON.stringify(payload) }),
+  getScanSession: (id) => request(`/scan/sessions/${encodeURIComponent(id)}`),
+  captureScanSession: (id) => request(`/scan/sessions/${encodeURIComponent(id)}/capture`, { method: 'POST' }),
+  cancelScanSession: (id) => request(`/scan/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  removeScanSessionPage: (sessionId, pageId) => request(`/scan/sessions/${encodeURIComponent(sessionId)}/pages/${encodeURIComponent(pageId)}`, { method: 'DELETE' }),
+  rotateScanSessionPage: (sessionId, pageId) => request(`/scan/sessions/${encodeURIComponent(sessionId)}/pages/${encodeURIComponent(pageId)}/rotate`, { method: 'POST' }),
+  reorderScanSessionPages: (sessionId, pageIds) => request(`/scan/sessions/${encodeURIComponent(sessionId)}/pages`, { method: 'PUT', body: JSON.stringify({ page_ids: pageIds }) }),
+  scanSessionPageImage: (sessionId, pageId) => requestBlob(`/scan/sessions/${encodeURIComponent(sessionId)}/pages/${encodeURIComponent(pageId)}/image`),
+  finalizeScanSession: (id, payload) => request(`/scan/sessions/${encodeURIComponent(id)}/finalize`, { method: 'POST', body: JSON.stringify(payload) }),
   getJobs: () => request('/scan/jobs'),
   cancelJob: (id) => request(`/scan/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
   jobThumbnailUrl: (id) => `${API_BASE}/scan/jobs/${encodeURIComponent(id)}/thumbnail`,

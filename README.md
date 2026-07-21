@@ -29,6 +29,9 @@ email, document-management systems, cloud storage or webhooks.
 - Health monitoring and scanner reconnection
 - Low-resolution previews
 - Manual and automatic multi-page scanning
+- Restart-safe server-side scan sessions with resume and cancellation
+- Page reordering, rotation, blank-page removal and margin/contrast optimization
+- Optional searchable OCR and PDF/A-2 output (German and English)
 - Real-time job updates through authenticated WebSockets
 - Actual process termination when a running scan is cancelled
 
@@ -159,6 +162,7 @@ secret rather than generating a new value on every start.
 | `SCAN2TARGET_MAX_REQUEST_SIZE_MB` | `100` | Maximum HTTP request body size |
 | `SCAN2TARGET_MAX_BATCH_PAGE_MB` | `20` | Maximum decoded size of one manual page |
 | `SCAN2TARGET_MAX_BATCH_PAGES` | `100` | Maximum number of manual batch pages |
+| `SCAN2TARGET_SCAN_SESSION_TTL_HOURS` | `24` | Retention time for unfinished server-side scan sessions |
 | `SCAN2TARGET_DATA_DIR` | `/data` | Persistent application data directory |
 | `SCAN2TARGET_DATABASE_PATH` | `/data/db/scan2target.db` | SQLite database path |
 | `SCAN2TARGET_SCANNER_CHECK_INTERVAL` | `30` | Scanner reachability interval in seconds |

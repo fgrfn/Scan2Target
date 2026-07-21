@@ -24,6 +24,11 @@ def init_database():
     from core.scanning.profiles import get_profile_repository
 
     get_profile_repository().seed_defaults()
+    from core.scanning.sessions import ScanSessionService
+
+    recovered_sessions = ScanSessionService().recover_interrupted()
+    if recovered_sessions:
+        logger.warning("Recovered %s interrupted scan session(s)", recovered_sessions)
     logger.info("Built-in scan profiles seeded")
     logger.info("Database initialized successfully")
 

@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     max_request_size_mb: int = 100
     max_batch_page_mb: int = 20
     max_batch_pages: int = 100
+    scan_session_ttl_hours: int = 24
 
     # Persistent delivery retry queue
     retry_poll_interval: int = 15
