@@ -19,8 +19,7 @@
   let filename = '';
   let outputFormat = 'pdf';
   let advanced = false;
-  let adfState = 'fronts';
-  let frontPages = [];
+  let askForAnotherPage = false;
 
   $: copy = $lang === 'de' ? {
     title: 'Was möchtest du scannen?', lead: 'Wähle die Papierquelle – Scanner, Ziel und Qualität sind bereits sinnvoll vorbelegt.',
@@ -28,28 +27,28 @@
     quality: 'Inhalt', document: 'Dokument', color: 'Farbe', photo: 'Foto', advanced: 'Weitere Einstellungen',
     scanner: 'Scanner', target: 'Ziel', profile: 'Profil', preview: 'Vorschau', start: 'Scan starten', scanning: 'Scanner arbeitet …',
     captureTitle: 'Seiten prüfen', captureLead: 'Drehe, sortiere oder entferne Seiten, bevor du sie speicherst.',
-    addPage: 'Weitere Seite', backsQuestion: 'Haben die Blätter Rückseiten?', backsLead: 'Du kannst sie jetzt als zweiten Stapel erfassen.',
-    noBacks: 'Nein, weiter', addBacks: 'Rückseiten hinzufügen', flipTitle: 'Stapel wenden und neu einlegen',
-    flipLead: 'Lege den Stapel so in den Einzug, dass die Rückseiten in umgekehrter Reihenfolge gescannt werden. Scan2Target sortiert sie automatisch ein.',
-    scanBacks: 'Rückseiten scannen', page: 'Seite', rotate: 'Drehen', up: 'Nach vorne', down: 'Nach hinten', remove: 'Entfernen',
+    anotherQuestion: 'Möchtest du eine weitere Seite scannen?',
+    anotherLead: 'Lege die nächste Seite auf das Flachbett oder in den Dokumenteneinzug.',
+    addPage: 'Ja, weitere Seite scannen', finishPages: 'Nein, PDF erstellen',
+    page: 'Seite', rotate: 'Drehen', up: 'Nach vorne', down: 'Nach hinten', remove: 'Entfernen',
     continue: 'Weiter', back: 'Zurück', saveTitle: 'Dokument speichern', saveLead: 'Vergib einen eindeutigen Namen und prüfe das Ziel.',
     filename: 'Dateiname', filenameHint: 'Die Dateiendung wird automatisch ergänzt.', format: 'Format', save: 'Speichern', saving: 'Wird gespeichert …',
     required: 'Bitte einen Dateinamen eingeben.', saved: 'Scan wurde gespeichert und zugestellt.', noSetup: 'Richte zuerst mindestens einen Scanner und ein Ziel ein.',
-    manage: 'Jetzt einrichten', empty: 'Noch keine Seite erfasst.', captured: '{n} Seiten erfasst', mismatch: 'Die Anzahl der Vorder- und Rückseiten ist unterschiedlich. Bitte prüfe die Reihenfolge.'
+    manage: 'Jetzt einrichten', empty: 'Noch keine Seite erfasst.', captured: '{n} Seiten erfasst'
   } : {
     title: 'What would you like to scan?', lead: 'Choose the paper source – scanner, target and quality are already preselected.',
     flatbed: 'Flatbed', flatbedHint: 'Photos, receipts and single pages', adf: 'Document feeder', adfHint: 'Multiple pages as a stack',
     quality: 'Content', document: 'Document', color: 'Color', photo: 'Photo', advanced: 'More settings',
     scanner: 'Scanner', target: 'Target', profile: 'Profile', preview: 'Preview', start: 'Start scan', scanning: 'Scanner is working …',
     captureTitle: 'Review pages', captureLead: 'Rotate, reorder or remove pages before saving.',
-    addPage: 'Add another page', backsQuestion: 'Do the sheets have backsides?', backsLead: 'You can capture them now as a second stack.',
-    noBacks: 'No, continue', addBacks: 'Add backsides', flipTitle: 'Flip and reinsert the stack',
-    flipLead: 'Insert the stack so the backsides scan in reverse order. Scan2Target will interleave them automatically.',
-    scanBacks: 'Scan backsides', page: 'Page', rotate: 'Rotate', up: 'Move forward', down: 'Move back', remove: 'Remove',
+    anotherQuestion: 'Would you like to scan another page?',
+    anotherLead: 'Place the next page on the flatbed or in the document feeder.',
+    addPage: 'Yes, scan another page', finishPages: 'No, create PDF',
+    page: 'Page', rotate: 'Rotate', up: 'Move forward', down: 'Move back', remove: 'Remove',
     continue: 'Continue', back: 'Back', saveTitle: 'Save document', saveLead: 'Choose a clear filename and confirm the destination.',
     filename: 'Filename', filenameHint: 'The extension is added automatically.', format: 'Format', save: 'Save', saving: 'Saving …',
     required: 'Enter a filename.', saved: 'Scan was saved and delivered.', noSetup: 'Set up at least one scanner and one target first.',
-    manage: 'Set up now', empty: 'No page captured yet.', captured: '{n} pages captured', mismatch: 'Front and back page counts differ. Please review the order.'
+    manage: 'Set up now', empty: 'No page captured yet.', captured: '{n} pages captured'
   };
 
   $: devices = data.devices || [];
@@ -73,33 +72,19 @@
     profileId = (profilesFor(value)[0] || profiles[0])?.id || '';
   }
 
-  async function capture(batch = source === 'ADF') {
+  async function capture() {
     if (!deviceId || !profileId) return;
     busy = true;
+    askForAnotherPage = false;
     preview = '';
     try {
-      const result = await api.capturePages({ device_id: deviceId, profile_id: profileId, source, batch });
-      if (source === 'ADF' && adfState === 'backs') {
-        const backs = [...result.pages].reverse();
-        const interleaved = [];
-        const count = Math.max(frontPages.length, backs.length);
-        for (let index = 0; index < count; index += 1) {
-          if (frontPages[index]) interleaved.push(frontPages[index]);
-          if (backs[index]) interleaved.push(backs[index]);
-        }
-        pages = interleaved;
-        adfState = 'done';
-        if (frontPages.length !== backs.length) onNotify(copy.mismatch, 'warning');
-      } else if (source === 'ADF') {
-        pages = result.pages;
-        frontPages = [...result.pages];
-        adfState = 'question';
-      } else {
-        pages = [...pages, ...result.pages];
-      }
+      const result = await api.capturePages({ device_id: deviceId, profile_id: profileId, source, batch: false });
+      pages = [...pages, ...result.pages];
       step = 2;
+      askForAnotherPage = true;
     } catch (error) {
       onNotify(error.message, 'error');
+      askForAnotherPage = pages.length > 0;
     } finally {
       busy = false;
     }
@@ -140,8 +125,11 @@
     pages = updated;
   }
 
-  function openBacks() { adfState = 'backs'; }
-  function proceed() { step = 3; outputFormat = pages.length > 1 ? 'pdf' : (category === 'photo' ? 'jpeg' : 'pdf'); }
+  function proceed() {
+    askForAnotherPage = false;
+    step = 3;
+    outputFormat = pages.length > 1 ? 'pdf' : (category === 'photo' ? 'jpeg' : 'pdf');
+  }
 
   async function saveDocument() {
     if (!filename.trim()) { onNotify(copy.required, 'error'); return; }
@@ -153,7 +141,7 @@
         page_urls: pages, output_format: pages.length > 1 ? 'pdf' : outputFormat
       });
       onNotify(copy.saved, 'success');
-      pages = []; frontPages = []; filename = ''; adfState = 'fronts'; step = 1;
+      pages = []; filename = ''; askForAnotherPage = false; step = 1;
       onNavigate('history');
     } catch (error) { onNotify(error.message, 'error'); }
     finally { busy = false; }
@@ -199,15 +187,13 @@
       {#if preview}<div class="preview-frame"><img src={preview} alt={copy.preview} /></div>{/if}
       <div class="flow-actions">
         {#if source === 'Flatbed'}<button class="btn secondary" disabled={busy} on:click={scanPreview}>{copy.preview}</button>{/if}
-        <button class="btn primary large" disabled={busy} on:click={() => capture(source === 'ADF')}><Icon name="scan" />{busy ? copy.scanning : copy.start}</button>
+        <button class="btn primary large" disabled={busy} on:click={capture}><Icon name="scan" />{busy ? copy.scanning : copy.start}</button>
       </div>
     {/if}
   {:else if step === 2}
     <div class="flow-heading"><span class="eyebrow">2 / 3</span><h2>{copy.captureTitle}</h2><p>{copy.captureLead}</p></div>
-    {#if adfState === 'question'}
-      <div class="decision-card"><Icon name="page" size={32} /><h3>{copy.backsQuestion}</h3><p>{copy.backsLead}</p><div class="flow-actions"><button class="btn secondary" on:click={() => adfState = 'done'}>{copy.noBacks}</button><button class="btn primary" on:click={openBacks}>{copy.addBacks}</button></div></div>
-    {:else if adfState === 'backs'}
-      <div class="decision-card"><div class="flip-icon">↻</div><h3>{copy.flipTitle}</h3><p>{copy.flipLead}</p><button class="btn primary large" disabled={busy} on:click={() => capture(true)}>{busy ? copy.scanning : copy.scanBacks}</button></div>
+    {#if askForAnotherPage}
+      <div class="decision-card"><Icon name="page" size={32} /><h3>{copy.anotherQuestion}</h3><p>{copy.anotherLead}</p><div class="flow-actions"><button class="btn secondary" disabled={busy || !pages.length} on:click={proceed}>{copy.finishPages}</button><button class="btn primary" disabled={busy} on:click={capture}>{busy ? copy.scanning : copy.addPage}</button></div></div>
     {/if}
     <div class="page-count">{copy.captured.replace('{n}', pages.length)}</div>
     {#if pages.length}
@@ -217,7 +203,7 @@
         {/each}
       </div>
     {:else}<div class="empty-state">{copy.empty}</div>{/if}
-    <div class="flow-actions between"><button class="btn secondary" on:click={() => step = 1}>{copy.back}</button><div>{#if source === 'Flatbed'}<button class="btn secondary" disabled={busy} on:click={() => capture(false)}>{copy.addPage}</button>{/if}<button class="btn primary" disabled={!pages.length || adfState === 'backs'} on:click={proceed}>{copy.continue}</button></div></div>
+    <div class="flow-actions"><button class="btn secondary" disabled={busy} on:click={() => step = 1}>{copy.back}</button></div>
   {:else}
     <div class="flow-heading"><span class="eyebrow">3 / 3</span><h2>{copy.saveTitle}</h2><p>{copy.saveLead}</p></div>
     <div class="save-card">
@@ -226,6 +212,6 @@
       <label>{copy.target}<select bind:value={targetId}>{#each targets as item}<option value={item.id}>{item.name}</option>{/each}</select></label>
       <div class="summary-row"><span>{pages.length} × {copy.page}</span><span>{source}</span></div>
     </div>
-    <div class="flow-actions between"><button class="btn secondary" on:click={() => step = 2}>{copy.back}</button><button class="btn primary large" disabled={busy || !filename.trim()} on:click={saveDocument}><Icon name="upload" />{busy ? copy.saving : copy.save}</button></div>
+    <div class="flow-actions between"><button class="btn secondary" on:click={() => { step = 2; askForAnotherPage = true; }}>{copy.back}</button><button class="btn primary large" disabled={busy || !filename.trim()} on:click={saveDocument}><Icon name="upload" />{busy ? copy.saving : copy.save}</button></div>
   {/if}
 </section>
