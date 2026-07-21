@@ -11,10 +11,14 @@ const port = 4174;
 const origin = `http://127.0.0.1:${port}`;
 let server;
 let browser;
+let serverOutput = '';
 
 async function waitForServer() {
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
+    if (server.exitCode !== null) {
+      throw new Error(`Vite preview server exited with code ${server.exitCode}\n${serverOutput}`);
+    }
     try {
       const response = await fetch(origin);
       if (response.ok) return;
@@ -28,10 +32,12 @@ async function waitForServer() {
 
 before(async () => {
   const vite = path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
-  server = spawn(process.execPath, [vite, '--host', '127.0.0.1', '--port', String(port)], {
+  server = spawn(process.execPath, [vite, 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
     cwd: root,
-    stdio: 'ignore'
+    stdio: ['ignore', 'pipe', 'pipe']
   });
+  server.stdout.on('data', (chunk) => { serverOutput += chunk.toString(); });
+  server.stderr.on('data', (chunk) => { serverOutput += chunk.toString(); });
   await waitForServer();
   browser = await chromium.launch({ headless: true });
 });
@@ -42,7 +48,13 @@ after(async () => {
 });
 
 test('captures two interactive ADF pages and finalizes one optimized PDF', async () => {
-  const page = await browser.newPage();
+  const context = await browser.newContext({ serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const browserErrors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`);
+  });
+  page.on('pageerror', (error) => browserErrors.push(`pageerror: ${error.message}`));
   await page.addInitScript(() => localStorage.setItem('scan2target_lang', 'en'));
   let captureCount = 0;
   let finalizePayload = null;
@@ -62,9 +74,13 @@ test('captures two interactive ADF pages and finalizes one optimized PDF', async
     created_at: '2026-07-21T12:00:00+00:00', updated_at: '2026-07-21T12:00:00+00:00'
   });
 
-  await page.route('**/api/v1/**', async (route) => {
+  await page.route('**/*', async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
+    if (!pathname.startsWith('/api/v1/')) {
+      await route.continue();
+      return;
+    }
     if (pathname.includes('/pages/') && pathname.endsWith('/image')) {
       await route.fulfill({ status: 200, contentType: 'image/jpeg', body: jpeg });
     } else if (pathname === '/api/v1/scan/sessions' && request.method() === 'GET') {
@@ -94,8 +110,14 @@ test('captures two interactive ADF pages and finalizes one optimized PDF', async
     }
   });
 
-  await page.goto(origin);
-  await page.getByRole('button', { name: /Document feeder/ }).click();
+  await page.goto(origin, { waitUntil: 'networkidle' });
+  const feederButton = page.getByRole('button', { name: /Document feeder/ });
+  try {
+    await feederButton.click();
+  } catch (error) {
+    const body = (await page.locator('body').innerText()).slice(0, 2_000);
+    throw new Error(`${error.message}\nPage content:\n${body}\nBrowser errors:\n${browserErrors.join('\n')}\nServer output:\n${serverOutput}`);
+  }
   await page.getByRole('button', { name: /Ask after every page/ }).click();
   await page.getByRole('button', { name: 'Start scan' }).click();
   await page.getByRole('heading', { name: 'Would you like to scan another page?' }).waitFor();
@@ -113,5 +135,5 @@ test('captures two interactive ADF pages and finalizes one optimized PDF', async
   assert.equal(finalizePayload.optimize, true);
   assert.equal(finalizePayload.ocr, true);
   assert.equal(finalizePayload.pdfa, true);
-  await page.close();
+  await context.close();
 });

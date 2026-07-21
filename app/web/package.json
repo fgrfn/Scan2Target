@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "node --test src/lib/*.test.js",
-    "test:e2e": "node --test e2e/*.test.js"
+    "test:e2e": "vite build && node --test e2e/*.test.js"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.0.2",

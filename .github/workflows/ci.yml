@@ -70,7 +70,6 @@ jobs:
           name: svelte-check-diagnostics
           path: app/web/svelte-check.log
           retention-days: 3
-      - run: npm run build
       - name: Install browser test runtime
         run: npx playwright install --with-deps chromium
       - name: Run multi-page browser flow
