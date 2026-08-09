@@ -2,6 +2,8 @@
 
 <img src="logo.png" alt="Scan2Target Logo" width="300"/>
 
+# Scan2Target
+
 [![Version](https://img.shields.io/github/v/release/fgrfn/Scan2Target?label=version)](https://github.com/fgrfn/Scan2Target/releases)
 [![CI](https://github.com/fgrfn/Scan2Target/actions/workflows/ci.yml/badge.svg)](https://github.com/fgrfn/Scan2Target/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
