@@ -4,9 +4,7 @@
 
 [![Version](https://img.shields.io/github/v/release/fgrfn/Scan2Target?label=version)](https://github.com/fgrfn/Scan2Target/releases)
 [![CI](https://github.com/fgrfn/Scan2Target/actions/workflows/ci.yml/badge.svg)](https://github.com/fgrfn/Scan2Target/actions/workflows/ci.yml)
-[![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](https://github.com/fgrfn/Scan2Target/pkgs/container/scan2target)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
 
 **Web-based scan server for USB and network scanners**
 
@@ -17,8 +15,7 @@ email, document-management systems, cloud storage or webhooks.
 
 ---
 
-> **Learning project:** Scan2Target was created with AI/Copilot assistance as a
-> practical project for modern web development, REST APIs and system integration.
+> **Personal learning project:** Built with the help of OpenAI Codex and Claude Code as a way to experiment, learn and create something useful.
 
 ## Features
 
