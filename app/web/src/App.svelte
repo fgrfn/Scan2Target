@@ -9,6 +9,7 @@
   import Toast from './components/ui/Toast.svelte';
   import LoginOverlay from './components/LoginOverlay.svelte';
   import NewScanView from './views/NewScanView.svelte';
+  import DashboardView from './views/DashboardView.svelte';
   import HistoryView from './views/HistoryView.svelte';
   import ManageView from './views/ManageView.svelte';
   import SettingsView from './views/SettingsView.svelte';
@@ -16,10 +17,12 @@
   let state;
   const unsubscribe = appStore.subscribe((value) => state = value);
   $: labels = $lang === 'de' ? {
-    scan: ['Scannen', 'Ein klarer Weg vom Papier zur fertigen Datei.'], history: ['Verlauf', 'Letzte Scans und fehlgeschlagene Zustellungen.'],
+    scan: ['Scannen', 'Ein klarer Weg vom Papier zur fertigen Datei.'], overview: ['Übersicht', 'Status, Scanner und letzte Aktivität auf einen Blick.'],
+    history: ['Verlauf', 'Letzte Scans und fehlgeschlagene Zustellungen.'],
     manage: ['Verwalten', 'Scanner, Ziele und Profile konfigurieren.'], settings: ['Einstellungen', 'Oberfläche, Anmeldung und Integrationen.']
   } : {
-    scan: ['Scan', 'A clear path from paper to the finished file.'], history: ['History', 'Recent scans and failed deliveries.'],
+    scan: ['Scan', 'A clear path from paper to the finished file.'], overview: ['Overview', 'Status, scanners and recent activity at a glance.'],
+    history: ['History', 'Recent scans and failed deliveries.'],
     manage: ['Manage', 'Configure scanners, targets and profiles.'], settings: ['Settings', 'Interface, sign-in and integrations.']
   };
   $: pageTitle = labels[state?.page] || labels.scan;
@@ -34,12 +37,13 @@
   });
 </script>
 
-<div class="app-shell" data-theme={state.settings.theme}>
+<div class="app-shell" data-theme={state.settings.theme} data-density={state.settings.compactTables ? 'compact' : 'comfortable'}>
   <Sidebar {pages} current={state.page} wsConnected={state.wsConnected} onNavigate={appStore.setPage} />
   <main class="main-area">
     <Topbar title={pageTitle[0]} subtitle={pageTitle[1]} loading={state.loading} {activeCount} onRefresh={appStore.refreshAll} onShowActive={() => appStore.setPage('history')} />
     <div class="view-container">
       {#if state.page === 'scan'}<NewScanView data={state} onNotify={appStore.notify} onNavigate={appStore.setPage} />
+      {:else if state.page === 'overview'}<DashboardView data={state} onNotify={appStore.notify} onNavigate={appStore.setPage} />
       {:else if state.page === 'history'}<HistoryView data={state} onHistory={appStore.replaceHistory} onNotify={appStore.notify} />
       {:else if state.page === 'manage'}<ManageView data={state} onDevices={appStore.replaceDevices} onTargets={appStore.replaceTargets} onNotify={appStore.notify} onProfilesChanged={appStore.loadCore} />
       {:else}<SettingsView settings={state.settings} version={state.version} lastUpdated={state.lastUpdated} profiles={state.profiles} authConfig={state.authConfig} onChange={appStore.setSettings} onNotify={appStore.notify} onAuthChanged={appStore.loadAuthConfig} />{/if}

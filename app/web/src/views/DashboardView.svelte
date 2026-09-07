@@ -65,13 +65,13 @@
       <p class="hero-copy">{$t('heroCopy')}</p>
     </div>
     <div class="hero-actions">
-      <button class="btn primary" on:click={() => onNavigate('new-scan')}>
+      <button class="btn primary" on:click={() => onNavigate('scan')}>
         <Icon name="scan" size={16} /> {$t('startScanNow')}
       </button>
-      <button class="btn ghost" on:click={() => onNavigate('devices')}>
+      <button class="btn ghost" on:click={() => onNavigate('manage')}>
         <Icon name="devices" size={16} /> {$t('goDevices')}
       </button>
-      <button class="btn ghost" on:click={() => onNavigate('targets')}>
+      <button class="btn ghost" on:click={() => onNavigate('manage')}>
         <Icon name="targets" size={16} /> {$t('goTargets')}
       </button>
     </div>
@@ -111,7 +111,7 @@
         <Icon name="devices" size={28} />
         <strong>{$t('noDevicesYet')}</strong>
         <p class="muted small">{$t('noDevicesYetHint')}</p>
-        <button class="btn primary" on:click={() => onNavigate('devices')}>{$t('goDevices')}</button>
+        <button class="btn primary" on:click={() => onNavigate('manage')}>{$t('goDevices')}</button>
       </div>
     {:else}
       <ul class="clean-list">
@@ -137,7 +137,7 @@
         <Icon name="history" size={28} />
         <strong>{$t('noHistoryYet')}</strong>
         <p class="muted small">{$t('noHistoryYetHint')}</p>
-        <button class="btn primary" on:click={() => onNavigate('new-scan')}>{$t('startScanNow')}</button>
+        <button class="btn primary" on:click={() => onNavigate('scan')}>{$t('startScanNow')}</button>
       </div>
     {:else}
       <ul class="clean-list">
@@ -161,7 +161,7 @@
           </li>
         {/each}
       </ul>
-      <button class="btn ghost top-gap" on:click={() => onNavigate('history')}>{$t('history')} →</button>
+      <button class="btn ghost top-gap" on:click={() => onNavigate('history')}>{$t('history')}</button>
     {/if}
   </Card>
 </section>

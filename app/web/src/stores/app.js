@@ -4,6 +4,7 @@ import { isActive } from '../lib/status';
 
 export const pages = [
   { id: 'scan', icon: 'scan' },
+  { id: 'overview', icon: 'dashboard' },
   { id: 'history', icon: 'history' },
   { id: 'manage', icon: 'devices' },
   { id: 'settings', icon: 'settings' }

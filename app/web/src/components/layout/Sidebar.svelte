@@ -5,7 +5,7 @@
   export let current = 'scan';
   export let wsConnected = false;
   export let onNavigate = () => {};
-  $: labels = $lang === 'de' ? { scan: 'Scannen', history: 'Verlauf', manage: 'Verwalten', settings: 'Einstellungen', ready: 'Bereit', offline: 'Offline' } : { scan: 'Scan', history: 'History', manage: 'Manage', settings: 'Settings', ready: 'Ready', offline: 'Offline' };
+  $: labels = $lang === 'de' ? { scan: 'Scannen', overview: 'Übersicht', history: 'Verlauf', manage: 'Verwalten', settings: 'Einstellungen', ready: 'Bereit', offline: 'Offline' } : { scan: 'Scan', overview: 'Overview', history: 'History', manage: 'Manage', settings: 'Settings', ready: 'Ready', offline: 'Offline' };
 </script>
 <aside class="sidebar">
   <button class="brand" on:click={() => onNavigate('scan')}><span class="logo-mark">S2</span><span><strong>Scan2Target</strong><small>Scan appliance</small></span></button>

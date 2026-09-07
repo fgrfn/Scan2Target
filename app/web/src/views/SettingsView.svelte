@@ -3,7 +3,7 @@
   import Icon from '../components/ui/Icon.svelte';
   import { api, setToken } from '../lib/api';
   import { appStore } from '../stores/app';
-  import { lang } from '../lib/i18n';
+  import { lang, t } from '../lib/i18n';
   export let settings;
   export let version = '';
   export let profiles = [];
@@ -53,6 +53,7 @@
   <section class="settings-card"><div class="settings-heading"><span class="settings-icon"><Icon name="settings" /></span><div><h2>{c.interface}</h2><p>{c.interfaceLead}</p></div></div>
     <div class="setting-row"><span>{c.language}</span><div class="choice-pills compact"><button class:active={$lang === 'de'} on:click={() => lang.set('de')}>Deutsch</button><button class:active={$lang === 'en'} on:click={() => lang.set('en')}>English</button></div></div>
     <div class="setting-row"><span>{c.theme}</span><select value={settings.theme} on:change={(event) => onChange({ theme: event.currentTarget.value })}><option value="system">{c.system}</option><option value="light">{c.light}</option><option value="dark">{c.dark}</option></select></div>
+    <label class="switch-row"><span>{$t('compactTablesLabel')}</span><input type="checkbox" checked={settings.compactTables} on:change={(event) => onChange({ compactTables: event.currentTarget.checked })} /></label>
   </section>
 
   <section class="settings-card"><div class="settings-heading"><span class="settings-icon"><Icon name="logout" /></span><div><h2>{c.account}</h2><p>{c.accountLead}</p></div></div>
