@@ -41,6 +41,8 @@ const en = {
   delete: 'Delete',
   edit: 'Edit',
   test: 'Test',
+  checkConnection: 'Check connection',
+  checking: 'Checking…',
   add: 'Add',
   added: 'Added',
   back: 'Back',
@@ -68,6 +70,7 @@ const en = {
   errorGeneric: 'Something went wrong',
 
   // Statuses
+  statusLabel: 'Status',
   status_completed: 'completed',
   status_failed: 'failed',
   status_running: 'running',
@@ -375,6 +378,8 @@ const de = {
   delete: 'Löschen',
   edit: 'Bearbeiten',
   test: 'Testen',
+  checkConnection: 'Verbindung prüfen',
+  checking: 'Prüfe …',
   add: 'Hinzufügen',
   added: 'Hinzugefügt',
   back: 'Zurück',
@@ -402,6 +407,7 @@ const de = {
   errorGeneric: 'Es ist ein Fehler aufgetreten',
 
   // Status
+  statusLabel: 'Status',
   status_completed: 'abgeschlossen',
   status_failed: 'fehlgeschlagen',
   status_running: 'läuft',

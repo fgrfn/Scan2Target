@@ -20,11 +20,13 @@
   $: c = $lang === 'de' ? {
     interface: 'Oberfläche', interfaceLead: 'Sprache und Darstellung auf diesem Gerät.', language: 'Sprache', theme: 'Darstellung', system: 'System', light: 'Hell', dark: 'Dunkel',
     account: 'Anmeldung', accountLead: 'Das einzelne Administratorkonto verwalten oder den Anmeldeschutz deaktivieren.', enabled: 'Anmeldung erforderlich', user: 'Benutzername', email: 'E-Mail', current: 'Aktuelles Passwort', next: 'Neues Passwort (optional)', save: 'Konto aktualisieren', saved: 'Konto aktualisiert', authSaved: 'Anmeldeeinstellung gespeichert', logout: 'Abmelden',
-    ha: 'Home Assistant', haLead: 'Die bestehende Scan-API für Taster und Automationen.', show: 'Beispiel anzeigen', hide: 'Beispiel ausblenden', copy: 'Kopieren', copied: 'Kopiert', version: 'Version', live: 'Betrieb', online: 'Online'
+    ha: 'Home Assistant', haLead: 'Die bestehende Scan-API für Taster und Automationen.', show: 'Beispiel anzeigen', hide: 'Beispiel ausblenden', copy: 'Kopieren', copied: 'Kopiert', version: 'Version', live: 'Betrieb', online: 'Online',
+    endpointHint: 'Endpunkt: POST /api/v1/homeassistant/scan — ein Aufruf im Browser (GET) antwortet mit 405.', authOff: 'Die Anmeldung ist deaktiviert: Jeder im Netzwerk kann diese Oberfläche und die API nutzen.', authOn: 'Melde dich an, um Benutzername, E-Mail und Passwort zu ändern.'
   } : {
     interface: 'Interface', interfaceLead: 'Language and appearance on this device.', language: 'Language', theme: 'Appearance', system: 'System', light: 'Light', dark: 'Dark',
     account: 'Sign-in', accountLead: 'Manage the single administrator account or disable sign-in protection.', enabled: 'Require sign-in', user: 'Username', email: 'Email', current: 'Current password', next: 'New password (optional)', save: 'Update account', saved: 'Account updated', authSaved: 'Sign-in setting saved', logout: 'Log out',
-    ha: 'Home Assistant', haLead: 'The existing scan API for buttons and automations.', show: 'Show example', hide: 'Hide example', copy: 'Copy', copied: 'Copied', version: 'Version', live: 'Operation', online: 'Online'
+    ha: 'Home Assistant', haLead: 'The existing scan API for buttons and automations.', show: 'Show example', hide: 'Hide example', copy: 'Copy', copied: 'Copied', version: 'Version', live: 'Operation', online: 'Online',
+    endpointHint: 'Endpoint: POST /api/v1/homeassistant/scan — opening it in a browser (GET) answers with 405.', authOff: 'Sign-in is disabled: anyone on the network can use this interface and the API.', authOn: 'Sign in to change username, email and password.'
   };
   $: snippet = `rest_command:\n  scan_document:\n    url: "${window.location.origin}/api/v1/homeassistant/scan"\n    method: POST\n    content_type: "application/json"\n    payload: '{"scanner_id":"favorite","target_id":"favorite","profile":"${haProfile}"}'`;
 
@@ -54,15 +56,18 @@
     <div class="setting-row"><span>{c.language}</span><div class="choice-pills compact"><button class:active={$lang === 'de'} on:click={() => lang.set('de')}>Deutsch</button><button class:active={$lang === 'en'} on:click={() => lang.set('en')}>English</button></div></div>
     <div class="setting-row"><span>{c.theme}</span><select value={settings.theme} on:change={(event) => onChange({ theme: event.currentTarget.value })}><option value="system">{c.system}</option><option value="light">{c.light}</option><option value="dark">{c.dark}</option></select></div>
     <label class="switch-row"><span>{$t('compactTablesLabel')}</span><input type="checkbox" checked={settings.compactTables} on:change={(event) => onChange({ compactTables: event.currentTarget.checked })} /></label>
+    <label class="switch-row"><span>{$t('autoRefreshLabel')}</span><input type="checkbox" checked={settings.autoRefresh} on:change={(event) => onChange({ autoRefresh: event.currentTarget.checked })} /></label>
   </section>
 
   <section class="settings-card"><div class="settings-heading"><span class="settings-icon"><Icon name="logout" /></span><div><h2>{c.account}</h2><p>{c.accountLead}</p></div></div>
     <label class="switch-row"><span>{c.enabled}</span><input type="checkbox" checked={authConfig.enabled} on:change={(event) => toggleAuth(event.currentTarget.checked)} /></label>
+    {#if !appStore.hasToken()}<p class="muted small top-gap">{authConfig.enabled ? c.authOn : c.authOff}</p>{/if}
     {#if appStore.hasToken()}<form class="account-form" on:submit|preventDefault={updateAccount}><div class="form-grid"><label>{c.user}<input bind:value={account.username} minlength="3" required /></label><label>{c.email}<input type="email" bind:value={account.email} /></label><label>{c.current}<input type="password" bind:value={account.current_password} required /></label><label>{c.next}<input type="password" bind:value={account.new_password} minlength={account.new_password ? 12 : null} /></label></div><div class="flow-actions"><button type="button" class="btn secondary" on:click={logout}>{c.logout}</button><button class="btn primary" disabled={savingAccount}>{c.save}</button></div></form>{/if}
   </section>
 
   <section class="settings-card full"><div class="settings-heading"><span class="settings-icon"><Icon name="bolt" /></span><div><h2>{c.ha}</h2><p>{c.haLead}</p></div></div>
-    <button class="btn secondary" on:click={() => haOpen = !haOpen}>{haOpen ? c.hide : c.show}</button>
+    <p class="muted small">{c.endpointHint}</p>
+    <button class="btn secondary top-gap" on:click={() => haOpen = !haOpen}>{haOpen ? c.hide : c.show}</button>
     {#if haOpen}<div class="ha-config"><select bind:value={haProfile}>{#each profiles as profile}<option value={profile.id}>{profile.name}</option>{/each}</select><pre>{snippet}</pre><button class="btn secondary" on:click={copySnippet}><Icon name="copy" size={15} />{c.copy}</button></div>{/if}
   </section>
 

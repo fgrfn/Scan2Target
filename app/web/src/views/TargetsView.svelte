@@ -32,6 +32,8 @@
 
   let form = emptyForm();
   let editing = false;
+  let checks = {};
+  let formError = '';
 
   async function reload() {
     onTargets(await api.getTargets());
@@ -44,6 +46,7 @@
   function startCreate() {
     editing = false;
     form = emptyForm();
+    formError = '';
   }
 
   function onTypeChange(nextType) {
@@ -81,6 +84,7 @@
   }
 
   async function save(validate = true) {
+    formError = '';
     try {
       const payload = getPayload();
       if (editing) await api.updateTarget(form.id, payload, validate);
@@ -89,6 +93,7 @@
       onNotify($t('targetSaved'), 'success');
       startCreate();
     } catch (error) {
+      formError = error.message;
       onNotify(error.message, 'error');
     }
   }
@@ -104,10 +109,15 @@
   }
 
   async function test(id) {
+    checks = { ...checks, [id]: { state: 'running', message: $t('checking') } };
     try {
       const result = await api.testTarget(id);
-      onNotify(result.message || $t('targetReachable'), 'success');
+      const message = result?.message || $t('targetReachable');
+      const ok = result?.success !== false;
+      checks = { ...checks, [id]: { state: ok ? 'ok' : 'error', message } };
+      onNotify(message, ok ? 'success' : 'error');
     } catch (error) {
+      checks = { ...checks, [id]: { state: 'error', message: error.message } };
       onNotify(error.message, 'error');
     }
   }
@@ -176,13 +186,18 @@
               </div>
             </div>
             <div class="row gap wrap">
-              <button class="btn ghost" on:click={() => test(tg.id)}>{$t('test')}</button>
+              <button class="btn ghost" disabled={checks[tg.id]?.state === 'running'} on:click={() => test(tg.id)}>
+                {checks[tg.id]?.state === 'running' ? $t('checking') : $t('checkConnection')}
+              </button>
               <button class="btn ghost" on:click={() => edit(tg)}>{$t('edit')}</button>
               <button class="btn ghost" on:click={() => toggleEnabled(tg)}>
                 {tg.enabled === false ? $t('enableTarget') : $t('disableTarget')}
               </button>
               <button class="btn danger" on:click={() => remove(tg.id)}>{$t('delete')}</button>
             </div>
+            {#if checks[tg.id]}
+              <p class="check-result {checks[tg.id].state}"><span class="dot"></span>{checks[tg.id].message}</p>
+            {/if}
           </article>
         {/each}
       </div>
@@ -260,5 +275,6 @@
       <button class="btn ghost" disabled={!form.name} on:click={() => save(false)}>{$t('saveWithoutTest')}</button>
       <button class="btn ghost" on:click={startCreate}>{$t('reset')}</button>
     </div>
+    {#if formError}<p class="form-error">{formError}</p>{/if}
   </Card>
 </section>
