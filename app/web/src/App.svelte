@@ -6,6 +6,7 @@
   import Sidebar from './components/layout/Sidebar.svelte';
   import Topbar from './components/layout/Topbar.svelte';
   import BottomNav from './components/layout/BottomNav.svelte';
+  import Footer from './components/layout/Footer.svelte';
   import Toast from './components/ui/Toast.svelte';
   import LoginOverlay from './components/LoginOverlay.svelte';
   import NewScanView from './views/NewScanView.svelte';
@@ -48,6 +49,7 @@
       {:else if state.page === 'manage'}<ManageView data={state} onDevices={appStore.replaceDevices} onTargets={appStore.replaceTargets} onNotify={appStore.notify} onProfilesChanged={appStore.loadCore} />
       {:else}<SettingsView settings={state.settings} version={state.version} lastUpdated={state.lastUpdated} profiles={state.profiles} authConfig={state.authConfig} onChange={appStore.setSettings} onNotify={appStore.notify} onAuthChanged={appStore.loadAuthConfig} />{/if}
     </div>
+    <Footer version={state.version} wsConnected={state.wsConnected} />
   </main>
   <BottomNav current={state.page} onNavigate={appStore.setPage} />
   <Toast toast={state.toast} onClose={appStore.clearToast} />

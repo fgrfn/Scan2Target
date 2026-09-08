@@ -60,12 +60,23 @@ def no_cache_file(path: Path, media_type: str | None = None) -> FileResponse:
 
 
 def get_version() -> str:
-    version_file = Path(__file__).parent.parent / "VERSION"
-    try:
-        return version_file.read_text().strip()
-    except OSError as exc:
-        logger.warning("Could not read VERSION file (%s): %s", version_file, exc)
-        return "0.0.0"
+    """Read the version from VERSION, next to the app or at the repo root."""
+    env_version = os.environ.get("SCAN2TARGET_VERSION", "").strip()
+    if env_version:
+        return env_version
+
+    # In the container the app lives at /app, in a checkout at <repo>/app.
+    candidates = (
+        Path(__file__).parent / "VERSION",
+        Path(__file__).parent.parent / "VERSION",
+    )
+    for version_file in candidates:
+        try:
+            return version_file.read_text().strip()
+        except OSError:
+            continue
+    logger.warning("Could not read VERSION file (tried: %s)", ", ".join(str(c) for c in candidates))
+    return "0.0.0"
 
 
 @asynccontextmanager

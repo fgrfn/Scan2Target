@@ -37,6 +37,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./
+COPY VERSION ./VERSION
 COPY --from=frontend-builder /app/web/dist ./web/dist
 
 RUN mkdir -p /data/scans /data/db /data/auth /data/logs /var/log/scan2target /tmp/scan2target/scans \

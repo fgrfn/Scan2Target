@@ -15,6 +15,7 @@
   let manual = { uri: '', name: '' };
   let editDevice = null;
   let discovering = false;
+  let checks = {};
 
   $: devices = data.devices || [];
   $: kpiCards = [
@@ -66,11 +67,16 @@
   }
 
   async function check(id) {
+    checks = { ...checks, [id]: { state: 'running', message: $t('checking') } };
     try {
       const res = await api.checkDevice(id);
       await refreshDevices();
-      onNotify(res.message || `Status: ${res.status}`, 'info');
+      const online = res.status === 'online';
+      const message = res.message || `${$t('statusLabel')}: ${$t(statusKey(res.status || 'unknown'))}`;
+      checks = { ...checks, [id]: { state: online ? 'ok' : 'error', message } };
+      onNotify(message, online ? 'success' : 'error');
     } catch (error) {
+      checks = { ...checks, [id]: { state: 'error', message: error.message } };
       onNotify(error.message, 'error');
     }
   }
@@ -150,11 +156,16 @@
               <div class="meta-box"><span>{$t('connectionLabel')}</span><strong>{d.connection_type || '—'}</strong></div>
               <div class="meta-box"><span>{$t('modelLabel')}</span><strong>{d.model || d.make || '—'}</strong></div>
             </div>
-            <div class="row gap">
-              <button class="btn ghost" on:click={() => check(d.id)}>{$t('test')}</button>
+            <div class="row gap wrap">
+              <button class="btn ghost" disabled={checks[d.id]?.state === 'running'} on:click={() => check(d.id)}>
+                {checks[d.id]?.state === 'running' ? $t('checking') : $t('checkConnection')}
+              </button>
               <button class="btn ghost" on:click={() => (editDevice = { ...d })}>{$t('edit')}</button>
               <button class="btn danger" on:click={() => remove(d.id)}>{$t('delete')}</button>
             </div>
+            {#if checks[d.id]}
+              <p class="check-result {checks[d.id].state}"><span class="dot"></span>{checks[d.id].message}</p>
+            {/if}
           </article>
         {/each}
       </div>
