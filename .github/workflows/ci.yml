@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, dev, 'agent/**']
+    branches: [main, dev, 'agent/**', 'nightly/**']
   workflow_dispatch:
 
 permissions:
