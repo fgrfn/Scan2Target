@@ -61,6 +61,11 @@ def validate_webhook_url(url: str) -> str:
     if parsed.username or parsed.password:
         raise UnsafeWebhookURLError("Webhook URL must not contain embedded credentials")
 
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise UnsafeWebhookURLError("Webhook URL contains an invalid port") from exc
+
     settings = get_settings()
     if settings.allow_private_webhooks:
         return url
@@ -68,7 +73,11 @@ def validate_webhook_url(url: str) -> str:
     try:
         addresses = {
             item[4][0]
-            for item in socket.getaddrinfo(parsed.hostname, parsed.port or 443, type=socket.SOCK_STREAM)
+            for item in socket.getaddrinfo(
+                parsed.hostname,
+                port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
         }
     except socket.gaierror as exc:
         raise UnsafeWebhookURLError("Webhook hostname could not be resolved") from exc
