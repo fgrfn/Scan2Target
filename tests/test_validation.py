@@ -3,7 +3,13 @@ from __future__ import annotations
 
 import pytest
 
-from core.validation import sanitize_filename_prefix, validate_batch_pages
+import core.validation as validation
+from core.validation import (
+    UnsafeWebhookURLError,
+    sanitize_filename_prefix,
+    validate_batch_pages,
+    validate_webhook_url,
+)
 
 
 def test_filename_prefix_rejects_path_traversal():
@@ -31,3 +37,45 @@ def test_batch_limits_page_count_and_size(monkeypatch):
     with pytest.raises(ValueError, match="single page"):
         validate_batch_pages(["A" * (2 * 1024 * 1024)])
     get_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://example.com:not-a-port/hook", "https://example.com:70000/hook"],
+)
+def test_webhook_rejects_invalid_port_before_dns_lookup(monkeypatch, url):
+    monkeypatch.setattr(
+        validation,
+        "get_settings",
+        lambda: type("Settings", (), {"allow_private_webhooks": False})(),
+    )
+    monkeypatch.setattr(
+        validation.socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: pytest.fail("DNS lookup must not run for an invalid port"),
+    )
+
+    with pytest.raises(UnsafeWebhookURLError, match="invalid port"):
+        validate_webhook_url(url)
+
+
+@pytest.mark.parametrize(
+    ("url", "expected_port"),
+    [("http://example.com/hook", 80), ("https://example.com/hook", 443)],
+)
+def test_webhook_uses_scheme_specific_default_port(monkeypatch, url, expected_port):
+    requested_ports = []
+    monkeypatch.setattr(
+        validation,
+        "get_settings",
+        lambda: type("Settings", (), {"allow_private_webhooks": False})(),
+    )
+
+    def resolve(_host, port, **_kwargs):
+        requested_ports.append(port)
+        return [(None, None, None, None, ("93.184.216.34", port))]
+
+    monkeypatch.setattr(validation.socket, "getaddrinfo", resolve)
+
+    assert validate_webhook_url(url) == url
+    assert requested_ports == [expected_port]
