@@ -23,7 +23,7 @@ class CleanupManager:
         We keep them for a week for UI preview purposes.
         """
         if not self.scan_dir.exists():
-            return
+            return {"deleted": 0, "freed_bytes": 0}
         
         deleted_count = 0
         freed_bytes = 0
@@ -57,7 +57,7 @@ class CleanupManager:
         After 30 days, we assume the user will not retry and delete them.
         """
         if not self.scan_dir.exists():
-            return
+            return {"deleted": 0, "freed_bytes": 0}
         
         deleted_count = 0
         freed_bytes = 0
