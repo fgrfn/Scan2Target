@@ -62,7 +62,6 @@ async def create_target(target: Target, validate: bool = True):
     """
     try:
         logger.info(f"Creating target: {target.name} (type: {target.type})")
-        logger.debug(f"Config: {target.config}")
         logger.debug(f"Validate: {validate}")
         
         # Convert Pydantic model to TargetConfig
