@@ -147,7 +147,7 @@ async def get_scan_timeline(days: int = 30):
                 date(created_at) as date,
                 COUNT(*) as count,
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+                SUM(CASE WHEN status IN ('failed', 'delivery_failed') THEN 1 ELSE 0 END) as failed
             FROM jobs 
             WHERE job_type = 'scan'
             AND date(created_at) >= date('now', ? || ' days')
@@ -181,7 +181,7 @@ async def get_scanner_statistics():
                 COALESCE(d.name, j.device_id) as scanner_name,
                 COUNT(*) as total_scans,
                 SUM(CASE WHEN j.status = 'completed' THEN 1 ELSE 0 END) as successful,
-                SUM(CASE WHEN j.status = 'failed' THEN 1 ELSE 0 END) as failed,
+                SUM(CASE WHEN j.status IN ('failed', 'delivery_failed') THEN 1 ELSE 0 END) as failed,
                 MAX(j.created_at) as last_used
             FROM jobs j
             LEFT JOIN devices d ON j.device_id = d.id
@@ -218,7 +218,7 @@ async def get_target_statistics():
                 COALESCE(t.name, j.target_id) as target_name,
                 COUNT(*) as total_deliveries,
                 SUM(CASE WHEN j.status = 'completed' AND j.message IS NULL THEN 1 ELSE 0 END) as successful,
-                SUM(CASE WHEN j.status = 'completed' AND j.message IS NOT NULL THEN 1 ELSE 0 END) as delivery_failed,
+                SUM(CASE WHEN j.status = 'delivery_failed' OR (j.status = 'completed' AND j.message IS NOT NULL) THEN 1 ELSE 0 END) as delivery_failed,
                 SUM(CASE WHEN j.status = 'failed' THEN 1 ELSE 0 END) as failed,
                 MAX(j.created_at) as last_used
             FROM jobs j
