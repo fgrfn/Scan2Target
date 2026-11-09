@@ -2,6 +2,7 @@
   import Card from '../components/ui/Card.svelte';
   import Badge from '../components/ui/Badge.svelte';
   import StatGrid from '../components/StatGrid.svelte';
+  import StatisticsView from './StatisticsView.svelte';
   import Icon from '../components/ui/Icon.svelte';
   import { api } from '../lib/api';
   import { t } from '../lib/i18n';
@@ -165,3 +166,5 @@
     {/if}
   </Card>
 </section>
+
+<StatisticsView {data} />
